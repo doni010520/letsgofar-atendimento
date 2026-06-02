@@ -64,7 +64,7 @@ export function AuthShell({
       <div className="w-full max-w-sm rounded-card bg-surface p-8 shadow-lg">
         <div className="mb-6 flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-mvf.svg" alt="MVF" className="mb-4 h-20 w-auto" />
+          <img src="/logo-mvf.png" alt="MVF" className="mb-4 h-24 w-auto rounded-xl" />
           <h1 className="text-xl font-semibold text-ink">{title}</h1>
           <p className="text-sm text-ink-soft">{subtitle}</p>
         </div>

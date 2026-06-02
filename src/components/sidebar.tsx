@@ -13,7 +13,7 @@ export function Sidebar() {
     <aside className="flex h-screen w-[72px] flex-col items-center gap-1 bg-surface py-4 shadow-[2px_0_12px_rgba(0,0,0,0.04)]">
       <Link href="/dashboard" className="mb-3 flex h-11 w-11 items-center justify-center" title="MVF">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon-mvf.svg" alt="MVF" className="h-10 w-10" />
+        <img src="/logo-mvf.png" alt="MVF" className="h-10 w-10 rounded-lg object-contain" />
       </Link>
 
       <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
