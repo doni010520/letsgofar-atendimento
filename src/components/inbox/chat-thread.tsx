@@ -32,9 +32,14 @@ export function ChatThread({
     <div className="flex h-full flex-1 flex-col bg-canvas">
       <header className="flex items-center justify-between border-b border-gray-100 bg-surface px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
-            {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
-          </div>
+          {conversation.contact_avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={conversation.contact_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
+              {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <div>
             <p className="text-sm font-semibold text-ink">
               {conversation.contact_name ?? conversation.contact_phone}

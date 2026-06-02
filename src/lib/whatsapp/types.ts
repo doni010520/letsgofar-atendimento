@@ -26,6 +26,8 @@ export interface ChannelProvider {
   status(): Promise<Channel["status"]>;
   sendText(params: SendTextParams): Promise<{ externalId?: string }>;
   sendMedia(params: SendMediaParams): Promise<{ externalId?: string }>;
+  /** URL da foto de perfil do contato (UAZAPI). Meta não expõe → null. */
+  getProfilePicture?(phone: string): Promise<string | null>;
 }
 
 /** Mensagem normalizada vinda de um webhook, independente do provedor. */

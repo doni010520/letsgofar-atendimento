@@ -37,7 +37,12 @@ export function KanbanBoard({ conversations }: { conversations: ConversationOver
                     className="w-full rounded-lg bg-surface p-3 text-left shadow-sm transition hover:shadow-md"
                   >
                     <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">{initials || "?"}</div>
+                      {c.contact_avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.contact_avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">{initials || "?"}</div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-ink">{c.contact_name ?? c.contact_phone}</p>
                         <p className="truncate text-[11px] text-ink-soft">{c.channel_name}</p>

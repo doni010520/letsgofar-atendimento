@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { InboundMessage } from "./types";
+import type { Channel } from "@/lib/types";
+import { syncContactAvatar } from "./avatar";
 
 /**
  * Persiste mensagens recebidas via webhook: localiza o canal pelo external_id,
@@ -15,7 +17,7 @@ export async function persistInbound(messages: InboundMessage[]) {
 
     const { data: channel } = await db
       .from("channels")
-      .select("id, organization_id")
+      .select("*")
       .eq("external_id", msg.channelExternalId)
       .maybeSingle();
     if (!channel) continue;
@@ -29,8 +31,15 @@ export async function persistInbound(messages: InboundMessage[]) {
         { organization_id: org, phone: msg.from, name: msg.contactName ?? null },
         { onConflict: "organization_id,phone", ignoreDuplicates: false },
       )
-      .select("id")
+      .select("id, avatar_url")
       .single();
+
+    // Foto de perfil (UAZAPI) — só quando ainda não temos avatar. Best-effort.
+    if (contact && !contact.avatar_url) {
+      await syncContactAvatar(db, channel as Channel, contact.id, msg.from).catch((e) =>
+        console.warn("avatar sync", (e as Error)?.message),
+      );
+    }
 
     // Conversa em aberto (reaproveita ou cria)
     let conversationId: string | undefined;

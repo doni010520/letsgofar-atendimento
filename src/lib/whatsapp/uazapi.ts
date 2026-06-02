@@ -96,6 +96,39 @@ export class UazapiProvider implements ChannelProvider {
     });
     return { externalId: r?.id ?? r?.messageId };
   }
+
+  /**
+   * Retorna a URL da foto de perfil do contato.
+   * Endpoint do uazapiGO: POST /chat/GetNameAndImageURL { number, preview }.
+   * Confirme o path/campos no swagger (/docs) da sua instância — variam por versão.
+   * Tenta também /chat/getProfileImage como fallback.
+   */
+  async getProfilePicture(phone: string): Promise<string | null> {
+    const tryParse = (r: unknown): string | null => {
+      const o = (r ?? {}) as Record<string, unknown>;
+      return (
+        (o.imgUrl as string) ?? (o.imageUrl as string) ?? (o.image as string) ??
+        (o.url as string) ?? (o.profilePicUrl as string) ?? (o.eurl as string) ?? null
+      );
+    };
+    try {
+      const r = await this.req("/chat/GetNameAndImageURL", {
+        method: "POST",
+        body: JSON.stringify({ number: phone, preview: false }),
+      });
+      const url = tryParse(r);
+      if (url) return url;
+    } catch { /* tenta fallback */ }
+    try {
+      const r = await this.req("/chat/getProfileImage", {
+        method: "POST",
+        body: JSON.stringify({ number: phone }),
+      });
+      return tryParse(r);
+    } catch {
+      return null;
+    }
+  }
 }
 
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */

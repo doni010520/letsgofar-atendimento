@@ -94,8 +94,13 @@ export function ConversationList({
                 selectedId === c.id && "bg-brand-light hover:bg-brand-light",
               )}
             >
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
-                {initials || "?"}
+              <div className="relative h-10 w-10 shrink-0">
+                {c.contact_avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.contact_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">{initials || "?"}</div>
+                )}
                 <span className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white", STATUS_DOT[c.status])} />
               </div>
               <div className="min-w-0 flex-1">
