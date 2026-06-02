@@ -59,6 +59,27 @@ export interface QuickReply {
   created_at: string;
 }
 
+export interface Automation {
+  id: string;
+  organization_id: string;
+  channel_id: string | null;
+  name: string;
+  trigger: string | null;
+  flow: { nodes: unknown[]; edges: unknown[] };
+  active: boolean;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface Integration {
+  id: string;
+  organization_id: string;
+  type: string;
+  config: Record<string, unknown>;
+  active: boolean;
+  created_at: string;
+}
+
 export type CampaignStatus = "draft" | "scheduled" | "running" | "paused" | "done" | "failed";
 
 export interface Campaign {
