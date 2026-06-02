@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui";
 
@@ -64,9 +63,8 @@ export function AuthShell({
     <div className="flex min-h-screen items-center justify-center bg-canvas p-4">
       <div className="w-full max-w-sm rounded-card bg-surface p-8 shadow-lg">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-white">
-            <MessageCircle size={26} />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mvf.svg" alt="MVF" className="mb-4 h-20 w-auto" />
           <h1 className="text-xl font-semibold text-ink">{title}</h1>
           <p className="text-sm text-ink-soft">{subtitle}</p>
         </div>
