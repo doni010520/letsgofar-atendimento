@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   BarChart3,
   MessageSquareText,
+  LayoutGrid,
   Radio,
   Bot,
   Megaphone,
@@ -38,6 +39,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/canais", label: "Canais", icon: Radio },
       { href: "/atendimento", label: "Atendimento", icon: MessageSquareText },
+      { href: "/atendimento-v2", label: "Atendimento V2", icon: LayoutGrid },
       { href: "/mensagens", label: "Mensagens", icon: Tag },
       { href: "/automacoes", label: "Automações", icon: Bot },
       { href: "/campanhas", label: "Campanhas", icon: Megaphone },
