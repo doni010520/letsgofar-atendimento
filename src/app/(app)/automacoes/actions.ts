@@ -19,3 +19,14 @@ export async function deleteAutomation(id: string) {
   await orgDelete("automations", id);
   revalidatePath("/automacoes");
 }
+
+export async function updateAutomationFlow(id: string, flowJson: string) {
+  let flow: unknown;
+  try {
+    flow = JSON.parse(flowJson);
+  } catch {
+    throw new Error("Fluxo inválido.");
+  }
+  await orgUpdate("automations", id, { flow, updated_at: new Date().toISOString() });
+  revalidatePath(`/automacoes/${id}`);
+}

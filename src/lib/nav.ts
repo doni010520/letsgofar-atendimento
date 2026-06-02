@@ -12,6 +12,9 @@ import {
   Plug,
   Tag,
   History,
+  Building2,
+  Wallet,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,6 +51,8 @@ export const NAV: NavGroup[] = [
   {
     title: "Empresa",
     items: [
+      { href: "/empresa", label: "Dados da empresa", icon: Building2 },
+      { href: "/financeiro", label: "Financeiro", icon: Wallet },
       { href: "/atendentes", label: "Atendentes", icon: Users },
       { href: "/departamentos", label: "Departamentos", icon: Layers },
       { href: "/ajustes", label: "Ajustes", icon: Settings },
@@ -57,6 +62,7 @@ export const NAV: NavGroup[] = [
     title: "Integrações",
     items: [
       { href: "/integracoes", label: "Integrações", icon: Plug },
+      { href: "/api", label: "Chaves de API", icon: KeyRound },
       { href: "/auditoria", label: "Auditoria", icon: History },
     ],
   },
