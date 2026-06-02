@@ -1,0 +1,115 @@
+"use client";
+
+import { useState } from "react";
+import { Search } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { ConversationOverview, ConversationStatus } from "@/lib/types";
+
+const FILTERS: { key: ConversationStatus | "all"; label: string }[] = [
+  { key: "all", label: "Todos" },
+  { key: "queued", label: "Em espera" },
+  { key: "open", label: "Em andamento" },
+  { key: "bot", label: "Bot" },
+  { key: "closed", label: "Encerrados" },
+];
+
+const STATUS_DOT: Record<ConversationStatus, string> = {
+  bot: "bg-violet-500",
+  queued: "bg-amber-500",
+  open: "bg-green-500",
+  closed: "bg-gray-400",
+};
+
+export function ConversationList({
+  conversations,
+  selectedId,
+  onSelect,
+}: {
+  conversations: ConversationOverview[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [filter, setFilter] = useState<ConversationStatus | "all">("all");
+  const [query, setQuery] = useState("");
+
+  const filtered = conversations.filter((c) => {
+    if (filter !== "all" && c.status !== filter) return false;
+    if (query) {
+      const q = query.toLowerCase();
+      return (
+        (c.contact_name ?? "").toLowerCase().includes(q) ||
+        c.contact_phone.includes(q)
+      );
+    }
+    return true;
+  });
+
+  return (
+    <div className="flex h-full w-80 shrink-0 flex-col border-r border-gray-100 bg-surface">
+      <div className="border-b border-gray-100 p-3">
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar conversa..."
+            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        <div className="mt-2 flex gap-1 overflow-x-auto">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                "whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition",
+                filter === f.key ? "bg-brand text-white" : "bg-gray-100 text-ink-soft hover:bg-gray-200",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {filtered.length === 0 && (
+          <p className="p-6 text-center text-xs text-ink-soft">Nenhuma conversa.</p>
+        )}
+        {filtered.map((c) => {
+          const initials = (c.contact_name ?? c.contact_phone)
+            .split(" ")
+            .slice(0, 2)
+            .map((w) => w[0]?.toUpperCase())
+            .join("");
+          const time = c.last_message_at
+            ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+            : "";
+          return (
+            <button
+              key={c.id}
+              onClick={() => onSelect(c.id)}
+              className={cn(
+                "flex w-full items-center gap-3 border-b border-gray-50 px-3 py-3 text-left transition hover:bg-gray-50",
+                selectedId === c.id && "bg-brand-light hover:bg-brand-light",
+              )}
+            >
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
+                {initials || "?"}
+                <span className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white", STATUS_DOT[c.status])} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-medium text-ink">{c.contact_name ?? c.contact_phone}</p>
+                  <span className="shrink-0 text-[10px] text-ink-soft">{time}</span>
+                </div>
+                <p className="truncate text-xs text-ink-soft">{c.last_message_body ?? "—"}</p>
+                <p className="truncate text-[10px] text-ink-soft/70">{c.channel_name}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

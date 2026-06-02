@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MVF Chat — clone do Chatmix
 
-## Getting Started
+SaaS multi-tenant de multiatendimento e automação via WhatsApp.
+Stack: **Next.js 16 (App Router) + TypeScript + Tailwind v4 + Supabase**.
+Integrações WhatsApp: **UAZAPI** (QR) e **Meta Cloud API** (oficial).
 
-First, run the development server:
+## Rodar em desenvolvimento
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd web
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sem `.env.local`, o app sobe em **modo preview** (dados de exemplo, sem login).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Conectar o Supabase (dados reais + login)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Crie um projeto em https://supabase.com.
+2. Copie `.env.local.example` para `.env.local` e preencha:
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `UAZAPI_HOST`, `UAZAPI_ADMIN_TOKEN` (canal não oficial)
+   - `META_VERIFY_TOKEN` (webhook da Meta — depois)
+3. Aplique as migrations do diretório `supabase/migrations/` no banco
+   (SQL Editor do Supabase, na ordem 0001 → 0002 → 0003).
+4. Reinicie o `npm run dev`. Acesse `/cadastro` → crie conta → crie a organização.
 
-## Learn More
+## Webhooks (precisam de URL pública do seu VPS)
 
-To learn more about Next.js, take a look at the following resources:
+- UAZAPI: `POST  https://SEU-DOMINIO/api/webhooks/uazapi`
+- Meta:   `GET/POST https://SEU-DOMINIO/api/webhooks/meta`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estrutura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/app/(app)/*      telas autenticadas (dashboard, canais, atendimento, ...)
+src/app/login        login / cadastro / onboarding
+src/app/api/webhooks rotas de webhook (uazapi, meta)
+src/lib/supabase     clientes (browser/server) + proxy de sessão
+src/lib/whatsapp     adapters ChannelProvider (uazapi.ts, meta.ts) + inbound
+supabase/migrations  schema + RLS + realtime
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Plano de arquitetura completo: `../PLANO.md`.
