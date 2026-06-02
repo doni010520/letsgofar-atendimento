@@ -59,6 +59,21 @@ export interface QuickReply {
   created_at: string;
 }
 
+export type CampaignStatus = "draft" | "scheduled" | "running" | "paused" | "done" | "failed";
+
+export interface Campaign {
+  id: string;
+  organization_id: string;
+  automation_id: string | null;
+  name: string;
+  status: CampaignStatus;
+  audience: unknown[];
+  scheduled_at: string | null;
+  progress: number;
+  stats: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Plan {
   id: string;
   organization_id: string;
