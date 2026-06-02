@@ -1,4 +1,4 @@
-import type { Channel, ConversationOverview, Message } from "@/lib/types";
+import type { Channel, ConversationOverview, Message, Department, Tag, QuickReply, Profile } from "@/lib/types";
 
 // Dados de exemplo usados no "modo preview" (sem Supabase configurado),
 // inspirados na conta real para a tela ficar realista.
@@ -33,6 +33,30 @@ function mk(
 }
 
 export const PREVIEW_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+export const MOCK_DEPARTMENTS: Department[] = [
+  { id: "d1", organization_id: "preview", name: "Suporte Técnico", color: "#00a8ff", created_at: "" },
+  { id: "d2", organization_id: "preview", name: "Financeiro", color: "#f59e0b", created_at: "" },
+  { id: "d3", organization_id: "preview", name: "Comercial", color: "#10b981", created_at: "" },
+];
+
+export const MOCK_TAGS: Tag[] = [
+  { id: "t1", organization_id: "preview", name: "Resolvido", color: "#10b981", scope: "conversation", created_at: "" },
+  { id: "t2", organization_id: "preview", name: "Aguardando pagamento", color: "#f59e0b", scope: "conversation", created_at: "" },
+  { id: "t3", organization_id: "preview", name: "VIP", color: "#8b5cf6", scope: "contact", created_at: "" },
+  { id: "t4", organization_id: "preview", name: "Almoço", color: "#6b7280", scope: "status", created_at: "" },
+];
+
+export const MOCK_QUICK_REPLIES: QuickReply[] = [
+  { id: "q1", organization_id: "preview", title: "Saudação", content: "Olá! Como posso ajudar?", shortcut: "/oi", kind: "model", created_at: "" },
+  { id: "q2", organization_id: "preview", title: "Horário", content: "Atendemos de seg a sex, 8h às 18h.", shortcut: "/horario", kind: "model", created_at: "" },
+];
+
+export const MOCK_AGENTS: Profile[] = [
+  { id: "u1", organization_id: "preview", name: "Tainá Borges", email: "taina@mvf.com", role: "agent", department_id: "d1", avatar_url: null, status: "online", whatsapp: null, notify: true, created_at: "" },
+  { id: "u2", organization_id: "preview", name: "Luana Santos", email: "luana@mvf.com", role: "supervisor", department_id: "d2", avatar_url: null, status: "away", whatsapp: null, notify: true, created_at: "" },
+  { id: "u3", organization_id: "preview", name: "ADONIAS SOUZA", email: "adonias@mvf.com", role: "admin", department_id: null, avatar_url: null, status: "offline", whatsapp: null, notify: true, created_at: "" },
+];
 
 // ---------- Conversas e mensagens (modo preview) ----------
 const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();

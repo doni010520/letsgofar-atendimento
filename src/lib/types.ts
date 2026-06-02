@@ -38,6 +38,36 @@ export interface Department {
   created_at: string;
 }
 
+export type TagScope = "conversation" | "contact" | "status";
+
+export interface Tag {
+  id: string;
+  organization_id: string;
+  name: string;
+  color: string | null;
+  scope: TagScope;
+  created_at: string;
+}
+
+export interface QuickReply {
+  id: string;
+  organization_id: string;
+  title: string;
+  content: string;
+  shortcut: string | null;
+  kind: "model" | "macro" | "auto";
+  created_at: string;
+}
+
+export interface Plan {
+  id: string;
+  organization_id: string;
+  name: string;
+  price: number | null;
+  description: string | null;
+  created_at: string;
+}
+
 export interface Channel {
   id: string;
   organization_id: string;
