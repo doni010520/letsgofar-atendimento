@@ -37,8 +37,8 @@ export class MetaProvider implements ChannelProvider {
     return res.json();
   }
 
-  // Meta não usa QR: a "conexão" é a validação das credenciais.
-  async connect(): Promise<ConnectResult> {
+  // Meta não usa QR/código: a "conexão" é a validação das credenciais.
+  async connect(_phone?: string): Promise<ConnectResult> {
     if (!this.phoneNumberId || !this.accessToken) {
       return { status: "error" };
     }

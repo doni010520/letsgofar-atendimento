@@ -16,16 +16,17 @@ export function NewChannelDialog() {
   const [type, setType] = useState<ChannelType>("uazapi");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [qrChannel, setQrChannel] = useState<{ id: string; qr?: string } | null>(null);
+  const [qrChannel, setQrChannel] = useState<{ id: string; qr?: string; phone?: string } | null>(null);
 
   async function onSubmit(formData: FormData) {
     setPending(true);
     setError(null);
     try {
+      const phone = String(formData.get("phone") || "").replace(/\D/g, "");
       const res = await createChannel(formData);
       setOpen(false);
       if (type === "uazapi" && res.status !== "connected") {
-        setQrChannel({ id: res.id, qr: res.qrCode });
+        setQrChannel({ id: res.id, qr: res.qrCode, phone });
       } else {
         router.refresh();
       }
@@ -122,6 +123,7 @@ export function NewChannelDialog() {
         <QrConnectModal
           channelId={qrChannel.id}
           initialQr={qrChannel.qr}
+          initialPhone={qrChannel.phone}
           onClose={() => {
             setQrChannel(null);
             router.refresh();

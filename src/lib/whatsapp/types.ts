@@ -15,13 +15,14 @@ export interface SendMediaParams {
 export interface ConnectResult {
   status: Channel["status"];
   qrCode?: string; // base64/data-url quando aplicável (UAZAPI)
+  pairCode?: string; // código de 8 dígitos para parear por número (UAZAPI)
   externalId?: string;
 }
 
 /** Contrato único para qualquer provedor de WhatsApp (Adapter). */
 export interface ChannelProvider {
-  /** Inicia/garante a conexão. UAZAPI retorna QR; Meta valida credenciais. */
-  connect(): Promise<ConnectResult>;
+  /** Inicia/garante a conexão. Se `phone` vier, pede código de pareamento (UAZAPI). */
+  connect(phone?: string): Promise<ConnectResult>;
   /** Consulta o status atual da conexão. */
   status(): Promise<Channel["status"]>;
   sendText(params: SendTextParams): Promise<{ externalId?: string }>;

@@ -37,8 +37,8 @@ export class UazapiProvider implements ChannelProvider {
     return res.json();
   }
 
-  /** Cria a instância (se necessário) e retorna o QR Code para parear. */
-  async connect(): Promise<ConnectResult> {
+  /** Cria a instância (se necessário) e retorna QR Code ou código de pareamento. */
+  async connect(phone?: string): Promise<ConnectResult> {
     if (!this.token) {
       const created = await this.req(
         "/instance/init",
@@ -47,14 +47,18 @@ export class UazapiProvider implements ChannelProvider {
       );
       this.token = created?.token ?? created?.instance?.token;
     }
-    // Configura o webhook da instância para apontar para o nosso app (best-effort;
-    // ajuste o path conforme a versão da sua UAZAPI se necessário).
+    // Configura o webhook da instância para apontar para o nosso app (best-effort).
     await this.setWebhook().catch((e) => console.warn("uazapi setWebhook", e?.message));
 
-    const conn = await this.req("/instance/connect", { method: "POST", body: "{}" });
+    // Se vier telefone, pede código de pareamento; senão, QR Code.
+    const digits = (phone || "").replace(/\D/g, "");
+    const body = digits ? JSON.stringify({ phone: digits }) : "{}";
+    const conn = await this.req("/instance/connect", { method: "POST", body });
+    const inst = conn?.instance ?? conn;
     return {
-      status: conn?.connected ? "connected" : "connecting",
-      qrCode: conn?.qrcode ?? conn?.qrCode ?? conn?.instance?.qrcode,
+      status: inst?.connected || inst?.status === "connected" ? "connected" : "connecting",
+      qrCode: inst?.qrcode ?? inst?.qrCode,
+      pairCode: inst?.paircode ?? inst?.pairCode ?? inst?.code,
       externalId: this.token,
     };
   }

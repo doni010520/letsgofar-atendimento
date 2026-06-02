@@ -130,13 +130,16 @@ export async function finalizeMetaCoexistence(input: {
   return { id: channel.id as string };
 }
 
-/** Reconecta o canal e devolve um QR atualizado (o QR da UAZAPI expira). */
-export async function refreshChannelConnection(channelId: string) {
+/**
+ * Reconecta o canal e devolve QR atualizado OU código de pareamento.
+ * Se `phone` vier, pede o código de 8 dígitos (parear por número).
+ */
+export async function refreshChannelConnection(channelId: string, phone?: string) {
   const supabase = await createClient();
   const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
   if (!channel) throw new Error("Canal não encontrado.");
 
-  const result = await getProvider(channel as Channel).connect();
+  const result = await getProvider(channel as Channel).connect(phone);
   await supabase
     .from("channels")
     .update({
@@ -149,7 +152,7 @@ export async function refreshChannelConnection(channelId: string) {
     })
     .eq("id", channelId);
 
-  return { status: result.status, qrCode: result.qrCode };
+  return { status: result.status, qrCode: result.qrCode, pairCode: result.pairCode };
 }
 
 /** Consulta o status atual (polling) e persiste. */
