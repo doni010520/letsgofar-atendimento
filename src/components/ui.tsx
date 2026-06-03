@@ -22,7 +22,33 @@ export function PageHeader({
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn("rounded-card bg-surface p-5 shadow-sm", className)}>{children}</div>
+    <div className={cn("rounded-card border border-gray-100 bg-surface p-5 shadow-sm", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function StatCard({
+  label,
+  value,
+  icon,
+  accent = "bg-brand-light text-brand",
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+  accent?: string;
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-card border border-gray-100 bg-surface p-5 shadow-sm transition hover:shadow-md">
+      <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", accent)}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold leading-tight text-ink">{value}</p>
+        <p className="truncate text-xs text-ink-soft">{label}</p>
+      </div>
+    </div>
   );
 }
 
