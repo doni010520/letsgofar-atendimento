@@ -12,7 +12,8 @@ export async function POST(request: Request) {
       const m = payload?.message;
       const isMedia = !!m && (!!m.mediaType || !!m?.content?.URL || /image|audio|video|document|sticker|ptt/i.test(String(m.messageType ?? "")));
       const isReact = !!m && (!!m.reaction || /reaction/i.test(String(m.messageType ?? m.type ?? "")));
-      if (ev !== "messages" || isMedia || isReact) {
+      const isGroupMsg = !!m && (m.isGroup === true || /@g\.us/.test(String(m.chatid ?? "")));
+      if (ev !== "messages" || isMedia || isReact || isGroupMsg) {
         await createServiceClient().from("webhook_log").insert({ payload }).then(() => {}, () => {});
       }
     }
