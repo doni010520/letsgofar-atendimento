@@ -11,7 +11,8 @@ export async function POST(request: Request) {
       const ev = String(payload?.EventType ?? payload?.event ?? "").toLowerCase();
       const m = payload?.message;
       const isMedia = !!m && (!!m.mediaType || !!m?.content?.URL || /image|audio|video|document|sticker|ptt/i.test(String(m.messageType ?? "")));
-      if (ev !== "messages" || isMedia) {
+      const isReact = !!m && (!!m.reaction || /reaction/i.test(String(m.messageType ?? m.type ?? "")));
+      if (ev !== "messages" || isMedia || isReact) {
         await createServiceClient().from("webhook_log").insert({ payload }).then(() => {}, () => {});
       }
     }

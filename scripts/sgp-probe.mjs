@@ -52,8 +52,8 @@ async function call(path, fields) {
   }
 }
 
-const cpfcnpj = args.cpfcnpj ? onlyDigits(args.cpfcnpj) : undefined;
-const contrato = args.contrato ? Number(args.contrato) : undefined;
+const cpfcnpj = (args.cpfcnpj ?? process.env.SGP_CPFCNPJ) ? onlyDigits(args.cpfcnpj ?? process.env.SGP_CPFCNPJ) : undefined;
+const contrato = (args.contrato ?? process.env.SGP_CONTRATO) ? Number(args.contrato ?? process.env.SGP_CONTRATO) : undefined;
 
 await call("api/ura/consultacliente/", { cpfcnpj, contrato });
 await call("api/ura/titulos/", { cpfcnpj, contrato, status: 1, limit: 10 });

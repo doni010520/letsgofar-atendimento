@@ -10,6 +10,17 @@ import {
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+// Paleta de cores por participante (estilo WhatsApp) — determinística pelo nome.
+const AUTHOR_COLORS = [
+  "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2", "#c2185b", "#0097a7",
+  "#f57c00", "#5d4037", "#455a64", "#00796b", "#512da8", "#e64a19",
+];
+function colorForName(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AUTHOR_COLORS[h % AUTHOR_COLORS.length];
+}
+
 function MediaContent({ message }: { message: Message }) {
   const url = message.media_url;
   if (!url) return null;
@@ -79,7 +90,9 @@ export function MessageBubble({
           )}
         >
           {!out && message.author_name && (
-            <p className="mb-0.5 text-xs font-semibold text-brand">{message.author_name}</p>
+            <p className="mb-0.5 text-xs font-semibold" style={{ color: colorForName(message.author_name) }}>
+              {message.author_name}
+            </p>
           )}
           {message.reply_excerpt && (
             <div className={cn("mb-1 rounded border-l-2 px-2 py-1 text-xs", out ? "border-white/60 bg-white/15" : "border-brand/50 bg-black/5 text-ink-soft")}>

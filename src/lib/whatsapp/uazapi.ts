@@ -342,8 +342,12 @@ function extractReply(m: any): InboundMessage["replyTo"] | undefined {
   return { externalId: id ? String(id) : undefined, excerpt, author: ci?.participant ? String(ci.participant).replace(/@.*/, "") : undefined };
 }
 
-// Detecta reação no campo dedicado do webhook (m.reaction) ou pelo messageType.
-const reactionEmoji = (m: any) => (typeof m?.reaction === "string" && m.reaction) || (isReaction(m) ? m?.content?.text ?? m?.text ?? "" : "");
+// Há sinal de reação? (campo dedicado m.reaction OU messageType "ReactionMessage")
+const hasReaction = (m: any) =>
+  isReaction(m) || (typeof m?.reaction === "string" && m.reaction.trim() !== "") || (!!m?.reaction && typeof m.reaction === "object");
+
+// Body é só um ID de mensagem (lixo de reação/citação mal interpretada)?
+const isBareId = (s?: string) => !!s && /^[0-9A-Fa-f]{15,}$/.test(s.trim());
 
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */
 export function parseUazapiWebhook(payload: any): InboundMessage[] {
@@ -353,7 +357,7 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const chatPhoto = chat?.image || chat?.imagePreview || undefined;
   const chatName = chat?.name || chat?.wa_name || undefined;
   return (Array.isArray(msgs) ? msgs : [])
-    .filter((m: any) => isReaction(m) || !!reactionEmoji(m) || !SKIP_TYPES.has(String(m?.messageType ?? m?.mediaType ?? m?.type ?? "").toLowerCase()))
+    .filter((m: any) => hasReaction(m) || !SKIP_TYPES.has(String(m?.messageType ?? m?.mediaType ?? m?.type ?? "").toLowerCase()))
     .map((m: any): InboundMessage => {
       const group = isGroupMessage(m);
       const base = {
@@ -370,14 +374,15 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
             ? String(m.messageTimestamp)
             : undefined,
       };
-      // Evento de reação: não cria mensagem, anexa emoji à msg-alvo.
-      const emoji = reactionEmoji(m);
-      if (isReaction(m) || (emoji && !m?.content?.URL)) {
+      // Evento de reação: NUNCA vira balão — anexa o emoji à msg-alvo (ou é descartado).
+      if (hasReaction(m)) {
+        const r = m?.reaction;
+        const emoji =
+          (typeof r === "string" ? r : r?.text ?? r?.emoji) ?? (isReaction(m) ? m?.content?.text ?? m?.text : "") ?? "";
         const targetId =
-          m?.content?.key?.ID ?? m?.content?.key?.id ?? m?.reactionMessage?.key?.id ?? m?.quoted?.messageid;
-        if (targetId) {
-          return { ...base, contentType: "text", reaction: { targetExternalId: String(targetId), emoji } };
-        }
+          m?.content?.key?.ID ?? m?.content?.key?.id ?? r?.key?.ID ?? r?.key?.id ?? r?.id ??
+          m?.reactionMessage?.key?.ID ?? m?.quoted?.messageid ?? m?.quoted?.id ?? "";
+        return { ...base, contentType: "text", reaction: { targetExternalId: String(targetId || ""), emoji: String(emoji || "") } };
       }
       // IMPORTANTE: o tipo real está em mediaType/messageType (type costuma ser só "media"/"text").
       return {
@@ -390,7 +395,9 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
         replyTo: extractReply(m),
       };
     })
-    .filter((m: InboundMessage) => !!m.from); // precisa de número/id de contato válido
+    .filter((m: InboundMessage) => !!m.from) // precisa de número/id de contato válido
+    // Descarta "texto" que seja só um ID de mensagem (lixo de reação/citação) — mantém mídia e reações.
+    .filter((m: InboundMessage) => !!m.reaction || m.contentType !== "text" || (!!m.body && m.body.trim() !== "" && !isBareId(m.body)));
 }
 
 /**
