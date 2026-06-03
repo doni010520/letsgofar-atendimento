@@ -18,6 +18,7 @@ import {
   closeConversation,
   toggleMute,
   fetchMessages,
+  fetchConversations,
 } from "@/app/(app)/atendimento/actions";
 import type { ConversationOverview, Message } from "@/lib/types";
 
@@ -54,6 +55,35 @@ export function Inbox({
     }
     if (live) markConversationRead(id).catch(() => {});
   }
+
+  // Polling de segurança: atualiza a inbox a cada 5s (independe do Realtime).
+  useEffect(() => {
+    if (!live) return;
+    let cancel = false;
+    const tick = async () => {
+      try {
+        const convs = await fetchConversations();
+        if (!cancel && Array.isArray(convs)) setConversations(convs);
+        if (!cancel && selectedId) {
+          const msgs = await fetchMessages(selectedId);
+          setMessagesByConv((prev) => {
+            const cur = prev[selectedId] ?? [];
+            const lastCur = cur[cur.length - 1];
+            const lastNew = msgs[msgs.length - 1];
+            if (cur.length === msgs.length && lastCur?.id === lastNew?.id && lastCur?.status === lastNew?.status) return prev;
+            return { ...prev, [selectedId]: msgs };
+          });
+        }
+      } catch {
+        /* silencioso */
+      }
+    };
+    const t = setInterval(tick, 5000);
+    return () => {
+      cancel = true;
+      clearInterval(t);
+    };
+  }, [live, selectedId]);
 
   // Realtime: mensagens recebidas (apenas direção "in"; as enviadas são otimistas).
   useEffect(() => {

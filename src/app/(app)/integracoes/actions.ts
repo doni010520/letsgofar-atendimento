@@ -8,6 +8,7 @@ export async function createIntegration(fd: FormData) {
     type: String(fd.get("type") || "sgp"),
     config: {
       url: String(fd.get("url") || "").trim(),
+      app: String(fd.get("app") || "").trim(),
       token: String(fd.get("token") || "").trim(),
     },
   });

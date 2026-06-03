@@ -4,13 +4,18 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/whatsapp";
-import { getMessages } from "@/lib/data/conversations";
+import { getMessages, getConversations } from "@/lib/data/conversations";
 import type { Channel, ContentType } from "@/lib/types";
 
 const isPreview = () => !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 export async function fetchMessages(conversationId: string) {
   return getMessages(conversationId);
+}
+
+/** Lista atualizada de conversas (usada pelo polling da inbox). */
+export async function fetchConversations() {
+  return getConversations();
 }
 
 export async function sendMessage(conversationId: string, text: string, replyToExternal?: string) {
