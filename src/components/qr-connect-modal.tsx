@@ -30,6 +30,7 @@ export function QrConnectModal({
   const [phone, setPhone] = useState(initialPhone ?? "");
   const [status, setStatus] = useState<Channel["status"]>("connecting");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const connected = status === "connected";
 
@@ -46,12 +47,26 @@ export function QrConnectModal({
 
   async function genCode() {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) return;
+    if (digits.length < 10) {
+      setErr("Informe o número completo: DDI + DDD + número.");
+      return;
+    }
     setBusy(true);
+    setErr(null);
+    setPairCode(undefined);
     try {
-      const r = await refreshChannelConnection(channelId, digits);
-      setPairCode(r.pairCode);
+      let r = await refreshChannelConnection(channelId, digits);
+      // UAZAPI às vezes retorna vazio na 1ª chamada — tenta de novo.
+      if (!r.pairCode && r.status !== "connected") {
+        await new Promise((res) => setTimeout(res, 1800));
+        r = await refreshChannelConnection(channelId, digits);
+      }
       setStatus(r.status);
+      if (r.pairCode) setPairCode(r.pairCode);
+      else if (r.status !== "connected")
+        setErr("Não consegui gerar o código agora. Aguarde alguns segundos e clique de novo.");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erro ao gerar o código.");
     } finally {
       setBusy(false);
     }
@@ -158,8 +173,9 @@ export function QrConnectModal({
                   disabled={busy || phone.replace(/\D/g, "").length < 10}
                   className="mx-auto mt-4 flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
                 >
-                  <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> {pairCode ? "Gerar novo código" : "Gerar código"}
+                  <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> {busy ? "Gerando..." : pairCode ? "Gerar novo código" : "Gerar código"}
                 </button>
+                {err && <p className="mt-2 text-xs text-danger">{err}</p>}
               </>
             )}
             <p className="mt-3 text-[11px] text-ink-soft">Aguardando leitura...</p>
