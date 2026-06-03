@@ -37,6 +37,13 @@ export async function persistInbound(messages: InboundMessage[]) {
 
     const org = channel.organization_id;
     const isGroup = !!msg.isGroup;
+    const fromMe = !!msg.fromMe; // eco do próprio número (enviado pelo celular) → direção "out"
+
+    // Dedup: ignora se já gravamos essa mensagem (mesmo external_id).
+    if (msg.externalId) {
+      const { data: dup } = await db.from("messages").select("id").eq("external_id", msg.externalId).limit(1).maybeSingle();
+      if (dup) continue;
+    }
 
     // Contato/grupo (upsert por organização + telefone/id). Não sobrescreve um
     // nome já existente com null.
@@ -107,7 +114,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       convBotNode = existing.bot_node_id;
     } else {
       isNew = true;
-      convStatus = automation ? "bot" : "queued";
+      convStatus = fromMe ? "open" : automation ? "bot" : "queued";
       const { data: conv } = await db
         .from("conversations")
         .insert({
@@ -135,17 +142,17 @@ export async function persistInbound(messages: InboundMessage[]) {
     await db.from("messages").insert({
       organization_id: org,
       conversation_id: conversationId,
-      direction: "in",
-      sender_type: "contact",
+      direction: fromMe ? "out" : "in",
+      sender_type: fromMe ? "agent" : "contact",
       content_type: msg.contentType,
       body,
       media_url: mediaUrl,
       external_id: msg.externalId ?? null,
-      author_name: msg.authorName ?? null,
+      author_name: fromMe ? null : msg.authorName ?? null,
       reply_to_external: msg.replyTo?.externalId ?? null,
       reply_excerpt: msg.replyTo?.excerpt ?? null,
       reply_author: msg.replyTo?.author ?? null,
-      status: "delivered",
+      status: fromMe ? "sent" : "delivered",
     });
 
     await db
@@ -153,8 +160,8 @@ export async function persistInbound(messages: InboundMessage[]) {
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", conversationId);
 
-    // Chatbot: roda se a conversa está no bot (aguardando) ou acabou de nascer com automação ativa.
-    if (automation && !isGroup && (convStatus === "bot" || isNew)) {
+    // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número).
+    if (automation && !isGroup && !fromMe && (convStatus === "bot" || isNew)) {
       const r = await runChatbot(
         db,
         channel as Channel,

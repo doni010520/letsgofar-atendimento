@@ -347,7 +347,6 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const msgs = payload?.messages ?? (payload?.message ? [payload.message] : []);
   const token = payload?.token ?? payload?.instance ?? payload?.owner ?? "";
   return (Array.isArray(msgs) ? msgs : [])
-    .filter((m: any) => !m?.fromMe) // ignora ecos do próprio número
     .filter((m: any) => isReaction(m) || !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
     .map((m: any): InboundMessage => {
       const group = isGroupMessage(m);
@@ -355,6 +354,7 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
         channelExternalId: token,
         from: group ? groupId(m) : contactNumber(m),
         isGroup: group,
+        fromMe: !!m?.fromMe,
         authorName: group ? authorName(m) : undefined,
         timestamp: m?.timestamp
           ? String(m.timestamp)

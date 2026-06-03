@@ -66,13 +66,14 @@ export function Inbox({
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const m = payload.new as Message;
-          if (m.direction !== "in") return;
 
-          setMessagesByConv((prev) =>
-            prev[m.conversation_id]
-              ? { ...prev, [m.conversation_id]: [...prev[m.conversation_id], m] }
-              : prev,
-          );
+          setMessagesByConv((prev) => {
+            const list = prev[m.conversation_id];
+            if (!list) return prev;
+            // Evita duplicar mensagens já presentes (ex.: otimista app-enviada).
+            if (list.some((x) => x.id === m.id || (m.external_id && x.external_id === m.external_id))) return prev;
+            return { ...prev, [m.conversation_id]: [...list, m] };
+          });
 
           setConversations((prev) => {
             const idx = prev.findIndex((c) => c.id === m.conversation_id);
@@ -84,7 +85,7 @@ export function Inbox({
               ...prev[idx],
               last_message_body: m.body,
               last_message_at: m.created_at,
-              last_message_direction: "in",
+              last_message_direction: m.direction,
               last_message_author: m.author_name ?? null,
             };
             return [updated, ...prev.filter((_, i) => i !== idx)];
