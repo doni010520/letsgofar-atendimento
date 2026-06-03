@@ -52,6 +52,9 @@ export class UazapiProvider implements ChannelProvider {
 
     // Se vier telefone, pede código de pareamento; senão, QR Code.
     const digits = (phone || "").replace(/\D/g, "");
+    // A UAZAPI só emite um código/QR novo a partir de um estado limpo: desconecta antes.
+    await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 1200));
     const body = digits ? JSON.stringify({ phone: digits }) : "{}";
     const conn = await this.req("/instance/connect", { method: "POST", body });
     const inst = conn?.instance ?? conn;
@@ -61,6 +64,18 @@ export class UazapiProvider implements ChannelProvider {
       pairCode: inst?.paircode ?? inst?.pairCode ?? inst?.code,
       externalId: this.token,
     };
+  }
+
+  /** Desconecta a instância (sem apagá-la). */
+  async disconnect(): Promise<void> {
+    if (!this.token) return;
+    await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
+  }
+
+  /** Apaga a instância na UAZAPI (DELETE /instance, com token). */
+  async deleteInstance(): Promise<void> {
+    if (!this.token) return;
+    await this.req("/instance", { method: "DELETE" }).catch(() => {});
   }
 
   /** Aponta o webhook da instância para /api/webhooks/uazapi. */

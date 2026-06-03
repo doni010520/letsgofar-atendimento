@@ -173,3 +173,34 @@ export async function syncChannelStatus(channelId: string) {
   }
   return { status };
 }
+
+/** Desconecta o canal (mantém o cadastro). */
+export async function disconnectChannel(channelId: string) {
+  const supabase = await createClient();
+  const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
+  if (!channel) throw new Error("Canal não encontrado.");
+  try {
+    await getProvider(channel as Channel).disconnect?.();
+  } catch (e) {
+    console.warn("disconnect", (e as Error)?.message);
+  }
+  await supabase.from("channels").update({ status: "disconnected" }).eq("id", channelId);
+  revalidatePath("/canais");
+  revalidatePath("/dashboard");
+}
+
+/** Exclui o canal (apaga a instância no provedor e o registro). */
+export async function deleteChannel(channelId: string) {
+  const supabase = await createClient();
+  const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
+  if (!channel) return;
+  try {
+    await getProvider(channel as Channel).deleteInstance?.();
+  } catch (e) {
+    console.warn("deleteInstance", (e as Error)?.message);
+  }
+  const { error } = await supabase.from("channels").delete().eq("id", channelId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/canais");
+  revalidatePath("/dashboard");
+}

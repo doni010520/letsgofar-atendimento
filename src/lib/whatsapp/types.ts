@@ -29,6 +29,10 @@ export interface ChannelProvider {
   sendMedia(params: SendMediaParams): Promise<{ externalId?: string }>;
   /** URL da foto de perfil do contato (UAZAPI). Meta não expõe → null. */
   getProfilePicture?(phone: string): Promise<string | null>;
+  /** Desconecta a sessão sem apagar (UAZAPI). */
+  disconnect?(): Promise<void>;
+  /** Apaga a instância no provedor (UAZAPI). */
+  deleteInstance?(): Promise<void>;
 }
 
 /** Mensagem normalizada vinda de um webhook, independente do provedor. */
