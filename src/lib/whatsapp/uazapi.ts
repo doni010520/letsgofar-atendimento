@@ -398,22 +398,34 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
  * Só roda quando o evento indica atualização/ack, para não confundir com mensagens novas.
  */
 export function parseUazapiStatus(payload: any): { externalId: string; status: "sent" | "delivered" | "read" }[] {
-  const ev = String(payload?.EventType ?? payload?.event ?? payload?.type ?? "").toLowerCase();
-  const isUpdate = /update|ack|status|receipt/.test(ev);
+  const rank = (raw: string): "sent" | "delivered" | "read" | undefined => {
+    const s = raw.toLowerCase();
+    if (/read|played/.test(s)) return "read";
+    if (/deliv/.test(s)) return "delivered";
+    if (/sent|server/.test(s)) return "sent";
+    return undefined;
+  };
+
+  // Formato real do webhook: { EventType:"messages_update", type:"ReadReceipt",
+  // state:"Read"|"Delivered", event:{ MessageIDs:[...], Type:"read"|"delivered" } }
+  const ev = payload?.event;
+  if (ev && Array.isArray(ev.MessageIDs)) {
+    const status = rank(String(payload?.state ?? ev.Type ?? payload?.type ?? ""));
+    if (!status) return [];
+    return ev.MessageIDs.filter(Boolean).map((id: any) => ({ externalId: String(id), status }));
+  }
+
+  // Fallback: array de mensagens com campo status/ack.
+  const evt = String(payload?.EventType ?? payload?.type ?? "").toLowerCase();
+  const isUpdate = /update|ack|status|receipt/.test(evt);
   const items = payload?.messages ?? (payload?.message ? [payload.message] : []);
   const arr = Array.isArray(items) ? items : [];
   const out: { externalId: string; status: "sent" | "delivered" | "read" }[] = [];
   for (const m of arr) {
-    const hasStatus = m?.status != null || m?.ack != null || m?.messageStatus != null;
-    if (!isUpdate && !(m?.fromMe && hasStatus)) continue;
+    if (!isUpdate && !(m?.fromMe && (m?.status != null || m?.ack != null))) continue;
     const id = m?.id ?? m?.messageid ?? m?.messageId ?? m?.key?.id;
-    if (!id) continue;
-    const raw = String(m?.status ?? m?.ack ?? m?.messageStatus ?? m?.Status ?? "").toLowerCase();
-    let status: "sent" | "delivered" | "read" | undefined;
-    if (/read|played|^[45]$/.test(raw)) status = "read";
-    else if (/deliv|^[23]$/.test(raw)) status = "delivered";
-    else if (/sent|server|^1$/.test(raw)) status = "sent";
-    if (status) out.push({ externalId: String(id), status });
+    const status = rank(String(m?.status ?? m?.ack ?? m?.messageStatus ?? m?.Status ?? ""));
+    if (id && status) out.push({ externalId: String(id), status });
   }
   return out;
 }

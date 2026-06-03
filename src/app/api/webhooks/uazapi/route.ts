@@ -6,10 +6,12 @@ import { createServiceClient } from "@/lib/supabase/server";
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    // DEBUG temporário: registra eventos não-"messages" (status/ack/chat) para diagnóstico.
+    // DEBUG temporário: registra eventos de status e mensagens de mídia para diagnóstico.
     if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.WEBHOOK_DEBUG === "1") {
       const ev = String(payload?.EventType ?? payload?.event ?? "").toLowerCase();
-      if (ev !== "messages" || /update|ack|status|read|receipt/.test(ev)) {
+      const m = payload?.message;
+      const isMedia = !!m && (!!m.mediaType || !!m?.content?.URL || /image|audio|video|document|sticker|ptt/i.test(String(m.messageType ?? "")));
+      if (ev !== "messages" || isMedia) {
         await createServiceClient().from("webhook_log").insert({ payload }).then(() => {}, () => {});
       }
     }
