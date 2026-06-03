@@ -17,7 +17,6 @@ export interface ConnectResult {
   qrCode?: string; // base64/data-url quando aplicável (UAZAPI)
   pairCode?: string; // código de 8 dígitos para parear por número (UAZAPI)
   externalId?: string;
-  debug?: string; // trilha de diagnóstico (temporário)
 }
 
 /** Contrato único para qualquer provedor de WhatsApp (Adapter). */
