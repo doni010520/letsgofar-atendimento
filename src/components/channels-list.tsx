@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MoreVertical, Power, Trash2, Plug } from "lucide-react";
 import { ChannelCard } from "@/components/channel-card";
 import { QrConnectModal } from "@/components/qr-connect-modal";
-import { disconnectChannel, deleteChannel } from "@/app/(app)/canais/actions";
+import { disconnectChannel, deleteChannel, syncChannelStatus } from "@/app/(app)/canais/actions";
 import type { Channel } from "@/lib/types";
 
 export function ChannelsList({ channels }: { channels: Channel[] }) {
@@ -13,6 +13,25 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
   const [connect, setConnect] = useState<{ id: string; phone?: string } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Ao abrir, sincroniza o status real de cada canal não-Meta (a UAZAPI é a fonte
+  // da verdade). Se algo mudou no banco, atualiza a tela.
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const targets = channels.filter((c) => c.type !== "meta_cloud");
+      const results = await Promise.all(
+        targets.map((c) =>
+          syncChannelStatus(c.id)
+            .then((r) => r.status !== c.status)
+            .catch(() => false),
+        ),
+      );
+      if (!cancel && results.some(Boolean)) router.refresh();
+    })();
+    return () => { cancel = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels.map((c) => `${c.id}:${c.status}`).join(",")]);
 
   async function onDisconnect(id: string) {
     setMenu(null);

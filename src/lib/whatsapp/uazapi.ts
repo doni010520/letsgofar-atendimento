@@ -194,39 +194,54 @@ export class UazapiProvider implements ChannelProvider {
   }
 }
 
+/** Detecta se a mensagem veio de um GRUPO (chatid @g.us ou flag isGroup). */
+function isGroupMessage(m: any): boolean {
+  if (m?.isGroup === true) return true;
+  const jid = String(
+    m?.chatid ?? m?.chat ?? m?.remoteJid ?? m?.key?.remoteJid ?? m?.content?.key?.remoteJID ?? m?.from ?? "",
+  );
+  return /@g\.us/i.test(jid);
+}
+
+// Tipos que não devem virar conversa/mensagem de atendimento.
+const SKIP_TYPES = new Set([
+  "reactionmessage", "reaction", "protocolmessage", "senderkeydistributionmessage",
+  "pollupdatemessage", "ephemeralmessage",
+]);
+
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */
 export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const msgs = payload?.messages ?? (payload?.message ? [payload.message] : []);
+  const token = payload?.token ?? payload?.instance ?? payload?.owner ?? "";
   return (Array.isArray(msgs) ? msgs : [])
-    .filter((m: any) => !m?.fromMe)
+    .filter((m: any) => !m?.fromMe) // ignora ecos do próprio número
+    .filter((m: any) => !isGroupMessage(m)) // atendimento é 1:1 — grupos são ignorados
+    .filter((m: any) => !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
     .map((m: any) => ({
-      channelExternalId: payload?.token ?? payload?.instance ?? "",
-      from: String(m?.sender ?? m?.from ?? "").replace(/\D/g, ""),
-      contactName: m?.senderName ?? m?.pushName,
+      channelExternalId: token,
+      from: String(m?.sender ?? m?.from ?? m?.chatid ?? "").replace(/@.*/, "").replace(/\D/g, ""),
+      contactName: m?.senderName ?? m?.pushName ?? m?.notifyName,
       contentType: mapType(m?.type ?? m?.messageType),
-      body: m?.text ?? m?.body ?? m?.caption,
-      mediaUrl: m?.file ?? m?.mediaUrl,
-      externalId: m?.id ?? m?.messageId,
-      timestamp: m?.timestamp ? String(m.timestamp) : undefined,
-    }));
+      body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
+      mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
+      externalId: m?.id ?? m?.messageId ?? m?.messageid,
+      timestamp: m?.timestamp
+        ? String(m.timestamp)
+        : m?.messageTimestamp
+          ? String(m.messageTimestamp)
+          : undefined,
+    }))
+    .filter((m: InboundMessage) => !!m.from); // precisa de remetente válido
 }
 
 function mapType(t?: string): InboundMessage["contentType"] {
-  switch ((t || "").toLowerCase()) {
-    case "image":
-      return "image";
-    case "audio":
-    case "ptt":
-      return "audio";
-    case "video":
-      return "video";
-    case "document":
-      return "document";
-    case "sticker":
-      return "sticker";
-    case "location":
-      return "location";
-    default:
-      return "text";
-  }
+  const s = (t || "").toLowerCase();
+  if (s.includes("image")) return "image";
+  if (s.includes("audio") || s.includes("ptt")) return "audio";
+  if (s.includes("video")) return "video";
+  if (s.includes("document")) return "document";
+  if (s.includes("sticker")) return "sticker";
+  if (s.includes("location")) return "location";
+  if (s.includes("contact") || s.includes("vcard")) return "contact";
+  return "text";
 }
