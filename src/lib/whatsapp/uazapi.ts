@@ -50,14 +50,8 @@ export class UazapiProvider implements ChannelProvider {
     // Configura o webhook da instância para apontar para o nosso app (best-effort).
     await this.setWebhook().catch((e) => console.warn("uazapi setWebhook", e?.message));
 
-    // Se vier telefone, pede código de pareamento; senão, QR Code.
     const digits = (phone || "").replace(/\D/g, "");
-    // A UAZAPI só emite um código/QR novo a partir de um estado limpo: desconecta antes.
-    await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 1000));
-
-    const body = digits ? JSON.stringify({ phone: digits }) : "{}";
-    const conn = await this.req("/instance/connect", { method: "POST", body });
+    const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
     const read = (o: any) => {
       const i = o?.instance ?? o ?? {};
       return {
@@ -66,13 +60,29 @@ export class UazapiProvider implements ChannelProvider {
         code: i.paircode ?? i.pairCode ?? i.code,
       };
     };
-    let r = read(conn);
-    // O código/QR é gerado de forma assíncrona — faz polling do status até aparecer.
-    for (let i = 0; i < 8 && !r.connected && !r.qr && !r.code; i++) {
-      await new Promise((res) => setTimeout(res, 1500));
-      const s = await this.req("/instance/status").catch(() => null);
-      if (s) r = read(s);
+    const body = digits ? JSON.stringify({ phone: digits }) : "{}";
+
+    // A UAZAPI só emite código/QR a partir de um estado LIMPO. Cada tentativa:
+    // desconecta → aguarda → connect. Repete até obter código (modo telefone) ou QR.
+    let r = { connected: false, qr: undefined as string | undefined, code: undefined as string | undefined };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
+      await sleep(1500);
+      const conn = await this.req("/instance/connect", { method: "POST", body }).catch(() => null);
+      if (conn) r = read(conn);
+
+      // Modo QR: o QR pode vir alguns segundos depois — consulta o status.
+      if (!digits) {
+        for (let i = 0; i < 6 && !r.connected && !r.qr; i++) {
+          await sleep(1500);
+          const s = await this.req("/instance/status").catch(() => null);
+          if (s) r = read(s);
+        }
+      }
+
+      if (r.connected || (digits ? r.code : r.qr)) break;
     }
+
     return {
       status: r.connected ? "connected" : "connecting",
       qrCode: r.qr || undefined,
