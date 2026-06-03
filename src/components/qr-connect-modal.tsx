@@ -32,6 +32,7 @@ export function QrConnectModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [dbg, setDbg] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false); // já fez a 1ª sincronização de status?
 
   const connected = status === "connected";
 
@@ -77,13 +78,30 @@ export function QrConnectModal({
     }
   }
 
-  // Ao abrir sem QR (canal existente), busca um QR na hora.
+  // Ao abrir: sincroniza o status PRIMEIRO (o canal pode já estar conectado).
+  // NÃO dispara connect aqui — abrir QR automático desconectaria um canal ativo.
   useEffect(() => {
-    if (!initialQr) refreshQr();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancel = false;
+    (async () => {
+      try {
+        const { status } = await syncChannelStatus(channelId);
+        if (!cancel) setStatus(status);
+      } finally {
+        if (!cancel) setChecked(true);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [channelId]);
 
-  // Polling de status.
+  // Busca o QR só quando o usuário está na aba QR, já checou o status e não está conectado.
+  useEffect(() => {
+    if (!checked || connected || mode !== "qr") return;
+    if (!qr) refreshQr();
+    const t = setInterval(refreshQr, 25000);
+    return () => clearInterval(t);
+  }, [checked, connected, mode, qr, refreshQr]);
+
+  // Polling de status enquanto não conectar.
   useEffect(() => {
     const t = setInterval(async () => {
       const { status } = await syncChannelStatus(channelId);
@@ -95,13 +113,6 @@ export function QrConnectModal({
     }, 4000);
     return () => clearInterval(t);
   }, [channelId, onConnected]);
-
-  // Renova o QR a cada 25s (somente no modo QR).
-  useEffect(() => {
-    if (connected || mode !== "qr") return;
-    const t = setInterval(refreshQr, 25000);
-    return () => clearInterval(t);
-  }, [refreshQr, connected, mode]);
 
   const img = toDataUrl(qr);
 

@@ -137,9 +137,10 @@ export class UazapiProvider implements ChannelProvider {
   }
 
   async status(): Promise<Channel["status"]> {
-    const s = await this.req("/instance/status");
-    if (s?.connected || s?.status === "connected") return "connected";
-    if (s?.status === "connecting") return "connecting";
+    const o = await this.req("/instance/status");
+    const i = (o?.instance ?? o ?? {}) as { status?: string; connected?: boolean };
+    if (o?.connected || i.connected || i.status === "connected") return "connected";
+    if (i.status === "connecting") return "connecting";
     return "disconnected";
   }
 
