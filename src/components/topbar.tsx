@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Bell, Settings, MessageCircle, User, LogOut, ChevronDown } from "lucide-react";
+import { APP_VERSION } from "@/lib/version";
 
 export function Topbar({
   userName,
@@ -32,6 +33,12 @@ export function Topbar({
       </Link>
 
       <div className="flex items-center gap-1">
+        <span
+          title="Versão do app"
+          className="mr-2 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-mono text-[11px] font-semibold text-ink-soft"
+        >
+          {APP_VERSION}
+        </span>
         <Link
           href="/ajustes"
           className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-gray-100 hover:text-ink"
