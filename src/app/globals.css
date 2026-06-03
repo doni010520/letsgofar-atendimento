@@ -31,6 +31,19 @@ body {
   box-sizing: border-box;
 }
 
+/* Tailwind v4 não força cursor de clique em botões — restauramos aqui (global). */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label[for],
+a[href] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
