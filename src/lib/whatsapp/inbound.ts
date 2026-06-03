@@ -126,6 +126,26 @@ export async function persistInbound(messages: InboundMessage[]) {
       if (!body && stored.transcription) body = stored.transcription;
     }
 
+    // Citação: resolve trecho e AUTOR a partir da mensagem citada que já temos no banco
+    // (o webhook só traz o LID do autor, sem nome).
+    let replyExcerpt = msg.replyTo?.excerpt ?? null;
+    let replyAuthor = msg.replyTo?.author ?? null;
+    if (msg.replyTo?.externalId) {
+      const t = msg.replyTo.externalId;
+      const tail = t.includes(":") ? t.split(":").pop()! : t;
+      const { data: q } = await db
+        .from("messages")
+        .select("author_name, direction, body, content_type")
+        .or(`external_id.eq.${t},external_id.ilike.%${tail}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (q) {
+        if (!replyExcerpt) replyExcerpt = q.body ?? (q.content_type !== "text" ? `[${q.content_type}]` : null);
+        replyAuthor = q.author_name ?? (q.direction === "out" ? "Você" : contact?.name ?? null);
+      }
+    }
+
     await db.from("messages").insert({
       organization_id: org,
       conversation_id: conversationId,
@@ -137,8 +157,8 @@ export async function persistInbound(messages: InboundMessage[]) {
       external_id: msg.externalId ?? null,
       author_name: fromMe ? null : msg.authorName ?? null,
       reply_to_external: msg.replyTo?.externalId ?? null,
-      reply_excerpt: msg.replyTo?.excerpt ?? null,
-      reply_author: msg.replyTo?.author ?? null,
+      reply_excerpt: replyExcerpt,
+      reply_author: replyAuthor,
       status: fromMe ? "sent" : "delivered",
     });
 
