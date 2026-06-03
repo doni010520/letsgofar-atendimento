@@ -366,6 +366,31 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
     .filter((m: InboundMessage) => !!m.from); // precisa de número/id de contato válido
 }
 
+/**
+ * Extrai atualizações de status (entregue/lido) de eventos messages_update.
+ * Só roda quando o evento indica atualização/ack, para não confundir com mensagens novas.
+ */
+export function parseUazapiStatus(payload: any): { externalId: string; status: "sent" | "delivered" | "read" }[] {
+  const ev = String(payload?.EventType ?? payload?.event ?? payload?.type ?? "").toLowerCase();
+  const isUpdate = /update|ack|status|receipt/.test(ev);
+  const items = payload?.messages ?? (payload?.message ? [payload.message] : []);
+  const arr = Array.isArray(items) ? items : [];
+  const out: { externalId: string; status: "sent" | "delivered" | "read" }[] = [];
+  for (const m of arr) {
+    const hasStatus = m?.status != null || m?.ack != null || m?.messageStatus != null;
+    if (!isUpdate && !(m?.fromMe && hasStatus)) continue;
+    const id = m?.id ?? m?.messageid ?? m?.messageId ?? m?.key?.id;
+    if (!id) continue;
+    const raw = String(m?.status ?? m?.ack ?? m?.messageStatus ?? m?.Status ?? "").toLowerCase();
+    let status: "sent" | "delivered" | "read" | undefined;
+    if (/read|played|^[45]$/.test(raw)) status = "read";
+    else if (/deliv|^[23]$/.test(raw)) status = "delivered";
+    else if (/sent|server|^1$/.test(raw)) status = "sent";
+    if (status) out.push({ externalId: String(id), status });
+  }
+  return out;
+}
+
 function mapType(t?: string): InboundMessage["contentType"] {
   const s = (t || "").toLowerCase();
   if (s.includes("image")) return "image";

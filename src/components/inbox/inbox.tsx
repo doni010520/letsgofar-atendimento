@@ -89,6 +89,18 @@ export function Inbox({
           });
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages" },
+        (payload) => {
+          const m = payload.new as Message;
+          setMessagesByConv((prev) =>
+            prev[m.conversation_id]
+              ? { ...prev, [m.conversation_id]: prev[m.conversation_id].map((x) => (x.id === m.id ? { ...x, ...m } : x)) }
+              : prev,
+          );
+        },
+      )
       .subscribe();
 
     return () => {

@@ -132,6 +132,29 @@ export async function persistInbound(messages: InboundMessage[]) {
   }
 }
 
+const STATUS_RANK: Record<string, number> = { pending: 0, sent: 1, delivered: 2, read: 3, failed: 0 };
+
+/** Aplica atualizações de status (entregue/lido) às mensagens enviadas, só "subindo" o nível. */
+export async function persistStatusUpdates(updates: { externalId: string; status: "sent" | "delivered" | "read" }[]) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !updates.length) return;
+  const db = createServiceClient();
+  for (const u of updates) {
+    const tail = u.externalId.includes(":") ? u.externalId.split(":").pop()! : u.externalId;
+    const { data: msg } = await db
+      .from("messages")
+      .select("id, status")
+      .eq("direction", "out")
+      .or(`external_id.eq.${u.externalId},external_id.ilike.%${tail}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!msg) continue;
+    if ((STATUS_RANK[u.status] ?? 0) > (STATUS_RANK[msg.status] ?? 0)) {
+      await db.from("messages").update({ status: u.status }).eq("id", msg.id);
+    }
+  }
+}
+
 type Reaction = { emoji: string; by: string };
 
 /** Anexa (ou remove, se emoji vazio) uma reação à mensagem-alvo, casando pelo id externo. */
