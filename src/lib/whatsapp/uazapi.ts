@@ -54,14 +54,29 @@ export class UazapiProvider implements ChannelProvider {
     const digits = (phone || "").replace(/\D/g, "");
     // A UAZAPI só emite um código/QR novo a partir de um estado limpo: desconecta antes.
     await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, 1000));
+
     const body = digits ? JSON.stringify({ phone: digits }) : "{}";
     const conn = await this.req("/instance/connect", { method: "POST", body });
-    const inst = conn?.instance ?? conn;
+    const read = (o: any) => {
+      const i = o?.instance ?? o ?? {};
+      return {
+        connected: !!(i.connected || i.status === "connected" || o?.loggedIn),
+        qr: i.qrcode ?? i.qrCode,
+        code: i.paircode ?? i.pairCode ?? i.code,
+      };
+    };
+    let r = read(conn);
+    // O código/QR é gerado de forma assíncrona — faz polling do status até aparecer.
+    for (let i = 0; i < 8 && !r.connected && !r.qr && !r.code; i++) {
+      await new Promise((res) => setTimeout(res, 1500));
+      const s = await this.req("/instance/status").catch(() => null);
+      if (s) r = read(s);
+    }
     return {
-      status: inst?.connected || inst?.status === "connected" ? "connected" : "connecting",
-      qrCode: inst?.qrcode ?? inst?.qrCode,
-      pairCode: inst?.paircode ?? inst?.pairCode ?? inst?.code,
+      status: r.connected ? "connected" : "connecting",
+      qrCode: r.qr || undefined,
+      pairCode: r.code || undefined,
       externalId: this.token,
     };
   }
