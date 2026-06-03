@@ -2,7 +2,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { InboundMessage } from "./types";
 import type { Channel } from "@/lib/types";
 import { syncContactAvatar } from "./avatar";
+import { storeInboundMedia } from "./media";
 import { getProvider } from "./index";
+
+const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
 /**
  * Persiste mensagens recebidas via webhook: localiza o canal pelo external_id,
@@ -89,14 +92,23 @@ export async function persistInbound(messages: InboundMessage[]) {
       conversationId = conv!.id;
     }
 
+    // Mídia: baixa/descriptografa e re-hospeda; áudio ganha transcrição como corpo.
+    let mediaUrl = msg.mediaUrl ?? null;
+    let body = msg.body ?? null;
+    if (MEDIA_TYPES.has(msg.contentType)) {
+      const stored = await storeInboundMedia(db, channel as Channel, msg.externalId).catch(() => ({}) as { url?: string; transcription?: string });
+      if (stored.url) mediaUrl = stored.url;
+      if (!body && stored.transcription) body = stored.transcription;
+    }
+
     await db.from("messages").insert({
       organization_id: org,
       conversation_id: conversationId,
       direction: "in",
       sender_type: "contact",
       content_type: msg.contentType,
-      body: msg.body ?? null,
-      media_url: msg.mediaUrl ?? null,
+      body,
+      media_url: mediaUrl,
       external_id: msg.externalId ?? null,
       author_name: msg.authorName ?? null,
       status: "delivered",

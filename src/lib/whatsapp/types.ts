@@ -32,6 +32,8 @@ export interface ChannelProvider {
   getProfilePicture?(phone: string): Promise<string | null>;
   /** Nome + imagem de um chat/grupo (UAZAPI). Para grupos, passe o JID `<id>@g.us`. */
   getChatInfo?(jid: string): Promise<{ name?: string; image?: string }>;
+  /** Baixa/descriptografa uma mídia recebida pelo id da mensagem (UAZAPI). */
+  downloadMedia?(externalId: string): Promise<{ url?: string; mimetype?: string; transcription?: string }>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */

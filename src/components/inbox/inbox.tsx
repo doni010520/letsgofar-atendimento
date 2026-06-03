@@ -7,6 +7,7 @@ import { ChatThread } from "./chat-thread";
 import { createClient } from "@/lib/supabase/client";
 import {
   sendMessage,
+  sendMediaMessage,
   assignToMe,
   closeConversation,
   toggleMute,
@@ -33,7 +34,7 @@ export function Inbox({
   const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>(
     initialSelectedId ? { [initialSelectedId]: initialMessages } : {},
   );
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
   const messages = selectedId ? messagesByConv[selectedId] ?? [] : [];
@@ -126,6 +127,25 @@ export function Inbox({
     });
   }
 
+  function handleSendFile(file: File) {
+    if (!selectedId) return;
+    const convId = selectedId;
+    const fd = new FormData();
+    fd.set("conversationId", convId);
+    fd.set("file", file);
+    startTransition(async () => {
+      await sendMediaMessage(fd);
+      const msgs = await fetchMessages(convId);
+      setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === convId);
+        if (idx < 0) return prev;
+        const updated = { ...prev[idx], last_message_at: new Date().toISOString(), last_message_direction: "out" as const };
+        return [updated, ...prev.filter((_, i) => i !== idx)];
+      });
+    });
+  }
+
   function handleAssign() {
     if (!selectedId) return;
     setConversations((prev) =>
@@ -163,9 +183,11 @@ export function Inbox({
           conversation={selected}
           messages={messages}
           onSend={handleSend}
+          onSendFile={handleSendFile}
           onAssign={handleAssign}
           onClose={handleClose}
           onToggleMute={handleToggleMute}
+          pending={isPending}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-ink-soft">

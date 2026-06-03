@@ -1,6 +1,31 @@
 import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
-import { Check, CheckCheck, Clock, AlertCircle } from "lucide-react";
+import { Check, CheckCheck, Clock, AlertCircle, FileText, Download } from "lucide-react";
+
+function MediaContent({ message }: { message: Message }) {
+  const url = message.media_url;
+  if (!url) return null;
+  switch (message.content_type) {
+    case "image":
+      // eslint-disable-next-line @next/next/no-img-element
+      return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="" className="mb-1 max-h-72 rounded-lg object-cover" /></a>;
+    case "sticker":
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={url} alt="" className="mb-1 h-28 w-28 object-contain" />;
+    case "audio":
+      return <audio controls src={url} className="mb-1 h-10 w-56 max-w-full" />;
+    case "video":
+      return <video controls src={url} className="mb-1 max-h-72 rounded-lg" />;
+    case "document":
+      return (
+        <a href={url} target="_blank" rel="noreferrer" download className="mb-1 flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-sm hover:bg-black/10">
+          <FileText size={18} /> <span className="underline">Abrir documento</span> <Download size={14} />
+        </a>
+      );
+    default:
+      return null;
+  }
+}
 
 export function MessageBubble({ message }: { message: Message }) {
   const out = message.direction === "out";
@@ -21,10 +46,14 @@ export function MessageBubble({ message }: { message: Message }) {
         {!out && message.author_name && (
           <p className="mb-0.5 text-xs font-semibold text-brand">{message.author_name}</p>
         )}
-        {message.content_type !== "text" && (
-          <p className="mb-1 text-xs opacity-80">[{message.content_type}]</p>
+        {message.media_url ? (
+          <MediaContent message={message} />
+        ) : (
+          message.content_type !== "text" && (
+            <p className="mb-1 text-xs opacity-80">[{message.content_type}]</p>
+          )
         )}
-        <p className="whitespace-pre-wrap break-words">{message.body}</p>
+        {message.body && <p className="whitespace-pre-wrap break-words">{message.body}</p>}
         <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", out ? "text-white/70" : "text-ink-soft")}>
           {time}
           {out && <StatusIcon status={message.status} />}

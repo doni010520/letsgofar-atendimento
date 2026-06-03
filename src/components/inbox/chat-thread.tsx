@@ -10,6 +10,7 @@ export function ChatThread({
   conversation,
   messages,
   onSend,
+  onSendFile,
   onAssign,
   onClose,
   onToggleMute,
@@ -18,6 +19,7 @@ export function ChatThread({
   conversation: ConversationOverview;
   messages: Message[];
   onSend: (text: string) => void;
+  onSendFile: (file: File) => void;
   onAssign: () => void;
   onClose: () => void;
   onToggleMute: () => void;
@@ -108,7 +110,12 @@ export function ChatThread({
         <div ref={endRef} />
       </div>
 
-      <Composer onSend={onSend} disabled={pending || conversation.status === "closed"} />
+      <Composer
+        onSend={onSend}
+        onSendFile={onSendFile}
+        disabled={conversation.status === "closed"}
+        sending={pending}
+      />
     </div>
   );
 }

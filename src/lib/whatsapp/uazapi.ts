@@ -161,6 +161,27 @@ export class UazapiProvider implements ChannelProvider {
   }
 
   /**
+   * Baixa/descriptografa uma mídia recebida e retorna a URL hospedada na UAZAPI
+   * (`/files/...`), o mimetype e, para áudio, a transcrição automática.
+   * Endpoint: POST /message/download { id }.
+   */
+  async downloadMedia(externalId: string): Promise<{ url?: string; mimetype?: string; transcription?: string }> {
+    try {
+      const r = (await this.req("/message/download", {
+        method: "POST",
+        body: JSON.stringify({ id: externalId }),
+      })) as Record<string, unknown>;
+      return {
+        url: (r.fileURL as string) ?? (r.url as string) ?? undefined,
+        mimetype: (r.mimetype as string) ?? undefined,
+        transcription: (r.transcription as string) || undefined,
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * Retorna a URL da foto de perfil do contato.
    * Endpoint do uazapiGO: POST /chat/GetNameAndImageURL { number, preview }.
    * Confirme o path/campos no swagger (/docs) da sua instância — variam por versão.
