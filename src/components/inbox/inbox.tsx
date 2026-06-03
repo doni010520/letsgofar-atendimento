@@ -127,7 +127,8 @@ export function Inbox({
         /* silencioso */
       }
     };
-    const t = setInterval(tick, 5000);
+    tick(); // primeira atualização imediata
+    const t = setInterval(tick, 4000);
     return () => {
       cancel = true;
       clearInterval(t);
