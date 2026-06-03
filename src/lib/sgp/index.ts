@@ -18,10 +18,13 @@ type AnyDb = {
 
 function parseConfig(config: unknown): SgpConfig {
   const c = (config ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => String(v ?? "").trim();
   return {
-    url: String(c.url ?? "").trim(),
-    app: String(c.app ?? "").trim(),
-    token: String(c.token ?? "").trim(),
+    url: str(c.url),
+    app: str(c.app),
+    token: str(c.token),
+    username: str(c.username) || undefined,
+    password: str(c.password) || undefined,
   };
 }
 

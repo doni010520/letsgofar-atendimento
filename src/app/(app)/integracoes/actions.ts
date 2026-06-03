@@ -10,6 +10,8 @@ export async function createIntegration(fd: FormData) {
       url: String(fd.get("url") || "").trim(),
       app: String(fd.get("app") || "").trim(),
       token: String(fd.get("token") || "").trim(),
+      username: String(fd.get("username") || "").trim(),
+      password: String(fd.get("password") || "").trim(),
     },
   });
   revalidatePath("/integracoes");

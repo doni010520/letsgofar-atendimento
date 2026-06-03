@@ -59,12 +59,22 @@ export function IntegrationsClient({ integrations }: { integrations: Integration
                 <input name="url" required placeholder="https://seudominio.sgp.net.br" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-ink-soft">Token (nome / app)</label>
-                <input name="app" placeholder="nome do token de integração" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Aplicação (app)</label>
+                <input name="app" placeholder="nome da aplicação de integração" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-ink-soft">Token (segredo)</label>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Token</label>
                 <input name="token" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Usuário <span className="text-ink-soft/60">(opcional)</span></label>
+                  <input name="username" autoComplete="off" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Senha <span className="text-ink-soft/60">(opcional)</span></label>
+                  <input name="password" type="password" autoComplete="new-password" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
