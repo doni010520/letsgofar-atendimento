@@ -245,12 +245,13 @@ export function Inbox({
     });
   }
 
-  function handleSendFile(file: File) {
+  function handleSendFile(file: File, asSticker?: boolean) {
     if (!selectedId) return;
     const convId = selectedId;
     const fd = new FormData();
     fd.set("conversationId", convId);
     fd.set("file", file);
+    if (asSticker) fd.set("kind", "sticker");
     startTransition(async () => {
       await sendMediaMessage(fd);
       const msgs = await fetchMessages(convId);

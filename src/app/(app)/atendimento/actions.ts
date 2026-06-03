@@ -141,7 +141,11 @@ export async function sendMediaMessage(formData: FormData) {
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
 
-  const { kind, content } = kindFromMime(file.type || "");
+  const override = String(formData.get("kind") || "");
+  const { kind, content } =
+    override === "sticker"
+      ? ({ kind: "sticker", content: "sticker" } as const)
+      : kindFromMime(file.type || "");
 
   // Upload pro bucket público "media" (service client ignora RLS no storage).
   const svc = createServiceClient();

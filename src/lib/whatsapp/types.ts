@@ -10,7 +10,7 @@ export interface SendMediaParams {
   to: string;
   url: string;
   caption?: string;
-  kind: "image" | "audio" | "video" | "document";
+  kind: "image" | "audio" | "video" | "document" | "sticker";
   replyId?: string;
 }
 

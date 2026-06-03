@@ -24,7 +24,7 @@ export function ChatThread({
   conversation: ConversationOverview;
   messages: Message[];
   onSend: (text: string, replyId?: string) => void;
-  onSendFile: (file: File) => void;
+  onSendFile: (file: File, asSticker?: boolean) => void;
   onSendLocation: () => void;
   onSendContact: () => void;
   onReact: (m: Message, emoji: string) => void;
