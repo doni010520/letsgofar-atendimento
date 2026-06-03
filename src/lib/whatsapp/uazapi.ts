@@ -339,7 +339,10 @@ function extractReply(m: any): InboundMessage["replyTo"] | undefined {
   if (!id && !ci?.quotedMessage) return undefined;
   const q = ci?.quotedMessage ?? {};
   const excerpt = q.conversation ?? q.text ?? q.caption ?? q?.extendedTextMessage?.text ?? undefined;
-  return { externalId: id ? String(id) : undefined, excerpt, author: ci?.participant ? String(ci.participant).replace(/@.*/, "") : undefined };
+  // Só usa o nome do autor citado se for um NOME (não um @lid/número, que vira lixo).
+  const rawAuthor = ci?.pushName ?? ci?.participantName ?? "";
+  const author = rawAuthor && !/^\d+$/.test(String(rawAuthor).replace(/@.*/, "")) ? String(rawAuthor) : undefined;
+  return { externalId: id ? String(id) : undefined, excerpt, author };
 }
 
 // Há sinal de reação? (campo dedicado m.reaction OU messageType "ReactionMessage")

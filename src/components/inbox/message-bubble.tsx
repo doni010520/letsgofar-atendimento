@@ -96,7 +96,9 @@ export function MessageBubble({
           )}
           {message.reply_excerpt && (
             <div className={cn("mb-1 rounded border-l-2 px-2 py-1 text-xs", out ? "border-white/60 bg-white/15" : "border-brand/50 bg-black/5 text-ink-soft")}>
-              {message.reply_author && <span className="font-medium">{message.reply_author}: </span>}
+              {message.reply_author && !/^\d+$/.test(message.reply_author) && (
+                <span className="font-medium">{message.reply_author}: </span>
+              )}
               {message.reply_excerpt.slice(0, 120)}
             </div>
           )}
