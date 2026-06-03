@@ -57,6 +57,12 @@ export function QrConnectModal({
     }
   }
 
+  // Ao abrir sem QR (canal existente), busca um QR na hora.
+  useEffect(() => {
+    if (!initialQr) refreshQr();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Polling de status.
   useEffect(() => {
     const t = setInterval(async () => {
