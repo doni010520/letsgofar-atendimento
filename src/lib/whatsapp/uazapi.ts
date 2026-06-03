@@ -209,6 +209,24 @@ const SKIP_TYPES = new Set([
   "pollupdatemessage", "ephemeralmessage",
 ]);
 
+/**
+ * Número real do CONTATO numa conversa 1:1.
+ * No WhatsApp novo o `sender` costuma ser um @lid (id privado), mas o `chatid`
+ * traz o número real (`557181937254@s.whatsapp.net`). Então priorizamos o chatid.
+ */
+function contactNumber(m: any): string {
+  const jid = String(
+    m?.chatid ?? m?.chat ?? m?.key?.remoteJid ?? m?.content?.key?.remoteJID ?? m?.from ?? m?.sender ?? "",
+  );
+  // Ignora @lid (não disca) — se só houver lid, devolve vazio e a msg é descartada.
+  if (/@lid/i.test(jid) && !/@s\.whatsapp\.net/i.test(jid)) {
+    const alt = String(m?.sender ?? m?.from ?? "");
+    if (/@s\.whatsapp\.net/i.test(alt)) return alt.replace(/@.*/, "").replace(/\D/g, "");
+    return "";
+  }
+  return jid.replace(/@.*/, "").replace(/\D/g, "");
+}
+
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */
 export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const msgs = payload?.messages ?? (payload?.message ? [payload.message] : []);
@@ -219,7 +237,7 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
     .filter((m: any) => !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
     .map((m: any) => ({
       channelExternalId: token,
-      from: String(m?.sender ?? m?.from ?? m?.chatid ?? "").replace(/@.*/, "").replace(/\D/g, ""),
+      from: contactNumber(m),
       contactName: m?.senderName ?? m?.pushName ?? m?.notifyName,
       contentType: mapType(m?.type ?? m?.messageType),
       body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
@@ -231,7 +249,7 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
           ? String(m.messageTimestamp)
           : undefined,
     }))
-    .filter((m: InboundMessage) => !!m.from); // precisa de remetente válido
+    .filter((m: InboundMessage) => !!m.from); // precisa de número de contato válido
 }
 
 function mapType(t?: string): InboundMessage["contentType"] {
