@@ -8,6 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 import {
   sendMessage,
   sendMediaMessage,
+  reactToMessage,
+  editMessageAction,
+  deleteMessageAction,
+  markConversationRead,
   assignToMe,
   closeConversation,
   toggleMute,
@@ -39,13 +43,14 @@ export function Inbox({
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
   const messages = selectedId ? messagesByConv[selectedId] ?? [] : [];
 
-  // Carrega mensagens ao selecionar (se ainda não estiverem em cache).
+  // Carrega mensagens ao selecionar (se ainda não estiverem em cache) e marca como lida.
   async function selectConversation(id: string) {
     setSelectedId(id);
     if (!messagesByConv[id]) {
       const msgs = await fetchMessages(id);
       setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
     }
+    if (live) markConversationRead(id).catch(() => {});
   }
 
   // Realtime: mensagens recebidas (apenas direção "in"; as enviadas são otimistas).
@@ -91,7 +96,40 @@ export function Inbox({
     };
   }, [live, router]);
 
-  function handleSend(text: string) {
+  function handleReact(m: Message, emoji: string) {
+    if (!selectedId) return;
+    const convId = selectedId;
+    startTransition(async () => {
+      await reactToMessage(convId, m.id, emoji);
+      const msgs = await fetchMessages(convId);
+      setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
+    });
+  }
+
+  function handleEdit(m: Message) {
+    if (!selectedId) return;
+    const convId = selectedId;
+    const next = window.prompt("Editar mensagem:", m.body ?? "");
+    if (next == null || next.trim() === (m.body ?? "")) return;
+    startTransition(async () => {
+      await editMessageAction(convId, m.id, next);
+      const msgs = await fetchMessages(convId);
+      setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
+    });
+  }
+
+  function handleDelete(m: Message) {
+    if (!selectedId) return;
+    const convId = selectedId;
+    if (!window.confirm("Apagar esta mensagem para todos?")) return;
+    startTransition(async () => {
+      await deleteMessageAction(convId, m.id);
+      const msgs = await fetchMessages(convId);
+      setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
+    });
+  }
+
+  function handleSend(text: string, replyId?: string) {
     if (!selectedId) return;
     const optimistic: Message = {
       id: `tmp-${Date.now()}`,
@@ -119,7 +157,7 @@ export function Inbox({
     });
 
     startTransition(async () => {
-      await sendMessage(selectedId, text);
+      await sendMessage(selectedId, text, replyId);
       if (live) {
         const msgs = await fetchMessages(selectedId);
         setMessagesByConv((prev) => ({ ...prev, [selectedId]: msgs }));
@@ -184,6 +222,9 @@ export function Inbox({
           messages={messages}
           onSend={handleSend}
           onSendFile={handleSendFile}
+          onReact={handleReact}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
           onAssign={handleAssign}
           onClose={handleClose}
           onToggleMute={handleToggleMute}

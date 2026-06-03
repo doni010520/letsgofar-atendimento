@@ -13,7 +13,7 @@ export async function fetchMessages(conversationId: string) {
   return getMessages(conversationId);
 }
 
-export async function sendMessage(conversationId: string, text: string) {
+export async function sendMessage(conversationId: string, text: string, replyToExternal?: string) {
   const body = text.trim();
   if (!body) return { ok: false };
   if (isPreview()) return { ok: true }; // modo preview: client mantém otimista
@@ -29,6 +29,17 @@ export async function sendMessage(conversationId: string, text: string) {
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
 
+  // Trecho da mensagem citada (para exibir o quote no nosso lado).
+  let replyExcerpt: string | null = null;
+  if (replyToExternal) {
+    const { data: q } = await supabase
+      .from("messages")
+      .select("body, content_type")
+      .eq("external_id", replyToExternal)
+      .maybeSingle();
+    replyExcerpt = q?.body ?? (q?.content_type && q.content_type !== "text" ? `[${q.content_type}]` : null);
+  }
+
   const { data: msg } = await supabase
     .from("messages")
     .insert({
@@ -39,6 +50,8 @@ export async function sendMessage(conversationId: string, text: string) {
       sender_id: session.userId,
       content_type: "text",
       body,
+      reply_to_external: replyToExternal ?? null,
+      reply_excerpt: replyExcerpt,
       status: "pending",
     })
     .select("id")
@@ -53,7 +66,7 @@ export async function sendMessage(conversationId: string, text: string) {
       .single();
     const to =
       conv.is_group && channel?.type === "uazapi" ? `${conv.contact_phone}@g.us` : conv.contact_phone;
-    const res = await getProvider(channel as Channel).sendText({ to, text: body });
+    const res = await getProvider(channel as Channel).sendText({ to, text: body, replyId: replyToExternal });
     await supabase
       .from("messages")
       .update({ status: "sent", external_id: res.externalId ?? null })
@@ -171,6 +184,97 @@ export async function sendMediaMessage(formData: FormData) {
     .update({ last_message_at: new Date().toISOString(), status: conv.status === "closed" ? "open" : conv.status })
     .eq("id", conversationId);
   revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+async function recipientFor(supabase: Awaited<ReturnType<typeof createClient>>, conversationId: string) {
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("contact_phone, channel_id, is_group")
+    .eq("id", conversationId)
+    .single();
+  if (!conv) throw new Error("Conversa não encontrada.");
+  const { data: channel } = await supabase.from("channels").select("*").eq("id", conv.channel_id).single();
+  const to =
+    conv.is_group && (channel as Channel)?.type === "uazapi" ? `${conv.contact_phone}@g.us` : conv.contact_phone;
+  return { to, channel: channel as Channel };
+}
+
+/** Reage a uma mensagem com um emoji (vazio remove a reação). */
+export async function reactToMessage(conversationId: string, messageId: string, emoji: string) {
+  if (isPreview()) return { ok: true };
+  const supabase = await createClient();
+  const { data: m } = await supabase.from("messages").select("external_id, reactions").eq("id", messageId).single();
+  if (!m?.external_id) return { ok: false };
+  const { to, channel } = await recipientFor(supabase, conversationId);
+  try {
+    await getProvider(channel).reactMessage?.(to, m.external_id, emoji);
+  } catch (e) {
+    console.error("react error", e);
+  }
+  const current = Array.isArray(m.reactions) ? (m.reactions as { emoji: string; by: string }[]) : [];
+  const without = current.filter((r) => r.by !== "Você");
+  const next = emoji ? [...without, { emoji, by: "Você" }] : without;
+  await supabase.from("messages").update({ reactions: next }).eq("id", messageId);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Edita o texto de uma mensagem enviada. */
+export async function editMessageAction(conversationId: string, messageId: string, newText: string) {
+  if (isPreview()) return { ok: true };
+  const text = newText.trim();
+  if (!text) return { ok: false };
+  const supabase = await createClient();
+  const { data: m } = await supabase.from("messages").select("external_id").eq("id", messageId).single();
+  if (!m?.external_id) return { ok: false };
+  const { channel } = await recipientFor(supabase, conversationId);
+  try {
+    await getProvider(channel).editMessage?.(m.external_id, text);
+  } catch (e) {
+    console.error("edit error", e);
+  }
+  await supabase.from("messages").update({ body: text, edited: true }).eq("id", messageId);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Apaga uma mensagem (para todos). */
+export async function deleteMessageAction(conversationId: string, messageId: string) {
+  if (isPreview()) return { ok: true };
+  const supabase = await createClient();
+  const { data: m } = await supabase.from("messages").select("external_id").eq("id", messageId).single();
+  const { channel } = await recipientFor(supabase, conversationId);
+  try {
+    if (m?.external_id) await getProvider(channel).deleteMessage?.(m.external_id);
+  } catch (e) {
+    console.error("delete error", e);
+  }
+  await supabase.from("messages").update({ is_deleted: true, body: null, media_url: null }).eq("id", messageId);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Marca as mensagens recebidas da conversa como lidas (✓✓ azul no WhatsApp). */
+export async function markConversationRead(conversationId: string) {
+  if (isPreview()) return { ok: true };
+  const supabase = await createClient();
+  const { data: msgs } = await supabase
+    .from("messages")
+    .select("id, external_id")
+    .eq("conversation_id", conversationId)
+    .eq("direction", "in")
+    .neq("status", "read")
+    .limit(200);
+  const ids = (msgs ?? []).map((m) => m.external_id).filter(Boolean) as string[];
+  if (!ids.length) return { ok: true };
+  try {
+    const { channel } = await recipientFor(supabase, conversationId);
+    await getProvider(channel).markRead?.(ids);
+  } catch (e) {
+    console.warn("markRead", (e as Error)?.message);
+  }
+  await supabase.from("messages").update({ status: "read" }).eq("conversation_id", conversationId).eq("direction", "in");
   return { ok: true };
 }
 

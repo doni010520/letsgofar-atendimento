@@ -144,20 +144,44 @@ export class UazapiProvider implements ChannelProvider {
     return "disconnected";
   }
 
-  async sendText({ to, text }: SendTextParams) {
+  async sendText({ to, text, replyId }: SendTextParams) {
     const r = await this.req("/send/text", {
       method: "POST",
-      body: JSON.stringify({ number: to, text }),
+      body: JSON.stringify({ number: to, text, ...(replyId ? { replyid: replyId } : {}) }),
     });
-    return { externalId: r?.id ?? r?.messageId };
+    return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }
 
-  async sendMedia({ to, url, caption, kind }: SendMediaParams) {
+  async sendMedia({ to, url, caption, kind, replyId }: SendMediaParams) {
     const r = await this.req("/send/media", {
       method: "POST",
-      body: JSON.stringify({ number: to, type: kind, file: url, text: caption }),
+      body: JSON.stringify({ number: to, type: kind, file: url, text: caption, ...(replyId ? { replyid: replyId } : {}) }),
     });
-    return { externalId: r?.id ?? r?.messageId };
+    return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
+  }
+
+  /** Reage a uma mensagem (text vazio remove). POST /message/react {number,id,text}. */
+  async reactMessage(to: string, externalId: string, emoji: string): Promise<void> {
+    await this.req("/message/react", {
+      method: "POST",
+      body: JSON.stringify({ number: to, id: externalId, text: emoji }),
+    });
+  }
+
+  /** Edita o texto de uma mensagem. POST /message/edit {id,text}. */
+  async editMessage(externalId: string, text: string): Promise<void> {
+    await this.req("/message/edit", { method: "POST", body: JSON.stringify({ id: externalId, text }) });
+  }
+
+  /** Apaga uma mensagem para todos. POST /message/delete {id}. */
+  async deleteMessage(externalId: string): Promise<void> {
+    await this.req("/message/delete", { method: "POST", body: JSON.stringify({ id: externalId }) });
+  }
+
+  /** Marca mensagens como lidas. POST /message/markread {id:[...]}. */
+  async markRead(externalIds: string[]): Promise<void> {
+    if (!externalIds.length) return;
+    await this.req("/message/markread", { method: "POST", body: JSON.stringify({ id: externalIds }) });
   }
 
   /**
@@ -288,30 +312,55 @@ function authorName(m: any): string | undefined {
   return m?.senderName ?? m?.pushName ?? m?.notifyName ?? undefined;
 }
 
+const isReaction = (m: any) => /reaction/i.test(String(m?.type ?? m?.messageType ?? ""));
+
+/** Extrai a citação (reply) do contextInfo, se houver. */
+function extractReply(m: any): InboundMessage["replyTo"] | undefined {
+  const ci = m?.content?.contextInfo ?? m?.contextInfo ?? m?.quoted?.contextInfo;
+  const id = ci?.stanzaID ?? ci?.stanzaId ?? ci?.quotedMessageId ?? ci?.id;
+  if (!id && !ci?.quotedMessage) return undefined;
+  const q = ci?.quotedMessage ?? {};
+  const excerpt = q.conversation ?? q.text ?? q.caption ?? q?.extendedTextMessage?.text ?? undefined;
+  return { externalId: id ? String(id) : undefined, excerpt, author: ci?.participant ? String(ci.participant).replace(/@.*/, "") : undefined };
+}
+
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */
 export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const msgs = payload?.messages ?? (payload?.message ? [payload.message] : []);
   const token = payload?.token ?? payload?.instance ?? payload?.owner ?? "";
   return (Array.isArray(msgs) ? msgs : [])
     .filter((m: any) => !m?.fromMe) // ignora ecos do próprio número
-    .filter((m: any) => !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
+    .filter((m: any) => isReaction(m) || !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
     .map((m: any): InboundMessage => {
       const group = isGroupMessage(m);
-      return {
+      const base = {
         channelExternalId: token,
         from: group ? groupId(m) : contactNumber(m),
-        contactName: group ? groupName(m) : authorName(m),
         isGroup: group,
         authorName: group ? authorName(m) : undefined,
-        contentType: mapType(m?.type ?? m?.messageType),
-        body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
-        mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
-        externalId: m?.id ?? m?.messageId ?? m?.messageid,
         timestamp: m?.timestamp
           ? String(m.timestamp)
           : m?.messageTimestamp
             ? String(m.messageTimestamp)
             : undefined,
+      };
+      // Evento de reação: não cria mensagem, anexa emoji à msg-alvo.
+      if (isReaction(m)) {
+        const targetId = m?.content?.key?.ID ?? m?.content?.key?.id ?? m?.reactionMessage?.key?.id;
+        return {
+          ...base,
+          contentType: "text",
+          reaction: { targetExternalId: String(targetId ?? ""), emoji: m?.content?.text ?? m?.text ?? "" },
+        };
+      }
+      return {
+        ...base,
+        contactName: group ? groupName(m) : authorName(m),
+        contentType: mapType(m?.type ?? m?.messageType),
+        body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
+        mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
+        externalId: m?.id ?? m?.messageId ?? m?.messageid,
+        replyTo: extractReply(m),
       };
     })
     .filter((m: InboundMessage) => !!m.from); // precisa de número/id de contato válido

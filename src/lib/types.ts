@@ -184,5 +184,11 @@ export interface Message {
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   external_id: string | null;
   author_name?: string | null;
+  reply_to_external?: string | null;
+  reply_excerpt?: string | null;
+  reply_author?: string | null;
+  reactions?: { emoji: string; by: string }[];
+  is_deleted?: boolean;
+  edited?: boolean;
   created_at: string;
 }

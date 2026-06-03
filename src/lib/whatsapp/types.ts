@@ -3,6 +3,7 @@ import type { Channel } from "@/lib/types";
 export interface SendTextParams {
   to: string; // número no formato internacional, só dígitos
   text: string;
+  replyId?: string; // id externo da mensagem citada (quote)
 }
 
 export interface SendMediaParams {
@@ -10,6 +11,7 @@ export interface SendMediaParams {
   url: string;
   caption?: string;
   kind: "image" | "audio" | "video" | "document";
+  replyId?: string;
 }
 
 export interface ConnectResult {
@@ -34,6 +36,14 @@ export interface ChannelProvider {
   getChatInfo?(jid: string): Promise<{ name?: string; image?: string }>;
   /** Baixa/descriptografa uma mídia recebida pelo id da mensagem (UAZAPI). */
   downloadMedia?(externalId: string): Promise<{ url?: string; mimetype?: string; transcription?: string }>;
+  /** Reage a uma mensagem com um emoji (string vazia remove a reação). */
+  reactMessage?(to: string, externalId: string, emoji: string): Promise<void>;
+  /** Edita o texto de uma mensagem enviada. */
+  editMessage?(externalId: string, text: string): Promise<void>;
+  /** Apaga uma mensagem (para todos). */
+  deleteMessage?(externalId: string): Promise<void>;
+  /** Marca mensagens como lidas. */
+  markRead?(externalIds: string[]): Promise<void>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */
@@ -52,4 +62,6 @@ export interface InboundMessage {
   timestamp?: string;
   isGroup?: boolean; // conversa de grupo
   authorName?: string; // quem enviou dentro do grupo (participante)
+  reaction?: { targetExternalId: string; emoji: string }; // evento de reação
+  replyTo?: { externalId?: string; excerpt?: string; author?: string }; // msg citada
 }

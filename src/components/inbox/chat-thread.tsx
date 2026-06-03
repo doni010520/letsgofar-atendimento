@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -11,6 +11,9 @@ export function ChatThread({
   messages,
   onSend,
   onSendFile,
+  onReact,
+  onEdit,
+  onDelete,
   onAssign,
   onClose,
   onToggleMute,
@@ -18,17 +21,22 @@ export function ChatThread({
 }: {
   conversation: ConversationOverview;
   messages: Message[];
-  onSend: (text: string) => void;
+  onSend: (text: string, replyId?: string) => void;
   onSendFile: (file: File) => void;
+  onReact: (m: Message, emoji: string) => void;
+  onEdit: (m: Message) => void;
+  onDelete: (m: Message) => void;
   onAssign: () => void;
   onClose: () => void;
   onToggleMute: () => void;
   pending?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, conversation.id]);
+  useEffect(() => setReplyTo(null), [conversation.id]);
 
   const isMeta = conversation.channel_type === "meta_cloud";
   const isGroup = !!conversation.is_group;
@@ -105,13 +113,36 @@ export function ChatThread({
           <p className="mt-10 text-center text-xs text-ink-soft">Nenhuma mensagem ainda.</p>
         )}
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble
+            key={m.id}
+            message={m}
+            onReply={setReplyTo}
+            onReact={onReact}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
         ))}
         <div ref={endRef} />
       </div>
 
+      {replyTo && (
+        <div className="flex items-center gap-2 border-t border-gray-100 bg-brand-light/40 px-4 py-2 text-xs">
+          <Reply size={14} className="text-brand" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-brand">Respondendo</p>
+            <p className="truncate text-ink-soft">
+              {replyTo.body ?? (replyTo.content_type !== "text" ? `[${replyTo.content_type}]` : "")}
+            </p>
+          </div>
+          <button onClick={() => setReplyTo(null)} className="text-ink-soft hover:text-ink"><X size={15} /></button>
+        </div>
+      )}
+
       <Composer
-        onSend={onSend}
+        onSend={(text) => {
+          onSend(text, replyTo?.external_id ?? undefined);
+          setReplyTo(null);
+        }}
         onSendFile={onSendFile}
         disabled={conversation.status === "closed"}
         sending={pending}

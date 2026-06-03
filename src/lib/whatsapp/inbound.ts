@@ -26,6 +26,14 @@ export async function persistInbound(messages: InboundMessage[]) {
       .maybeSingle();
     if (!channel) continue;
 
+    // Reação: anexa o emoji à mensagem-alvo e segue (não cria mensagem nova).
+    if (msg.reaction) {
+      await applyReaction(db, msg.reaction.targetExternalId, msg.reaction.emoji, msg.authorName ?? "contato").catch(
+        (e) => console.warn("reaction", (e as Error)?.message),
+      );
+      continue;
+    }
+
     const org = channel.organization_id;
     const isGroup = !!msg.isGroup;
 
@@ -111,6 +119,9 @@ export async function persistInbound(messages: InboundMessage[]) {
       media_url: mediaUrl,
       external_id: msg.externalId ?? null,
       author_name: msg.authorName ?? null,
+      reply_to_external: msg.replyTo?.externalId ?? null,
+      reply_excerpt: msg.replyTo?.excerpt ?? null,
+      reply_author: msg.replyTo?.author ?? null,
       status: "delivered",
     });
 
@@ -120,3 +131,25 @@ export async function persistInbound(messages: InboundMessage[]) {
       .eq("id", conversationId);
   }
 }
+
+type Reaction = { emoji: string; by: string };
+
+/** Anexa (ou remove, se emoji vazio) uma reação à mensagem-alvo, casando pelo id externo. */
+async function applyReaction(db: DB, targetExternalId: string, emoji: string, by: string) {
+  if (!targetExternalId) return;
+  const tail = targetExternalId.includes(":") ? targetExternalId.split(":").pop()! : targetExternalId;
+  const { data: msg } = await db
+    .from("messages")
+    .select("id, reactions")
+    .or(`external_id.eq.${targetExternalId},external_id.ilike.%${tail}`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!msg) return;
+  const current: Reaction[] = Array.isArray(msg.reactions) ? (msg.reactions as Reaction[]) : [];
+  const without = current.filter((r) => r.by !== by);
+  const next = emoji ? [...without, { emoji, by }] : without;
+  await db.from("messages").update({ reactions: next }).eq("id", msg.id);
+}
+
+type DB = ReturnType<typeof createServiceClient>;
