@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus, Radio } from "lucide-react";
 import { getChannels } from "@/lib/data/channels";
-import { ChannelCard } from "@/components/channel-card";
+import { ChannelsList } from "@/components/channels-list";
 import { Scroll } from "@/components/scroll";
 
 export default async function DashboardPage() {
@@ -44,11 +44,7 @@ export default async function DashboardPage() {
             </span>
           </Link>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {channels.map((c) => (
-              <ChannelCard key={c.id} channel={c} />
-            ))}
-          </div>
+          <ChannelsList channels={channels} />
         )}
       </section>
     </Scroll>

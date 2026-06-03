@@ -22,7 +22,7 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
               type="button"
               onClick={() => clickable && setConnect({ id: c.id, phone: c.phone ?? undefined })}
               disabled={!clickable}
-              className={clickable ? "text-left transition hover:opacity-90 focus:outline-none" : "text-left"}
+              className={clickable ? "cursor-pointer text-left transition hover:opacity-90 focus:outline-none" : "cursor-default text-left"}
               title={clickable ? (c.status === "connected" ? "Ver conexão" : "Conectar / ler QR ou código") : undefined}
             >
               <ChannelCard channel={c} />
