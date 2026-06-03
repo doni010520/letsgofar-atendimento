@@ -18,6 +18,9 @@ export function MessageBubble({ message }: { message: Message }) {
           message.sender_type === "system" && "bg-gray-200 text-gray-600 italic",
         )}
       >
+        {!out && message.author_name && (
+          <p className="mb-0.5 text-xs font-semibold text-brand">{message.author_name}</p>
+        )}
         {message.content_type !== "text" && (
           <p className="mb-1 text-xs opacity-80">[{message.content_type}]</p>
         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { UserCheck, CheckCircle2 } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -12,6 +12,7 @@ export function ChatThread({
   onSend,
   onAssign,
   onClose,
+  onToggleMute,
   pending,
 }: {
   conversation: ConversationOverview;
@@ -19,6 +20,7 @@ export function ChatThread({
   onSend: (text: string) => void;
   onAssign: () => void;
   onClose: () => void;
+  onToggleMute: () => void;
   pending?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -27,6 +29,9 @@ export function ChatThread({
   }, [messages.length, conversation.id]);
 
   const isMeta = conversation.channel_type === "meta_cloud";
+  const isGroup = !!conversation.is_group;
+  const muted = !!conversation.is_muted;
+  const title = conversation.contact_name ?? (isGroup ? "Grupo" : conversation.contact_phone);
 
   return (
     <div className="flex h-full flex-1 flex-col bg-canvas">
@@ -36,16 +41,26 @@ export function ChatThread({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={conversation.contact_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
-              {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${
+                isGroup ? "bg-brand-light text-brand" : "bg-gray-200 text-gray-600"
+              }`}
+            >
+              {isGroup ? <Users size={18} /> : title.slice(0, 2).toUpperCase()}
             </div>
           )}
           <div>
-            <p className="text-sm font-semibold text-ink">
-              {conversation.contact_name ?? conversation.contact_phone}
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+              {title}
+              {isGroup && (
+                <span className="rounded bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                  Grupo
+                </span>
+              )}
+              {muted && <BellOff size={13} className="text-ink-soft" />}
             </p>
             <p className="text-xs text-ink-soft">
-              {conversation.contact_phone} ·{" "}
+              {isGroup ? "Conversa de grupo" : conversation.contact_phone} ·{" "}
               <span className={isMeta ? "text-blue-600" : "text-gray-600"}>
                 {conversation.channel_name}
               </span>
@@ -53,6 +68,14 @@ export function ChatThread({
           </div>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={onToggleMute}
+            title={muted ? "Reativar notificações" : "Silenciar conversa"}
+            className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
+          >
+            {muted ? <BellOff size={14} /> : <Bell size={14} />}
+            {muted ? "Silenciado" : "Silenciar"}
+          </button>
           {conversation.status !== "closed" && (
             <>
               <button

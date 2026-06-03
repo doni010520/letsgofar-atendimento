@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { InboundMessage } from "./types";
 import type { Channel } from "@/lib/types";
 import { syncContactAvatar } from "./avatar";
+import { getProvider } from "./index";
 
 /**
  * Persiste mensagens recebidas via webhook: localiza o canal pelo external_id,
@@ -23,22 +24,41 @@ export async function persistInbound(messages: InboundMessage[]) {
     if (!channel) continue;
 
     const org = channel.organization_id;
+    const isGroup = !!msg.isGroup;
 
-    // Contato (upsert por organização + telefone)
+    // Contato/grupo (upsert por organização + telefone/id). Não sobrescreve um
+    // nome já existente com null.
     const { data: contact } = await db
       .from("contacts")
       .upsert(
-        { organization_id: org, phone: msg.from, name: msg.contactName ?? null },
+        {
+          organization_id: org,
+          phone: msg.from,
+          name: msg.contactName ?? null,
+          is_group: isGroup,
+        },
         { onConflict: "organization_id,phone", ignoreDuplicates: false },
       )
-      .select("id, avatar_url")
+      .select("id, name, avatar_url, is_group")
       .single();
 
-    // Foto de perfil (UAZAPI) — só quando ainda não temos avatar. Best-effort.
-    if (contact && !contact.avatar_url) {
-      await syncContactAvatar(db, channel as Channel, contact.id, msg.from).catch((e) =>
-        console.warn("avatar sync", (e as Error)?.message),
-      );
+    // Enriquecimento (UAZAPI): nome do grupo e/ou foto, quando ainda faltam. Best-effort.
+    if (contact) {
+      const provider = getProvider(channel as Channel);
+      const needName = isGroup && !contact.name;
+      const needAvatar = !contact.avatar_url;
+      if ((needName || needAvatar) && provider.getChatInfo) {
+        const jid = isGroup ? `${msg.from}@g.us` : `${msg.from}@s.whatsapp.net`;
+        const info = await provider.getChatInfo(jid).catch(() => ({}) as { name?: string; image?: string });
+        const patch: Record<string, unknown> = {};
+        if (needName && info.name) patch.name = info.name;
+        if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
+      }
+      if (needAvatar && !isGroup) {
+        await syncContactAvatar(db, channel as Channel, contact.id, msg.from).catch((e) =>
+          console.warn("avatar sync", (e as Error)?.message),
+        );
+      }
     }
 
     // Conversa em aberto (reaproveita ou cria)
@@ -78,6 +98,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       body: msg.body ?? null,
       media_url: msg.mediaUrl ?? null,
       external_id: msg.externalId ?? null,
+      author_name: msg.authorName ?? null,
       status: "delivered",
     });
 

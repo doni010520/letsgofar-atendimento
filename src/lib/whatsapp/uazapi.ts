@@ -192,6 +192,28 @@ export class UazapiProvider implements ChannelProvider {
       return null;
     }
   }
+
+  /**
+   * Nome + imagem de um chat (contato ou grupo). Para grupos passe o JID
+   * completo (`<id>@g.us`). Best-effort: retorna o que conseguir.
+   */
+  async getChatInfo(jid: string): Promise<{ name?: string; image?: string }> {
+    try {
+      const r = (await this.req("/chat/GetNameAndImageURL", {
+        method: "POST",
+        body: JSON.stringify({ number: jid, preview: false }),
+      })) as Record<string, unknown>;
+      const name =
+        (r.name as string) ?? (r.Name as string) ?? (r.subject as string) ??
+        (r.verifiedName as string) ?? (r.pushName as string) ?? undefined;
+      const image =
+        (r.imgUrl as string) ?? (r.imageUrl as string) ?? (r.image as string) ??
+        (r.url as string) ?? (r.profilePicUrl as string) ?? (r.eurl as string) ?? undefined;
+      return { name: name || undefined, image: image || undefined };
+    } catch {
+      return {};
+    }
+  }
 }
 
 /** Detecta se a mensagem veio de um GRUPO (chatid @g.us ou flag isGroup). */
@@ -227,29 +249,51 @@ function contactNumber(m: any): string {
   return jid.replace(/@.*/, "").replace(/\D/g, "");
 }
 
+/** ID do grupo (dígitos do JID @g.us). */
+function groupId(m: any): string {
+  const jid = String(
+    m?.chatid ?? m?.chat ?? m?.key?.remoteJid ?? m?.content?.key?.remoteJID ?? "",
+  );
+  return jid.replace(/@.*/, "").replace(/\D/g, "");
+}
+
+/** Nome do grupo, se vier no payload. */
+function groupName(m: any): string | undefined {
+  return m?.chatName ?? m?.groupName ?? m?.groupSubject ?? m?.subject ?? m?.group?.subject ?? undefined;
+}
+
+/** Nome de quem enviou (participante do grupo ou remetente 1:1). */
+function authorName(m: any): string | undefined {
+  return m?.senderName ?? m?.pushName ?? m?.notifyName ?? undefined;
+}
+
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */
 export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const msgs = payload?.messages ?? (payload?.message ? [payload.message] : []);
   const token = payload?.token ?? payload?.instance ?? payload?.owner ?? "";
   return (Array.isArray(msgs) ? msgs : [])
     .filter((m: any) => !m?.fromMe) // ignora ecos do próprio número
-    .filter((m: any) => !isGroupMessage(m)) // atendimento é 1:1 — grupos são ignorados
     .filter((m: any) => !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
-    .map((m: any) => ({
-      channelExternalId: token,
-      from: contactNumber(m),
-      contactName: m?.senderName ?? m?.pushName ?? m?.notifyName,
-      contentType: mapType(m?.type ?? m?.messageType),
-      body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
-      mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
-      externalId: m?.id ?? m?.messageId ?? m?.messageid,
-      timestamp: m?.timestamp
-        ? String(m.timestamp)
-        : m?.messageTimestamp
-          ? String(m.messageTimestamp)
-          : undefined,
-    }))
-    .filter((m: InboundMessage) => !!m.from); // precisa de número de contato válido
+    .map((m: any): InboundMessage => {
+      const group = isGroupMessage(m);
+      return {
+        channelExternalId: token,
+        from: group ? groupId(m) : contactNumber(m),
+        contactName: group ? groupName(m) : authorName(m),
+        isGroup: group,
+        authorName: group ? authorName(m) : undefined,
+        contentType: mapType(m?.type ?? m?.messageType),
+        body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
+        mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
+        externalId: m?.id ?? m?.messageId ?? m?.messageid,
+        timestamp: m?.timestamp
+          ? String(m.timestamp)
+          : m?.messageTimestamp
+            ? String(m.messageTimestamp)
+            : undefined,
+      };
+    })
+    .filter((m: InboundMessage) => !!m.from); // precisa de número/id de contato válido
 }
 
 function mapType(t?: string): InboundMessage["contentType"] {

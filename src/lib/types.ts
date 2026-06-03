@@ -124,6 +124,7 @@ export interface Contact {
   avatar_url: string | null;
   custom_fields: Record<string, unknown>;
   notes: string | null;
+  is_group?: boolean;
   created_at: string;
 }
 
@@ -140,6 +141,7 @@ export interface Conversation {
   opened_at: string | null;
   closed_at: string | null;
   satisfaction: number | null;
+  is_muted?: boolean;
   created_at: string;
 }
 
@@ -164,6 +166,9 @@ export interface ConversationOverview {
   last_message_body: string | null;
   last_message_type: ContentType | null;
   last_message_direction: MessageDirection | null;
+  is_group?: boolean;
+  is_muted?: boolean;
+  last_message_author?: string | null;
 }
 
 export interface Message {
@@ -178,5 +183,6 @@ export interface Message {
   media_url: string | null;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   external_id: string | null;
+  author_name?: string | null;
   created_at: string;
 }

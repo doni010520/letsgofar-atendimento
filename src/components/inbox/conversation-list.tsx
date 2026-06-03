@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Users, BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConversationOverview, ConversationStatus } from "@/lib/types";
 
@@ -77,7 +77,9 @@ export function ConversationList({
           <p className="p-6 text-center text-xs text-ink-soft">Nenhuma conversa.</p>
         )}
         {filtered.map((c) => {
-          const initials = (c.contact_name ?? c.contact_phone)
+          const isGroup = !!c.is_group;
+          const title = c.contact_name ?? (isGroup ? "Grupo" : c.contact_phone);
+          const initials = title
             .split(" ")
             .slice(0, 2)
             .map((w) => w[0]?.toUpperCase())
@@ -85,6 +87,11 @@ export function ConversationList({
           const time = c.last_message_at
             ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
             : "";
+          // Em grupos, prefixa a prévia com quem enviou a última mensagem.
+          const preview =
+            isGroup && c.last_message_author && c.last_message_direction === "in"
+              ? `${c.last_message_author.split(" ")[0]}: ${c.last_message_body ?? ""}`
+              : (c.last_message_body ?? "—");
           return (
             <button
               key={c.id}
@@ -99,16 +106,26 @@ export function ConversationList({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.contact_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">{initials || "?"}</div>
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold",
+                      isGroup ? "bg-brand-light text-brand" : "bg-gray-200 text-gray-600",
+                    )}
+                  >
+                    {isGroup ? <Users size={18} /> : initials || "?"}
+                  </div>
                 )}
                 <span className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white", STATUS_DOT[c.status])} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-medium text-ink">{c.contact_name ?? c.contact_phone}</p>
+                  <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium text-ink">
+                    <span className="truncate">{title}</span>
+                    {c.is_muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
+                  </p>
                   <span className="shrink-0 text-[10px] text-ink-soft">{time}</span>
                 </div>
-                <p className="truncate text-xs text-ink-soft">{c.last_message_body ?? "—"}</p>
+                <p className="truncate text-xs text-ink-soft">{preview}</p>
                 <p className="truncate text-[10px] text-ink-soft/70">{c.channel_name}</p>
               </div>
             </button>

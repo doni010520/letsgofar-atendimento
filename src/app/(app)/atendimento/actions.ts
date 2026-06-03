@@ -24,7 +24,7 @@ export async function sendMessage(conversationId: string, text: string) {
 
   const { data: conv } = await supabase
     .from("conversation_overview")
-    .select("contact_phone, channel_id, status")
+    .select("contact_phone, channel_id, status, is_group")
     .eq("id", conversationId)
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
@@ -51,10 +51,9 @@ export async function sendMessage(conversationId: string, text: string) {
       .select("*")
       .eq("id", conv.channel_id)
       .single();
-    const res = await getProvider(channel as Channel).sendText({
-      to: conv.contact_phone,
-      text: body,
-    });
+    const to =
+      conv.is_group && channel?.type === "uazapi" ? `${conv.contact_phone}@g.us` : conv.contact_phone;
+    const res = await getProvider(channel as Channel).sendText({ to, text: body });
     await supabase
       .from("messages")
       .update({ status: "sent", external_id: res.externalId ?? null })
@@ -96,6 +95,15 @@ export async function closeConversation(conversationId: string) {
     .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", conversationId);
   revalidatePath("/atendimento");
+}
+
+/** Silencia/dessilencia uma conversa (grupo ou contato). */
+export async function toggleMute(conversationId: string, muted: boolean) {
+  if (isPreview()) return { muted };
+  const supabase = await createClient();
+  await supabase.from("conversations").update({ is_muted: muted }).eq("id", conversationId);
+  revalidatePath("/atendimento");
+  return { muted };
 }
 
 export async function transferConversation(conversationId: string, toUserId: string) {

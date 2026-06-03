@@ -30,6 +30,8 @@ export interface ChannelProvider {
   sendMedia(params: SendMediaParams): Promise<{ externalId?: string }>;
   /** URL da foto de perfil do contato (UAZAPI). Meta não expõe → null. */
   getProfilePicture?(phone: string): Promise<string | null>;
+  /** Nome + imagem de um chat/grupo (UAZAPI). Para grupos, passe o JID `<id>@g.us`. */
+  getChatInfo?(jid: string): Promise<{ name?: string; image?: string }>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */
@@ -39,11 +41,13 @@ export interface ChannelProvider {
 /** Mensagem normalizada vinda de um webhook, independente do provedor. */
 export interface InboundMessage {
   channelExternalId: string; // identifica o canal (instance/phone_number_id)
-  from: string; // número do contato (dígitos)
-  contactName?: string;
+  from: string; // número do contato (dígitos) OU id do grupo quando isGroup
+  contactName?: string; // nome do contato, ou nome do grupo quando isGroup
   contentType: "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker";
   body?: string;
   mediaUrl?: string;
   externalId?: string; // id da mensagem no provedor
   timestamp?: string;
+  isGroup?: boolean; // conversa de grupo
+  authorName?: string; // quem enviou dentro do grupo (participante)
 }

@@ -9,6 +9,7 @@ import {
   sendMessage,
   assignToMe,
   closeConversation,
+  toggleMute,
   fetchMessages,
 } from "@/app/(app)/atendimento/actions";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -76,6 +77,7 @@ export function Inbox({
               last_message_body: m.body,
               last_message_at: m.created_at,
               last_message_direction: "in",
+              last_message_author: m.author_name ?? null,
             };
             return [updated, ...prev.filter((_, i) => i !== idx)];
           });
@@ -140,6 +142,15 @@ export function Inbox({
     startTransition(() => closeConversation(selectedId));
   }
 
+  function handleToggleMute() {
+    if (!selectedId) return;
+    const next = !selected?.is_muted;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === selectedId ? { ...c, is_muted: next } : c)),
+    );
+    startTransition(() => toggleMute(selectedId, next).then(() => undefined));
+  }
+
   return (
     <div className="flex h-full">
       <ConversationList
@@ -154,6 +165,7 @@ export function Inbox({
           onSend={handleSend}
           onAssign={handleAssign}
           onClose={handleClose}
+          onToggleMute={handleToggleMute}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-ink-soft">
