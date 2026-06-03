@@ -152,7 +152,7 @@ export async function refreshChannelConnection(channelId: string, phone?: string
     })
     .eq("id", channelId);
 
-  return { status: result.status, qrCode: result.qrCode, pairCode: result.pairCode };
+  return { status: result.status, qrCode: result.qrCode, pairCode: result.pairCode, debug: result.debug };
 }
 
 /** Consulta o status atual (polling) e persiste. */

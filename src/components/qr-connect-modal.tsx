@@ -64,7 +64,7 @@ export function QrConnectModal({
       setStatus(r.status);
       if (r.pairCode) setPairCode(r.pairCode);
       else if (r.status !== "connected")
-        setErr("Não consegui gerar o código agora. Aguarde alguns segundos e clique de novo.");
+        setErr("Não consegui gerar o código agora. Tente de novo. " + (r.debug ? `[${r.debug}]` : ""));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Erro ao gerar o código.");
     } finally {
