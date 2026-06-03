@@ -47,6 +47,7 @@ import {
   toggleMute,
   fetchMessages,
   fetchConversations,
+  openDirectConversation,
 } from "@/app/(app)/atendimento/actions";
 import type { ConversationOverview, Message } from "@/lib/types";
 
@@ -226,6 +227,20 @@ export function Inbox({
     });
   }
 
+  function handleOpenDirect(name: string, phone: string) {
+    if (!selected) return;
+    const channelId = selected.channel_id;
+    startTransition(async () => {
+      const { id } = await openDirectConversation(channelId, phone, name);
+      if (!id) return;
+      const convs = await fetchConversations();
+      setConversations(convs);
+      setSelectedId(id);
+      const msgs = await fetchMessages(id);
+      setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
+    });
+  }
+
   function handleReact(m: Message, emoji: string) {
     if (!selectedId) return;
     const convId = selectedId;
@@ -362,6 +377,7 @@ export function Inbox({
           onReact={handleReact}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onAuthorClick={handleOpenDirect}
           onAssign={handleAssign}
           onClose={handleClose}
           onToggleMute={handleToggleMute}

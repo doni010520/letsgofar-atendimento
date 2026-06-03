@@ -66,6 +66,7 @@ export interface InboundMessage {
   timestamp?: string;
   isGroup?: boolean; // conversa de grupo
   authorName?: string; // quem enviou dentro do grupo (participante)
+  authorPhone?: string; // telefone real do participante (para abrir 1:1)
   reaction?: { targetExternalId: string; emoji: string }; // evento de reação
   replyTo?: { externalId?: string; excerpt?: string; author?: string }; // msg citada
   fromMe?: boolean; // mensagem enviada pelo próprio número (eco do celular) → direção "out"

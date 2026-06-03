@@ -330,6 +330,15 @@ function authorName(m: any): string | undefined {
   return m?.senderName ?? m?.pushName ?? m?.notifyName ?? undefined;
 }
 
+/** Telefone real do autor (participante do grupo) — vem em sender_pn. @lid não serve. */
+function authorPhone(m: any): string | undefined {
+  for (const f of [m?.sender_pn, m?.senderPn, m?.sender, m?.participant_pn]) {
+    const s = String(f ?? "");
+    if (/@s\.whatsapp\.net/i.test(s)) return s.replace(/@.*/, "").replace(/\D/g, "");
+  }
+  return undefined;
+}
+
 const isReaction = (m: any) => /reaction/i.test(String(m?.type ?? m?.messageType ?? ""));
 
 /** Extrai a citação (reply) do contextInfo, se houver. */
@@ -369,6 +378,7 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
         isGroup: group,
         fromMe: !!m?.fromMe,
         authorName: group ? authorName(m) : undefined,
+        authorPhone: group ? authorPhone(m) : undefined,
         chatPhoto,
         chatName,
         timestamp: m?.timestamp

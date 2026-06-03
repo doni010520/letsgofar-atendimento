@@ -16,6 +16,7 @@ export function ChatThread({
   onReact,
   onEdit,
   onDelete,
+  onAuthorClick,
   onAssign,
   onClose,
   onToggleMute,
@@ -30,6 +31,7 @@ export function ChatThread({
   onReact: (m: Message, emoji: string) => void;
   onEdit: (m: Message) => void;
   onDelete: (m: Message) => void;
+  onAuthorClick: (name: string, phone: string) => void;
   onAssign: () => void;
   onClose: () => void;
   onToggleMute: () => void;
@@ -124,6 +126,7 @@ export function ChatThread({
             onReact={onReact}
             onEdit={onEdit}
             onDelete={onDelete}
+            onAuthorClick={onAuthorClick}
           />
         ))}
         <div ref={endRef} />

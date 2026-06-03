@@ -52,12 +52,14 @@ export function MessageBubble({
   onReact,
   onEdit,
   onDelete,
+  onAuthorClick,
 }: {
   message: Message;
   onReply?: (m: Message) => void;
   onReact?: (m: Message, emoji: string) => void;
   onEdit?: (m: Message) => void;
   onDelete?: (m: Message) => void;
+  onAuthorClick?: (name: string, phone: string) => void;
 }) {
   const out = message.direction === "out";
   const [menu, setMenu] = useState(false);
@@ -89,11 +91,21 @@ export function MessageBubble({
             message.sender_type === "system" && "bg-gray-200 text-gray-600 italic",
           )}
         >
-          {!out && message.author_name && (
-            <p className="mb-0.5 text-xs font-semibold" style={{ color: colorForName(message.author_name) }}>
-              {message.author_name}
-            </p>
-          )}
+          {!out && message.author_name &&
+            (message.author_phone && onAuthorClick ? (
+              <button
+                onClick={() => onAuthorClick(message.author_name!, message.author_phone!)}
+                className="mb-0.5 text-xs font-semibold hover:underline"
+                style={{ color: colorForName(message.author_name) }}
+                title="Abrir conversa com este contato"
+              >
+                {message.author_name}
+              </button>
+            ) : (
+              <p className="mb-0.5 text-xs font-semibold" style={{ color: colorForName(message.author_name) }}>
+                {message.author_name}
+              </p>
+            ))}
           {message.reply_excerpt && (
             <div className={cn("mb-1 rounded border-l-2 px-2 py-1 text-xs", out ? "border-white/60 bg-white/15" : "border-brand/50 bg-black/5 text-ink-soft")}>
               {message.reply_author && !/^\d+$/.test(message.reply_author) && (

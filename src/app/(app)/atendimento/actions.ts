@@ -18,6 +18,54 @@ export async function fetchConversations() {
   return getConversations();
 }
 
+/** Abre (ou cria) uma conversa 1:1 com um participante — ex.: clicar no nome num grupo. */
+export async function openDirectConversation(channelId: string, phone: string, name?: string) {
+  if (isPreview()) return { id: null as string | null };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return { id: null };
+  const supabase = await createClient();
+
+  const { data: contact } = await supabase
+    .from("contacts")
+    .upsert(
+      { organization_id: session.organization.id, phone: digits, name: name ?? null, is_group: false },
+      { onConflict: "organization_id,phone", ignoreDuplicates: false },
+    )
+    .select("id")
+    .single();
+  if (!contact) return { id: null };
+
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("channel_id", channelId)
+    .eq("contact_id", contact.id)
+    .in("status", ["bot", "queued", "open"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let id = existing?.id ?? null;
+  if (!id) {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .insert({
+        organization_id: session.organization.id,
+        channel_id: channelId,
+        contact_id: contact.id,
+        status: "open",
+        last_message_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    id = conv?.id ?? null;
+  }
+  revalidatePath("/atendimento");
+  return { id };
+}
+
 export async function sendMessage(conversationId: string, text: string, replyToExternal?: string) {
   const body = text.trim();
   if (!body) return { ok: false };

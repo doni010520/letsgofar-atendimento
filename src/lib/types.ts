@@ -184,6 +184,7 @@ export interface Message {
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   external_id: string | null;
   author_name?: string | null;
+  author_phone?: string | null;
   reply_to_external?: string | null;
   reply_excerpt?: string | null;
   reply_author?: string | null;
