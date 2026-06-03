@@ -69,7 +69,7 @@ export function QrConnectModal({
       if (r.pairCode) setPairCode(r.pairCode);
       else if (r.status !== "connected")
         setErr(
-          "Não consegui gerar o código agora. Verifique se o número está completo (DDI+DDD+9 dígitos) e tente de novo em alguns segundos — o WhatsApp limita a geração de códigos seguidos.",
+          "Não consegui gerar o código agora. Aguarde alguns segundos e tente de novo — o WhatsApp limita a geração de códigos em sequência.",
         );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Erro ao gerar o código.");
@@ -176,18 +176,8 @@ export function QrConnectModal({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="DDI + DDD + número (ex: 5573999998888)"
-                  className="mb-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
                 />
-                {(() => {
-                  const d = phone.replace(/\D/g, "");
-                  if (d.startsWith("55") && d.length > 0 && d.length !== 13)
-                    return (
-                      <p className="mb-2 text-[11px] text-amber-600">
-                        Número brasileiro tem 13 dígitos (55 + DDD + 9 dígitos). Você digitou {d.length}.
-                      </p>
-                    );
-                  return <div className="mb-2" />;
-                })()}
                 {pairCode ? (
                   <div className="rounded-lg border border-brand/30 bg-brand-light py-4">
                     <p className="text-[11px] text-ink-soft">Digite este código no WhatsApp:</p>
