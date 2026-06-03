@@ -44,6 +44,10 @@ export interface ChannelProvider {
   deleteMessage?(externalId: string): Promise<void>;
   /** Marca mensagens como lidas. */
   markRead?(externalIds: string[]): Promise<void>;
+  /** Envia uma localização. */
+  sendLocation?(to: string, loc: { name?: string; address?: string; latitude: number; longitude: number }): Promise<{ externalId?: string }>;
+  /** Envia um contato (vCard). */
+  sendContact?(to: string, contact: { fullName: string; phoneNumber: string }): Promise<{ externalId?: string }>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */

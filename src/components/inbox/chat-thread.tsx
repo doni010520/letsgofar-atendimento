@@ -11,6 +11,8 @@ export function ChatThread({
   messages,
   onSend,
   onSendFile,
+  onSendLocation,
+  onSendContact,
   onReact,
   onEdit,
   onDelete,
@@ -23,6 +25,8 @@ export function ChatThread({
   messages: Message[];
   onSend: (text: string, replyId?: string) => void;
   onSendFile: (file: File) => void;
+  onSendLocation: () => void;
+  onSendContact: () => void;
   onReact: (m: Message, emoji: string) => void;
   onEdit: (m: Message) => void;
   onDelete: (m: Message) => void;
@@ -144,6 +148,8 @@ export function ChatThread({
           setReplyTo(null);
         }}
         onSendFile={onSendFile}
+        onSendLocation={onSendLocation}
+        onSendContact={onSendContact}
         disabled={conversation.status === "closed"}
         sending={pending}
       />

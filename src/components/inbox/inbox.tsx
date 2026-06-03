@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 import {
   sendMessage,
   sendMediaMessage,
+  sendLocationMessage,
+  sendContactMessage,
   reactToMessage,
   editMessageAction,
   deleteMessageAction,
@@ -107,6 +109,41 @@ export function Inbox({
       supabase.removeChannel(channel);
     };
   }, [live, router]);
+
+  function refetch(convId: string) {
+    return fetchMessages(convId).then((msgs) => setMessagesByConv((prev) => ({ ...prev, [convId]: msgs })));
+  }
+
+  function handleSendLocation() {
+    if (!selectedId) return;
+    const convId = selectedId;
+    if (!navigator.geolocation) {
+      alert("Geolocalização não disponível neste dispositivo.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        startTransition(async () => {
+          await sendLocationMessage(convId, { latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+          await refetch(convId);
+        });
+      },
+      () => alert("Não foi possível obter a localização."),
+    );
+  }
+
+  function handleSendContact() {
+    if (!selectedId) return;
+    const convId = selectedId;
+    const name = window.prompt("Nome do contato:");
+    if (!name) return;
+    const phone = window.prompt("Telefone (com DDI+DDD, só números):");
+    if (!phone) return;
+    startTransition(async () => {
+      await sendContactMessage(convId, name, phone);
+      await refetch(convId);
+    });
+  }
 
   function handleReact(m: Message, emoji: string) {
     if (!selectedId) return;
@@ -234,6 +271,8 @@ export function Inbox({
           messages={messages}
           onSend={handleSend}
           onSendFile={handleSendFile}
+          onSendLocation={handleSendLocation}
+          onSendContact={handleSendContact}
           onReact={handleReact}
           onEdit={handleEdit}
           onDelete={handleDelete}

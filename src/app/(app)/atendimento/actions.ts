@@ -278,6 +278,79 @@ export async function markConversationRead(conversationId: string) {
   return { ok: true };
 }
 
+/** Envia uma localização na conversa. */
+export async function sendLocationMessage(
+  conversationId: string,
+  loc: { latitude: number; longitude: number; name?: string; address?: string },
+) {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const supabase = await createClient();
+  const { to, channel } = await recipientFor(supabase, conversationId);
+  const label = loc.name || loc.address || `${loc.latitude}, ${loc.longitude}`;
+  const { data: msg } = await supabase
+    .from("messages")
+    .insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "agent",
+      sender_id: session.userId,
+      content_type: "location",
+      body: `📍 ${label}\nhttps://maps.google.com/?q=${loc.latitude},${loc.longitude}`,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+  try {
+    const res = await getProvider(channel).sendLocation?.(to, loc);
+    await supabase.from("messages").update({ status: "sent", external_id: res?.externalId ?? null }).eq("id", msg!.id);
+  } catch (e) {
+    console.error("sendLocation", e);
+    await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
+  }
+  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Envia um contato (vCard) na conversa. */
+export async function sendContactMessage(conversationId: string, fullName: string, phoneNumber: string) {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const name = fullName.trim();
+  const phone = phoneNumber.replace(/\D/g, "");
+  if (!name || !phone) return { ok: false };
+  const supabase = await createClient();
+  const { to, channel } = await recipientFor(supabase, conversationId);
+  const { data: msg } = await supabase
+    .from("messages")
+    .insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "agent",
+      sender_id: session.userId,
+      content_type: "contact",
+      body: `👤 ${name} — ${phone}`,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+  try {
+    const res = await getProvider(channel).sendContact?.(to, { fullName: name, phoneNumber: phone });
+    await supabase.from("messages").update({ status: "sent", external_id: res?.externalId ?? null }).eq("id", msg!.id);
+  } catch (e) {
+    console.error("sendContact", e);
+    await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
+  }
+  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
 /** Silencia/dessilencia uma conversa (grupo ou contato). */
 export async function toggleMute(conversationId: string, muted: boolean) {
   if (isPreview()) return { muted };

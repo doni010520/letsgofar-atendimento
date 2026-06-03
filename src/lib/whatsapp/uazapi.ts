@@ -184,6 +184,24 @@ export class UazapiProvider implements ChannelProvider {
     await this.req("/message/markread", { method: "POST", body: JSON.stringify({ id: externalIds }) });
   }
 
+  /** Envia uma localização. POST /send/location {number,name,address,latitude,longitude}. */
+  async sendLocation(to: string, loc: { name?: string; address?: string; latitude: number; longitude: number }): Promise<{ externalId?: string }> {
+    const r = await this.req("/send/location", {
+      method: "POST",
+      body: JSON.stringify({ number: to, name: loc.name ?? "", address: loc.address ?? "", latitude: loc.latitude, longitude: loc.longitude }),
+    });
+    return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
+  }
+
+  /** Envia um contato (vCard). POST /send/contact {number,fullName,phoneNumber}. */
+  async sendContact(to: string, contact: { fullName: string; phoneNumber: string }): Promise<{ externalId?: string }> {
+    const r = await this.req("/send/contact", {
+      method: "POST",
+      body: JSON.stringify({ number: to, fullName: contact.fullName, phoneNumber: contact.phoneNumber }),
+    });
+    return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
+  }
+
   /**
    * Baixa/descriptografa uma mídia recebida e retorna a URL hospedada na UAZAPI
    * (`/files/...`), o mimetype e, para áudio, a transcrição automática.

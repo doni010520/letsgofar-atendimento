@@ -1,21 +1,26 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Send, Paperclip, Mic, Square, Loader2 } from "lucide-react";
+import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp } from "lucide-react";
 
 export function Composer({
   onSend,
   onSendFile,
+  onSendLocation,
+  onSendContact,
   disabled,
   sending,
 }: {
   onSend: (text: string) => void;
   onSendFile: (file: File) => void;
+  onSendLocation?: () => void;
+  onSendContact?: () => void;
   disabled?: boolean;
   sending?: boolean;
 }) {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
+  const [attachMenu, setAttachMenu] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -67,14 +72,36 @@ export function Composer({
         className="hidden"
         onChange={pickFile}
       />
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={disabled || sending}
-        className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-gray-100 text-ink-soft transition hover:bg-gray-200 disabled:opacity-40"
-        title="Anexar arquivo"
-      >
-        <Paperclip size={18} />
-      </button>
+      <div className="relative">
+        <button
+          onClick={() => setAttachMenu((v) => !v)}
+          disabled={disabled || sending}
+          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-gray-100 text-ink-soft transition hover:bg-gray-200 disabled:opacity-40"
+          title="Anexar"
+        >
+          <Paperclip size={18} />
+        </button>
+        {attachMenu && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setAttachMenu(false)} />
+            <div className="absolute bottom-12 left-0 z-20 w-44 overflow-hidden rounded-lg border border-gray-100 bg-surface py-1 text-sm shadow-xl">
+              <button onClick={() => { setAttachMenu(false); fileRef.current?.click(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
+                <FileUp size={15} /> Arquivo / mídia
+              </button>
+              {onSendLocation && (
+                <button onClick={() => { setAttachMenu(false); onSendLocation(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
+                  <MapPin size={15} /> Localização
+                </button>
+              )}
+              {onSendContact && (
+                <button onClick={() => { setAttachMenu(false); onSendContact(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
+                  <UserPlus size={15} /> Contato
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       <textarea
         value={text}
