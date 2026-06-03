@@ -31,26 +31,26 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {channels.map((c) => {
           const clickable = c.type !== "meta_cloud"; // UAZAPI: clicar reabre conexão (QR/código)
+          const menuBtn = (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenu(menu === c.id ? null : c.id); }}
+              className="rounded-lg p-1.5 text-ink-soft transition hover:bg-gray-100 hover:text-ink"
+              title="Ações"
+            >
+              <MoreVertical size={18} />
+            </button>
+          );
           return (
             <div key={c.id} className="relative">
-              <button
-                type="button"
-                onClick={() => clickable && setConnect({ id: c.id, phone: c.phone ?? undefined })}
-                disabled={!clickable || busy === c.id}
-                className={clickable ? "block w-full cursor-pointer text-left transition hover:opacity-90 focus:outline-none" : "block w-full cursor-default text-left"}
+              <div
+                role={clickable ? "button" : undefined}
+                onClick={() => clickable && busy !== c.id && setConnect({ id: c.id, phone: c.phone ?? undefined })}
+                className={clickable ? "cursor-pointer transition hover:opacity-90" : ""}
                 title={clickable ? (c.status === "connected" ? "Ver conexão" : "Conectar / ler QR ou código") : undefined}
               >
-                <ChannelCard channel={c} />
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setMenu(menu === c.id ? null : c.id); }}
-                className="absolute right-3 top-3 rounded-lg p-1.5 text-ink-soft hover:bg-gray-100 hover:text-ink"
-                title="Ações"
-              >
-                <MoreVertical size={18} />
-              </button>
+                <ChannelCard channel={c} action={menuBtn} />
+              </div>
 
               {menu === c.id && (
                 <>

@@ -2,7 +2,7 @@ import { Card, StatusBadge } from "@/components/ui";
 import { formatPhone } from "@/lib/utils";
 import type { Channel } from "@/lib/types";
 
-export function ChannelCard({ channel }: { channel: Channel }) {
+export function ChannelCard({ channel, action }: { channel: Channel; action?: React.ReactNode }) {
   const isMeta = channel.type === "meta_cloud";
   return (
     <Card className="flex items-center gap-4">
@@ -23,6 +23,7 @@ export function ChannelCard({ channel }: { channel: Channel }) {
       </div>
 
       <StatusBadge status={channel.status} />
+      {action ? <div className="shrink-0">{action}</div> : null}
     </Card>
   );
 }
