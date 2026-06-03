@@ -3,6 +3,7 @@ import type { InboundMessage } from "./types";
 import type { Channel } from "@/lib/types";
 import { syncContactAvatar } from "./avatar";
 import { storeInboundMedia } from "./media";
+import { runChatbot } from "./chatbot";
 import { getProvider } from "./index";
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
@@ -72,11 +73,27 @@ export async function persistInbound(messages: InboundMessage[]) {
       }
     }
 
+    // Automação ativa do canal (chatbot). Grupos não entram no bot.
+    const { data: automation } = isGroup
+      ? { data: null }
+      : await db
+          .from("automations")
+          .select("id, flow, active, channel_id")
+          .eq("organization_id", org)
+          .eq("active", true)
+          .or(`channel_id.eq.${channel.id},channel_id.is.null`)
+          .order("channel_id", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+
     // Conversa em aberto (reaproveita ou cria)
-    let conversationId: string | undefined;
+    let conversationId: string;
+    let convStatus = "queued";
+    let convBotNode: string | null = null;
+    let isNew = false;
     const { data: existing } = await db
       .from("conversations")
-      .select("id")
+      .select("id, status, bot_node_id")
       .eq("channel_id", channel.id)
       .eq("contact_id", contact!.id)
       .in("status", ["bot", "queued", "open"])
@@ -84,15 +101,21 @@ export async function persistInbound(messages: InboundMessage[]) {
       .limit(1)
       .maybeSingle();
 
-    if (existing) conversationId = existing.id;
-    else {
+    if (existing) {
+      conversationId = existing.id;
+      convStatus = existing.status;
+      convBotNode = existing.bot_node_id;
+    } else {
+      isNew = true;
+      convStatus = automation ? "bot" : "queued";
       const { data: conv } = await db
         .from("conversations")
         .insert({
           organization_id: org,
           channel_id: channel.id,
           contact_id: contact!.id,
-          status: "queued",
+          status: convStatus,
+          bot_automation_id: automation?.id ?? null,
           last_message_at: new Date().toISOString(),
         })
         .select("id")
@@ -129,6 +152,21 @@ export async function persistInbound(messages: InboundMessage[]) {
       .from("conversations")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", conversationId);
+
+    // Chatbot: roda se a conversa está no bot (aguardando) ou acabou de nascer com automação ativa.
+    if (automation && !isGroup && (convStatus === "bot" || isNew)) {
+      const r = await runChatbot(
+        db,
+        channel as Channel,
+        { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, is_group: isGroup, bot_node_id: convBotNode },
+        automation as { id: string; flow: { nodes: never[]; edges: never[] } },
+        body ?? "",
+      ).catch((e) => {
+        console.warn("chatbot", (e as Error)?.message);
+        return null;
+      });
+      if (r === "queued") await db.from("conversations").update({ status: "queued" }).eq("id", conversationId);
+    }
   }
 }
 
