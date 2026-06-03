@@ -1,10 +1,38 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 import { ConversationList } from "./conversation-list";
 import { ChatThread } from "./chat-thread";
 import { createClient } from "@/lib/supabase/client";
+
+/** Toca um bip curto de notificação via Web Audio (sem precisar de arquivo). */
+let audioCtx: AudioContext | null = null;
+function playPing() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx = audioCtx ?? new Ctx();
+    const ctx = audioCtx;
+    const now = ctx.currentTime;
+    [880, 1175].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = now + i * 0.12;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.2);
+    });
+  } catch {
+    /* silencioso */
+  }
+}
 import {
   sendMessage,
   sendMediaMessage,
@@ -42,6 +70,24 @@ export function Inbox({
     initialSelectedId ? { [initialSelectedId]: initialMessages } : {},
   );
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+
+  // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
+  const maxInbound = (convs: ConversationOverview[]) =>
+    convs.reduce((mx, c) => {
+      if (c.last_message_direction === "in" && !c.is_muted && c.last_message_at) {
+        const t = Date.parse(c.last_message_at);
+        if (t > mx) return t;
+      }
+      return mx;
+    }, 0);
+  const lastPingRef = useRef<number>(maxInbound(initialConversations));
+
+  function maybePing(convs: ConversationOverview[]) {
+    const newest = maxInbound(convs);
+    if (lastPingRef.current && newest > lastPingRef.current) playPing();
+    if (newest > lastPingRef.current) lastPingRef.current = newest;
+  }
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
   const messages = selectedId ? messagesByConv[selectedId] ?? [] : [];
@@ -63,7 +109,10 @@ export function Inbox({
     const tick = async () => {
       try {
         const convs = await fetchConversations();
-        if (!cancel && Array.isArray(convs)) setConversations(convs);
+        if (!cancel && Array.isArray(convs)) {
+          setConversations(convs);
+          maybePing(convs);
+        }
         if (!cancel && selectedId) {
           const msgs = await fetchMessages(selectedId);
           setMessagesByConv((prev) => {
@@ -187,12 +236,16 @@ export function Inbox({
   }
 
   function handleEdit(m: Message) {
-    if (!selectedId) return;
+    setEditing({ id: m.id, text: m.body ?? "" });
+  }
+
+  function saveEdit() {
+    if (!selectedId || !editing) return;
     const convId = selectedId;
-    const next = window.prompt("Editar mensagem:", m.body ?? "");
-    if (next == null || next.trim() === (m.body ?? "")) return;
+    const { id, text } = editing;
+    setEditing(null);
     startTransition(async () => {
-      await editMessageAction(convId, m.id, next);
+      await editMessageAction(convId, id, text);
       const msgs = await fetchMessages(convId);
       setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
     });
@@ -316,6 +369,36 @@ export function Inbox({
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-ink-soft">
           Selecione uma conversa para começar.
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setEditing(null)}>
+          <div className="w-full max-w-md rounded-card bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-ink">Editar mensagem</h2>
+              <button onClick={() => setEditing(null)} className="text-ink-soft hover:text-ink"><X size={18} /></button>
+            </div>
+            <textarea
+              autoFocus
+              value={editing.text}
+              onChange={(e) => setEditing((s) => (s ? { ...s, text: e.target.value } : s))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+                if (e.key === "Escape") setEditing(null);
+              }}
+              rows={3}
+              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setEditing(null)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-ink hover:bg-gray-200">
+                Cancelar
+              </button>
+              <button onClick={saveEdit} disabled={!editing.text.trim()} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-40">
+                Salvar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
