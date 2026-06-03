@@ -202,6 +202,25 @@ export class UazapiProvider implements ChannelProvider {
     return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }
 
+  /** Participantes de um grupo (LID + telefone real). POST /group/info {groupjid}. */
+  async getGroupParticipants(groupJid: string): Promise<{ lid: string; phone: string }[]> {
+    try {
+      const r = (await this.req("/group/info", {
+        method: "POST",
+        body: JSON.stringify({ groupjid: groupJid }),
+      })) as { Participants?: any[]; participants?: any[] };
+      const parts = r?.Participants ?? r?.participants ?? [];
+      return parts
+        .map((p: any) => ({
+          lid: String(p?.LID ?? p?.JID ?? "").replace(/@.*/, "").replace(/\D/g, ""),
+          phone: String(p?.PhoneNumber ?? p?.PN ?? "").replace(/@.*/, "").replace(/\D/g, ""),
+        }))
+        .filter((p) => p.lid && p.phone);
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Baixa/descriptografa uma mídia recebida e retorna a URL hospedada na UAZAPI
    * (`/files/...`), o mimetype e, para áudio, a transcrição automática.
@@ -379,6 +398,8 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
         fromMe: !!m?.fromMe,
         authorName: group ? authorName(m) : undefined,
         authorPhone: group ? authorPhone(m) : undefined,
+        authorLid: group ? String(m?.sender ?? "").replace(/@.*/, "") || undefined : undefined,
+        chatJid: group ? String(m?.chatid ?? m?.chat ?? "") || undefined : undefined,
         chatPhoto,
         chatName,
         timestamp: m?.timestamp

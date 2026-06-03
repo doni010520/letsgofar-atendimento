@@ -59,7 +59,7 @@ export function MessageBubble({
   onReact?: (m: Message, emoji: string) => void;
   onEdit?: (m: Message) => void;
   onDelete?: (m: Message) => void;
-  onAuthorClick?: (name: string, phone: string) => void;
+  onAuthorClick?: (m: Message) => void;
 }) {
   const out = message.direction === "out";
   const [menu, setMenu] = useState(false);
@@ -92,9 +92,9 @@ export function MessageBubble({
           )}
         >
           {!out && message.author_name &&
-            (message.author_phone && onAuthorClick ? (
+            ((message.author_phone || message.author_lid) && onAuthorClick ? (
               <button
-                onClick={() => onAuthorClick(message.author_name!, message.author_phone!)}
+                onClick={() => onAuthorClick(message)}
                 className="mb-0.5 text-xs font-semibold hover:underline"
                 style={{ color: colorForName(message.author_name) }}
                 title="Abrir conversa com este contato"

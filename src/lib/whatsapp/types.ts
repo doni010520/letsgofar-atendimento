@@ -48,6 +48,8 @@ export interface ChannelProvider {
   sendLocation?(to: string, loc: { name?: string; address?: string; latitude: number; longitude: number }): Promise<{ externalId?: string }>;
   /** Envia um contato (vCard). */
   sendContact?(to: string, contact: { fullName: string; phoneNumber: string }): Promise<{ externalId?: string }>;
+  /** Lista participantes de um grupo (LID + telefone real). Para resolver autor → 1:1. */
+  getGroupParticipants?(groupJid: string): Promise<{ lid: string; phone: string }[]>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */
@@ -67,6 +69,8 @@ export interface InboundMessage {
   isGroup?: boolean; // conversa de grupo
   authorName?: string; // quem enviou dentro do grupo (participante)
   authorPhone?: string; // telefone real do participante (para abrir 1:1)
+  authorLid?: string; // LID do participante (resolvível via /group/info)
+  chatJid?: string; // JID completo do chat/grupo (preserva traço de jids antigos)
   reaction?: { targetExternalId: string; emoji: string }; // evento de reação
   replyTo?: { externalId?: string; excerpt?: string; author?: string }; // msg citada
   fromMe?: boolean; // mensagem enviada pelo próprio número (eco do celular) → direção "out"

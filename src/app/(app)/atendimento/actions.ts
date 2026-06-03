@@ -18,14 +18,31 @@ export async function fetchConversations() {
   return getConversations();
 }
 
-/** Abre (ou cria) uma conversa 1:1 com um participante — ex.: clicar no nome num grupo. */
-export async function openDirectConversation(channelId: string, phone: string, name?: string) {
+/**
+ * Abre (ou cria) uma conversa 1:1 com um participante — ex.: clicar no nome num grupo.
+ * Se só houver o LID (mensagem comum de grupo), resolve o telefone via /group/info.
+ */
+export async function openDirectConversation(
+  channelId: string,
+  opts: { phone?: string; lid?: string; name?: string; groupJid?: string },
+) {
   if (isPreview()) return { id: null as string | null };
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
-  const digits = phone.replace(/\D/g, "");
-  if (!digits) return { id: null };
   const supabase = await createClient();
+
+  let digits = (opts.phone || "").replace(/\D/g, "");
+  // Resolve LID → telefone real consultando os participantes do grupo.
+  if (!digits && opts.lid && opts.groupJid) {
+    const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
+    const parts = await getProvider(channel as Channel)
+      .getGroupParticipants?.(opts.groupJid)
+      .catch(() => [] as { lid: string; phone: string }[]);
+    const lidDigits = opts.lid.replace(/\D/g, "");
+    digits = (parts ?? []).find((p) => p.lid === lidDigits)?.phone ?? "";
+  }
+  if (!digits) return { id: null };
+  const name = opts.name;
 
   const { data: contact } = await supabase
     .from("contacts")
@@ -77,7 +94,7 @@ export async function sendMessage(conversationId: string, text: string, replyToE
 
   const { data: conv } = await supabase
     .from("conversation_overview")
-    .select("contact_phone, channel_id, status, is_group")
+    .select("contact_phone, channel_id, status, is_group, contact_jid")
     .eq("id", conversationId)
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
@@ -117,8 +134,7 @@ export async function sendMessage(conversationId: string, text: string, replyToE
       .select("*")
       .eq("id", conv.channel_id)
       .single();
-    const to =
-      conv.is_group && channel?.type === "uazapi" ? `${conv.contact_phone}@g.us` : conv.contact_phone;
+    const to = recipientOf(conv);
     const res = await getProvider(channel as Channel).sendText({ to, text: body, replyId: replyToExternal });
     await supabase
       .from("messages")
@@ -184,7 +200,7 @@ export async function sendMediaMessage(formData: FormData) {
   const supabase = await createClient();
   const { data: conv } = await supabase
     .from("conversation_overview")
-    .select("contact_phone, channel_id, status, is_group")
+    .select("contact_phone, channel_id, status, is_group, contact_jid")
     .eq("id", conversationId)
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
@@ -225,10 +241,7 @@ export async function sendMediaMessage(formData: FormData) {
 
   try {
     const { data: channel } = await supabase.from("channels").select("*").eq("id", conv.channel_id).single();
-    const to =
-      conv.is_group && (channel as Channel)?.type === "uazapi"
-        ? `${conv.contact_phone}@g.us`
-        : conv.contact_phone;
+    const to = recipientOf(conv);
     const res = await getProvider(channel as Channel).sendMedia({ to, url: publicUrl, caption, kind });
     await supabase.from("messages").update({ status: "sent", external_id: res.externalId ?? null }).eq("id", msg!.id);
   } catch (e) {
@@ -244,17 +257,21 @@ export async function sendMediaMessage(formData: FormData) {
   return { ok: true };
 }
 
+/** Destinatário do provedor: para grupos usa o JID completo (preserva traço). */
+function recipientOf(conv: { contact_phone: string; is_group?: boolean; contact_jid?: string | null }) {
+  if (conv.is_group) return conv.contact_jid || `${conv.contact_phone}@g.us`;
+  return conv.contact_phone;
+}
+
 async function recipientFor(supabase: Awaited<ReturnType<typeof createClient>>, conversationId: string) {
   const { data: conv } = await supabase
     .from("conversation_overview")
-    .select("contact_phone, channel_id, is_group")
+    .select("contact_phone, channel_id, is_group, contact_jid")
     .eq("id", conversationId)
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
   const { data: channel } = await supabase.from("channels").select("*").eq("id", conv.channel_id).single();
-  const to =
-    conv.is_group && (channel as Channel)?.type === "uazapi" ? `${conv.contact_phone}@g.us` : conv.contact_phone;
-  return { to, channel: channel as Channel };
+  return { to: recipientOf(conv), channel: channel as Channel };
 }
 
 /** Reage a uma mensagem com um emoji (vazio remove a reação). */

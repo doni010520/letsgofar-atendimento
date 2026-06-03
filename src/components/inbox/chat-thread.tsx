@@ -31,7 +31,7 @@ export function ChatThread({
   onReact: (m: Message, emoji: string) => void;
   onEdit: (m: Message) => void;
   onDelete: (m: Message) => void;
-  onAuthorClick: (name: string, phone: string) => void;
+  onAuthorClick: (m: Message) => void;
   onAssign: () => void;
   onClose: () => void;
   onToggleMute: () => void;

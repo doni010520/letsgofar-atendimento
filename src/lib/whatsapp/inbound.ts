@@ -64,6 +64,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       const patch: Record<string, unknown> = {};
       if (!contact.name && msg.chatName) patch.name = msg.chatName;
       if (!contact.avatar_url && msg.chatPhoto) patch.avatar_url = msg.chatPhoto;
+      if (isGroup && msg.chatJid) patch.chat_jid = msg.chatJid; // JID completo do grupo
       if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
     }
 
@@ -157,6 +158,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       external_id: msg.externalId ?? null,
       author_name: fromMe ? null : msg.authorName ?? null,
       author_phone: fromMe ? null : msg.authorPhone ?? null,
+      author_lid: fromMe ? null : msg.authorLid ?? null,
       reply_to_external: msg.replyTo?.externalId ?? null,
       reply_excerpt: replyExcerpt,
       reply_author: replyAuthor,

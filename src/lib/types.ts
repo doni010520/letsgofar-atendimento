@@ -168,6 +168,7 @@ export interface ConversationOverview {
   last_message_direction: MessageDirection | null;
   is_group?: boolean;
   is_muted?: boolean;
+  contact_jid?: string | null;
   last_message_author?: string | null;
 }
 
@@ -185,6 +186,7 @@ export interface Message {
   external_id: string | null;
   author_name?: string | null;
   author_phone?: string | null;
+  author_lid?: string | null;
   reply_to_external?: string | null;
   reply_excerpt?: string | null;
   reply_author?: string | null;

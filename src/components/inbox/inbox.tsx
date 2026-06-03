@@ -227,12 +227,21 @@ export function Inbox({
     });
   }
 
-  function handleOpenDirect(name: string, phone: string) {
+  function handleOpenDirect(m: Message) {
     if (!selected) return;
     const channelId = selected.channel_id;
+    const groupJid = selected.contact_jid ?? undefined;
     startTransition(async () => {
-      const { id } = await openDirectConversation(channelId, phone, name);
-      if (!id) return;
+      const { id } = await openDirectConversation(channelId, {
+        phone: m.author_phone ?? undefined,
+        lid: m.author_lid ?? undefined,
+        name: m.author_name ?? undefined,
+        groupJid,
+      });
+      if (!id) {
+        alert("Não consegui identificar o número deste participante.");
+        return;
+      }
       const convs = await fetchConversations();
       setConversations(convs);
       setSelectedId(id);
