@@ -69,4 +69,6 @@ export interface InboundMessage {
   reaction?: { targetExternalId: string; emoji: string }; // evento de reação
   replyTo?: { externalId?: string; excerpt?: string; author?: string }; // msg citada
   fromMe?: boolean; // mensagem enviada pelo próprio número (eco do celular) → direção "out"
+  chatPhoto?: string; // foto do contato/grupo (vem no objeto chat do webhook)
+  chatName?: string; // nome do contato/grupo (vem no objeto chat do webhook)
 }

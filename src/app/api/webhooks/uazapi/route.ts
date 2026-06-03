@@ -6,10 +6,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    // DEBUG temporário: registra payloads de mídia para diagnóstico.
+    // DEBUG temporário: registra eventos não-"messages" (status/ack/chat) para diagnóstico.
     if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.WEBHOOK_DEBUG === "1") {
-      const raw = JSON.stringify(payload);
-      if (/image|audio|video|document|ptt|sticker|media/i.test(raw)) {
+      const ev = String(payload?.EventType ?? payload?.event ?? "").toLowerCase();
+      if (ev !== "messages" || /update|ack|status|read|receipt/.test(ev)) {
         await createServiceClient().from("webhook_log").insert({ payload }).then(() => {}, () => {});
       }
     }

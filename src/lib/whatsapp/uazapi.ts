@@ -342,12 +342,18 @@ function extractReply(m: any): InboundMessage["replyTo"] | undefined {
   return { externalId: id ? String(id) : undefined, excerpt, author: ci?.participant ? String(ci.participant).replace(/@.*/, "") : undefined };
 }
 
+// Detecta reação no campo dedicado do webhook (m.reaction) ou pelo messageType.
+const reactionEmoji = (m: any) => (typeof m?.reaction === "string" && m.reaction) || (isReaction(m) ? m?.content?.text ?? m?.text ?? "" : "");
+
 /** Normaliza o payload de webhook da UAZAPI em mensagens internas. */
 export function parseUazapiWebhook(payload: any): InboundMessage[] {
   const msgs = payload?.messages ?? (payload?.message ? [payload.message] : []);
   const token = payload?.token ?? payload?.instance ?? payload?.owner ?? "";
+  const chat = payload?.chat ?? {};
+  const chatPhoto = chat?.image || chat?.imagePreview || undefined;
+  const chatName = chat?.name || chat?.wa_name || undefined;
   return (Array.isArray(msgs) ? msgs : [])
-    .filter((m: any) => isReaction(m) || !SKIP_TYPES.has(String(m?.type ?? m?.messageType ?? "").toLowerCase()))
+    .filter((m: any) => isReaction(m) || !!reactionEmoji(m) || !SKIP_TYPES.has(String(m?.messageType ?? m?.mediaType ?? m?.type ?? "").toLowerCase()))
     .map((m: any): InboundMessage => {
       const group = isGroupMessage(m);
       const base = {
@@ -356,6 +362,8 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
         isGroup: group,
         fromMe: !!m?.fromMe,
         authorName: group ? authorName(m) : undefined,
+        chatPhoto,
+        chatName,
         timestamp: m?.timestamp
           ? String(m.timestamp)
           : m?.messageTimestamp
@@ -363,19 +371,20 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
             : undefined,
       };
       // Evento de reação: não cria mensagem, anexa emoji à msg-alvo.
-      if (isReaction(m)) {
-        const targetId = m?.content?.key?.ID ?? m?.content?.key?.id ?? m?.reactionMessage?.key?.id;
-        return {
-          ...base,
-          contentType: "text",
-          reaction: { targetExternalId: String(targetId ?? ""), emoji: m?.content?.text ?? m?.text ?? "" },
-        };
+      const emoji = reactionEmoji(m);
+      if (isReaction(m) || (emoji && !m?.content?.URL)) {
+        const targetId =
+          m?.content?.key?.ID ?? m?.content?.key?.id ?? m?.reactionMessage?.key?.id ?? m?.quoted?.messageid;
+        if (targetId) {
+          return { ...base, contentType: "text", reaction: { targetExternalId: String(targetId), emoji } };
+        }
       }
+      // IMPORTANTE: o tipo real está em mediaType/messageType (type costuma ser só "media"/"text").
       return {
         ...base,
-        contactName: group ? groupName(m) : authorName(m),
-        contentType: mapType(m?.type ?? m?.messageType),
-        body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text,
+        contactName: group ? chatName ?? groupName(m) : authorName(m),
+        contentType: mapType(m?.mediaType ?? m?.messageType ?? m?.type),
+        body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text ?? m?.content?.caption,
         mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
         externalId: m?.id ?? m?.messageId ?? m?.messageid,
         replyTo: extractReply(m),

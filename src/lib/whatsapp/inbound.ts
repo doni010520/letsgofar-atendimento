@@ -1,10 +1,8 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { InboundMessage } from "./types";
 import type { Channel } from "@/lib/types";
-import { syncContactAvatar } from "./avatar";
 import { storeInboundMedia } from "./media";
 import { runChatbot } from "./chatbot";
-import { getProvider } from "./index";
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
@@ -61,23 +59,12 @@ export async function persistInbound(messages: InboundMessage[]) {
       .select("id, name, avatar_url, is_group")
       .single();
 
-    // Enriquecimento (UAZAPI): nome do grupo e/ou foto, quando ainda faltam. Best-effort.
+    // Nome e foto vêm no objeto `chat` do webhook (contato e grupo). Preenche o que faltar.
     if (contact) {
-      const provider = getProvider(channel as Channel);
-      const needName = isGroup && !contact.name;
-      const needAvatar = !contact.avatar_url;
-      if ((needName || needAvatar) && provider.getChatInfo) {
-        const jid = isGroup ? `${msg.from}@g.us` : `${msg.from}@s.whatsapp.net`;
-        const info = await provider.getChatInfo(jid).catch(() => ({}) as { name?: string; image?: string });
-        const patch: Record<string, unknown> = {};
-        if (needName && info.name) patch.name = info.name;
-        if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
-      }
-      if (needAvatar && !isGroup) {
-        await syncContactAvatar(db, channel as Channel, contact.id, msg.from).catch((e) =>
-          console.warn("avatar sync", (e as Error)?.message),
-        );
-      }
+      const patch: Record<string, unknown> = {};
+      if (!contact.name && msg.chatName) patch.name = msg.chatName;
+      if (!contact.avatar_url && msg.chatPhoto) patch.avatar_url = msg.chatPhoto;
+      if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
     }
 
     // Automação ativa do canal (chatbot). Grupos não entram no bot.
