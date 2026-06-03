@@ -191,7 +191,7 @@ export function QrConnectModal({
                   <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> {busy ? "Gerando..." : pairCode ? "Gerar novo código" : "Gerar código"}
                 </button>
                 {err && <p className="mt-2 text-xs text-danger">{err}</p>}
-                {dbg && <p className="mt-2 break-all text-[10px] font-mono text-ink-soft/70">{dbg}</p>}
+                {err && dbg && <p className="mt-2 break-all text-[10px] font-mono text-ink-soft/70">{dbg}</p>}
               </>
             )}
             <p className="mt-3 text-[11px] text-ink-soft">Aguardando leitura...</p>
