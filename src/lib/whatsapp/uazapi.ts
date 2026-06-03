@@ -378,13 +378,16 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
             : undefined,
       };
       // Evento de reação: NUNCA vira balão — anexa o emoji à msg-alvo (ou é descartado).
+      // Formato UAZAPI: { type:"reaction", text:"🙏" (emoji), reaction:"<ID alvo>", content:{key:{ID:"<ID alvo>"},text:"🙏"} }
       if (hasReaction(m)) {
         const r = m?.reaction;
         const emoji =
-          (typeof r === "string" ? r : r?.text ?? r?.emoji) ?? (isReaction(m) ? m?.content?.text ?? m?.text : "") ?? "";
+          m?.content?.text ?? m?.text ?? (typeof r === "string" && !isBareId(r) ? r : "") ?? (typeof r === "object" ? r?.text ?? r?.emoji : "") ?? "";
         const targetId =
-          m?.content?.key?.ID ?? m?.content?.key?.id ?? r?.key?.ID ?? r?.key?.id ?? r?.id ??
-          m?.reactionMessage?.key?.ID ?? m?.quoted?.messageid ?? m?.quoted?.id ?? "";
+          m?.content?.key?.ID ?? m?.content?.key?.id ??
+          (typeof r === "string" && isBareId(r) ? r : "") ??
+          (typeof r === "object" ? r?.key?.ID ?? r?.key?.id ?? r?.id : "") ??
+          m?.reactionMessage?.key?.ID ?? "";
         return { ...base, contentType: "text", reaction: { targetExternalId: String(targetId || ""), emoji: String(emoji || "") } };
       }
       // IMPORTANTE: o tipo real está em mediaType/messageType (type costuma ser só "media"/"text").
