@@ -31,6 +31,7 @@ export function QrConnectModal({
   const [status, setStatus] = useState<Channel["status"]>("connecting");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [dbg, setDbg] = useState<string | null>(null);
 
   const connected = status === "connected";
 
@@ -53,6 +54,7 @@ export function QrConnectModal({
     }
     setBusy(true);
     setErr(null);
+    setDbg(null);
     setPairCode(undefined);
     try {
       let r = await refreshChannelConnection(channelId, digits);
@@ -62,9 +64,12 @@ export function QrConnectModal({
         r = await refreshChannelConnection(channelId, digits);
       }
       setStatus(r.status);
+      setDbg(r.debug ?? null);
       if (r.pairCode) setPairCode(r.pairCode);
       else if (r.status !== "connected")
-        setErr("Não consegui gerar o código agora. Aguarde alguns segundos e clique de novo.");
+        setErr(
+          "Não consegui gerar o código agora. Verifique se o número está completo (DDI+DDD+9 dígitos) e tente de novo em alguns segundos — o WhatsApp limita a geração de códigos seguidos.",
+        );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Erro ao gerar o código.");
     } finally {
@@ -160,8 +165,18 @@ export function QrConnectModal({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="DDI + DDD + número (ex: 5573999998888)"
-                  className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="mb-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
                 />
+                {(() => {
+                  const d = phone.replace(/\D/g, "");
+                  if (d.startsWith("55") && d.length > 0 && d.length !== 13)
+                    return (
+                      <p className="mb-2 text-[11px] text-amber-600">
+                        Número brasileiro tem 13 dígitos (55 + DDD + 9 dígitos). Você digitou {d.length}.
+                      </p>
+                    );
+                  return <div className="mb-2" />;
+                })()}
                 {pairCode ? (
                   <div className="rounded-lg border border-brand/30 bg-brand-light py-4">
                     <p className="text-[11px] text-ink-soft">Digite este código no WhatsApp:</p>
@@ -176,6 +191,7 @@ export function QrConnectModal({
                   <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> {busy ? "Gerando..." : pairCode ? "Gerar novo código" : "Gerar código"}
                 </button>
                 {err && <p className="mt-2 text-xs text-danger">{err}</p>}
+                {dbg && <p className="mt-2 break-all text-[10px] font-mono text-ink-soft/70">{dbg}</p>}
               </>
             )}
             <p className="mt-3 text-[11px] text-ink-soft">Aguardando leitura...</p>

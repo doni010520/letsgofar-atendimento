@@ -62,6 +62,7 @@ export class UazapiProvider implements ChannelProvider {
     };
     const body = digits ? JSON.stringify({ phone: digits }) : "{}";
     const statusOf = (o: any) => (o?.instance ?? o ?? {})?.status;
+    const dbg: string[] = [`mode=${digits ? "code(" + digits.length + "d)" : "qr"}`];
 
     // A UAZAPI só emite código/QR a partir de um estado LIMPO. Cada tentativa:
     // desconecta → confirma "disconnected" → aguarda → connect. Repete até obter o código/QR.
@@ -77,14 +78,23 @@ export class UazapiProvider implements ChannelProvider {
       }
       await sleep(800); // folga para o socket fechar
 
-      const conn = await this.req("/instance/connect", { method: "POST", body }).catch(() => null);
-      if (conn) r = read(conn);
+      const conn = await this.req("/instance/connect", { method: "POST", body }).catch((e) => {
+        dbg.push(`connect#${attempt}:ERR ${e?.message}`);
+        return null;
+      });
+      if (conn) {
+        r = read(conn);
+        dbg.push(`connect#${attempt}:st=${statusOf(conn)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
+      }
 
       // O código/QR pode vir 1-2s depois — consulta o status até aparecer.
       for (let i = 0; i < 4 && !r.connected && !(digits ? r.code : r.qr); i++) {
         await sleep(1200);
         const s = await this.req("/instance/status").catch(() => null);
-        if (s) r = read(s);
+        if (s) {
+          r = read(s);
+          dbg.push(`poll#${attempt}.${i}:st=${statusOf(s)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
+        }
       }
 
       if (r.connected || (digits ? r.code : r.qr)) break;
@@ -95,6 +105,7 @@ export class UazapiProvider implements ChannelProvider {
       qrCode: r.qr || undefined,
       pairCode: r.code || undefined,
       externalId: this.token,
+      debug: dbg.join(" | "),
     };
   }
 
