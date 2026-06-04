@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
 import {
   Check, CheckCheck, Clock, AlertCircle, FileText, Download,
-  Reply, SmilePlus, Pencil, Trash2, MoreVertical,
+  Reply, SmilePlus, Pencil, Trash2, MoreVertical, X,
 } from "lucide-react";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -21,16 +21,16 @@ function colorForName(name: string): string {
   return AUTHOR_COLORS[h % AUTHOR_COLORS.length];
 }
 
-function MediaContent({ message }: { message: Message }) {
+function MediaContent({ message, onImageClick }: { message: Message; onImageClick?: (url: string) => void }) {
   const url = message.media_url;
   if (!url) return null;
   switch (message.content_type) {
     case "image":
       // eslint-disable-next-line @next/next/no-img-element
-      return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="" className="mb-1 max-h-72 rounded-lg object-cover" /></a>;
+      return <img src={url} alt="" onClick={() => onImageClick?.(url)} className="mb-1 max-h-72 cursor-zoom-in rounded-lg object-cover" />;
     case "sticker":
       // eslint-disable-next-line @next/next/no-img-element
-      return <img src={url} alt="" className="mb-1 h-28 w-28 object-contain" />;
+      return <img src={url} alt="" onClick={() => onImageClick?.(url)} className="mb-1 h-28 w-28 cursor-zoom-in object-contain" />;
     case "audio":
       return <audio controls src={url} className="mb-1 h-10 w-56 max-w-full" />;
     case "video":
@@ -68,6 +68,7 @@ export function MessageBubble({
   const out = message.direction === "out";
   const [menu, setMenu] = useState(false);
   const [emoji, setEmoji] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const time = message.created_at
     ? new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : "";
@@ -122,7 +123,7 @@ export function MessageBubble({
             </div>
           )}
           {message.media_url ? (
-            <MediaContent message={message} />
+            <MediaContent message={message} onImageClick={setLightbox} />
           ) : (
             message.content_type !== "text" && <p className="mb-1 text-xs opacity-80">[{message.content_type}]</p>
           )}
@@ -142,6 +143,30 @@ export function MessageBubble({
         )}
       </div>
       {!out && <Actions {...{ message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete }} />}
+
+      {lightbox && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" onClick={() => setLightbox(null)}>
+          <button onClick={() => setLightbox(null)} className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" title="Fechar">
+            <X size={22} />
+          </button>
+          <a
+            href={lightbox}
+            download
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-4 right-4 flex items-center gap-1 rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20"
+            title="Baixar"
+          >
+            <Download size={16} /> Baixar
+          </a>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+          />
+        </div>
+      )}
     </div>
   );
 }
