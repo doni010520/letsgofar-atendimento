@@ -51,6 +51,13 @@ export interface ChannelProvider {
   sendContact?(to: string, contact: { fullName: string; phoneNumber: string }): Promise<{ externalId?: string }>;
   /** Lista participantes de um grupo (LID + telefone real). Para resolver autor → 1:1. */
   getGroupParticipants?(groupJid: string): Promise<{ lid: string; phone: string }[]>;
+  /** Informações do grupo: nome, descrição, participantes. */
+  getGroupInfo?(groupJid: string): Promise<{
+    name?: string;
+    description?: string;
+    owner?: string;
+    participants: { phone: string; lid: string; isAdmin: boolean }[];
+  }>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */

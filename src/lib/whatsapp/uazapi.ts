@@ -207,6 +207,34 @@ export class UazapiProvider implements ChannelProvider {
     return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }
 
+  /** Informações completas de um grupo: nome, descrição e participantes. */
+  async getGroupInfo(groupJid: string): Promise<{
+    name?: string;
+    description?: string;
+    owner?: string;
+    participants: { phone: string; lid: string; isAdmin: boolean }[];
+  }> {
+    try {
+      const r = (await this.req("/group/info", {
+        method: "POST",
+        body: JSON.stringify({ groupjid: groupJid }),
+      })) as Record<string, any>;
+      const parts = (r?.Participants ?? r?.participants ?? []) as any[];
+      return {
+        name: r?.Name ?? r?.name ?? undefined,
+        description: r?.Topic ?? r?.topic ?? undefined,
+        owner: String(r?.OwnerPN ?? "").replace(/@.*/, "").replace(/\D/g, "") || undefined,
+        participants: parts.map((p: any) => ({
+          phone: String(p?.PhoneNumber ?? p?.PN ?? "").replace(/@.*/, "").replace(/\D/g, ""),
+          lid: String(p?.LID ?? p?.JID ?? "").replace(/@.*/, "").replace(/\D/g, ""),
+          isAdmin: !!(p?.IsAdmin || p?.IsSuperAdmin),
+        })),
+      };
+    } catch {
+      return { participants: [] };
+    }
+  }
+
   /** Participantes de um grupo (LID + telefone real). POST /group/info {groupjid}. */
   async getGroupParticipants(groupJid: string): Promise<{ lid: string; phone: string }[]> {
     try {

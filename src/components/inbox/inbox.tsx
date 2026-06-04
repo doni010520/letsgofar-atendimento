@@ -235,12 +235,18 @@ export function Inbox({
 
   function handleOpenDirect(m: Message) {
     if (!selected) return;
-    const grp = selected;
+    startDirect(selected, { phone: m.author_phone ?? undefined, lid: m.author_lid ?? undefined, name: m.author_name ?? undefined });
+  }
+
+  function handleOpenContact(phone: string, name?: string) {
+    if (!selected) return;
+    startDirect(selected, { phone, name });
+  }
+
+  function startDirect(grp: ConversationOverview, opts: { phone?: string; lid?: string; name?: string }) {
     startTransition(async () => {
       const r = await resolveDirectContact(grp.channel_id, {
-        phone: m.author_phone ?? undefined,
-        lid: m.author_lid ?? undefined,
-        name: m.author_name ?? undefined,
+        ...opts,
         groupJid: grp.contact_jid ?? undefined,
       });
       if (!r.phone) {
@@ -455,6 +461,7 @@ export function Inbox({
           onEdit={handleEdit}
           onDelete={handleDelete}
           onAuthorClick={handleOpenDirect}
+          onOpenContact={handleOpenContact}
           onType={handleDraftType}
           onAssign={handleAssign}
           onClose={handleClose}

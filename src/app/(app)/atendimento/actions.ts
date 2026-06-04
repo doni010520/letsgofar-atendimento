@@ -130,6 +130,49 @@ export async function resolveDirectContact(
   return { phone: digits, name: opts.name ?? contact?.name ?? null, existingId };
 }
 
+export interface GroupInfoResult {
+  name?: string;
+  description?: string;
+  participants: { phone: string; name: string | null; isAdmin: boolean; isOwner: boolean }[];
+}
+
+/** Informações do grupo da conversa (nome, descrição, participantes com nomes resolvidos). */
+export async function getGroupInfo(conversationId: string): Promise<GroupInfoResult | null> {
+  if (isPreview()) return null;
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("channel_id, is_group, contact_jid, contact_phone")
+    .eq("id", conversationId)
+    .single();
+  if (!conv?.is_group) return null;
+  const { data: channel } = await supabase.from("channels").select("*").eq("id", conv.channel_id).single();
+  const jid = (conv.contact_jid as string) || `${conv.contact_phone}@g.us`;
+  const info = await getProvider(channel as Channel).getGroupInfo?.(jid);
+  if (!info) return null;
+
+  // Resolve nomes a partir dos nossos contatos.
+  const phones = info.participants.map((p) => p.phone).filter(Boolean);
+  const names = new Map<string, string>();
+  if (phones.length) {
+    const { data: contacts } = await supabase.from("contacts").select("phone, name").in("phone", phones);
+    for (const c of contacts ?? []) if (c.name) names.set(c.phone, c.name);
+  }
+  return {
+    name: info.name,
+    description: info.description,
+    participants: info.participants
+      .filter((p) => p.phone)
+      .map((p) => ({
+        phone: p.phone,
+        name: names.get(p.phone) ?? null,
+        isAdmin: p.isAdmin,
+        isOwner: p.phone === info.owner,
+      }))
+      .sort((a, b) => Number(b.isOwner) - Number(a.isOwner) || Number(b.isAdmin) - Number(a.isAdmin)),
+  };
+}
+
 export async function sendMessage(
   conversationId: string,
   text: string,
