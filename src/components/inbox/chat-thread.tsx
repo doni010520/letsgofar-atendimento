@@ -118,17 +118,37 @@ export function ChatThread({
         {messages.length === 0 && (
           <p className="mt-10 text-center text-xs text-ink-soft">Nenhuma mensagem ainda.</p>
         )}
-        {messages.map((m) => (
-          <MessageBubble
-            key={m.id}
-            message={m}
-            onReply={setReplyTo}
-            onReact={onReact}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onAuthorClick={onAuthorClick}
-          />
-        ))}
+        {(() => {
+          // Mapa id-externo (sufixo) → mensagem, para resolver o autor/treco citado.
+          const byExt = new Map<string, Message>();
+          for (const mm of messages) {
+            if (mm.external_id) byExt.set(mm.external_id.split(":").pop()!, mm);
+          }
+          return messages.map((m) => {
+            let quotedAuthor: string | null | undefined = m.reply_author;
+            let quotedExcerpt: string | null | undefined = m.reply_excerpt;
+            if (m.reply_to_external) {
+              const q = byExt.get(m.reply_to_external.split(":").pop()!);
+              if (q) {
+                quotedAuthor = q.author_name ?? (q.direction === "out" ? "Você" : conversation.contact_name);
+                quotedExcerpt = q.body ?? (q.content_type !== "text" ? `[${q.content_type}]` : quotedExcerpt);
+              }
+            }
+            return (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                onReply={setReplyTo}
+                onReact={onReact}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onAuthorClick={onAuthorClick}
+                quotedAuthor={quotedAuthor}
+                quotedExcerpt={quotedExcerpt}
+              />
+            );
+          });
+        })()}
         <div ref={endRef} />
       </div>
 

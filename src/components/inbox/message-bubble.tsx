@@ -53,6 +53,8 @@ export function MessageBubble({
   onEdit,
   onDelete,
   onAuthorClick,
+  quotedAuthor,
+  quotedExcerpt,
 }: {
   message: Message;
   onReply?: (m: Message) => void;
@@ -60,6 +62,8 @@ export function MessageBubble({
   onEdit?: (m: Message) => void;
   onDelete?: (m: Message) => void;
   onAuthorClick?: (m: Message) => void;
+  quotedAuthor?: string | null;
+  quotedExcerpt?: string | null;
 }) {
   const out = message.direction === "out";
   const [menu, setMenu] = useState(false);
@@ -84,6 +88,8 @@ export function MessageBubble({
       {out && <Actions {...{ message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete }} />}
       <div className="relative max-w-[70%]">
         <div
+          onDoubleClick={() => onReply?.(message)}
+          title="Duplo clique para responder"
           className={cn(
             "rounded-2xl px-3 py-2 text-sm shadow-sm",
             out ? "rounded-br-sm bg-brand text-white" : "rounded-bl-sm bg-surface text-ink",
@@ -106,12 +112,13 @@ export function MessageBubble({
                 {message.author_name}
               </p>
             ))}
-          {message.reply_excerpt && (
+          {(quotedExcerpt ?? message.reply_excerpt) && (
             <div className={cn("mb-1 rounded border-l-2 px-2 py-1 text-xs", out ? "border-white/60 bg-white/15" : "border-brand/50 bg-black/5 text-ink-soft")}>
-              {message.reply_author && !/^\d+$/.test(message.reply_author) && (
-                <span className="font-medium">{message.reply_author}: </span>
-              )}
-              {message.reply_excerpt.slice(0, 120)}
+              {(() => {
+                const a = quotedAuthor ?? message.reply_author;
+                return a && !/^\d+$/.test(a) ? <span className="font-medium">{a}: </span> : null;
+              })()}
+              {(quotedExcerpt ?? message.reply_excerpt ?? "").slice(0, 120)}
             </div>
           )}
           {message.media_url ? (
