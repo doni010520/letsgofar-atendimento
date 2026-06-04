@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Users, Crown, Shield, Loader2, Save, Check } from "lucide-react";
+import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import {
   getContactDetails,
   updateContactDetails,
   getGroupInfo,
+  getContactHistory,
   type ContactDetails,
   type GroupInfoResult,
 } from "@/app/(app)/atendimento/actions";
@@ -41,6 +42,7 @@ export function ContactPanel({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [history, setHistory] = useState<{ id: string; protocol: string | null; status: string; opened_at: string | null; closed_at: string | null }[]>([]);
 
   useEffect(() => {
     let cancel = false;
@@ -51,7 +53,10 @@ export function ContactPanel({
         const g = await getGroupInfo(conversation.id);
         if (!cancel) setGroup(g);
       } else {
-        const c = await getContactDetails(conversation.id);
+        const [c, h] = await Promise.all([
+          getContactDetails(conversation.id),
+          getContactHistory(conversation.id),
+        ]);
         if (!cancel && c) {
           setContact(c);
           setName(c.name ?? "");
@@ -59,6 +64,7 @@ export function ContactPanel({
           const cf = (c.custom_fields ?? {}) as Record<string, unknown>;
           setFields(Object.fromEntries(CRM_FIELDS.map((f) => [f.key, String(cf[f.key] ?? "")])));
         }
+        if (!cancel) setHistory(h ?? []);
       }
       if (!cancel) setLoading(false);
     })();
@@ -171,6 +177,34 @@ export function ContactPanel({
               {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
               {saved ? "Salvo!" : "Salvar"}
             </button>
+
+            {/* Histórico de atendimentos anteriores */}
+            {history.length > 0 && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-ink-soft">
+                  <History size={12} /> Atendimentos anteriores
+                </p>
+                <div className="space-y-1.5">
+                  {history.map((h) => (
+                    <div key={h.id} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
+                      {h.protocol && (
+                        <span className="inline-flex items-center gap-0.5 font-mono text-ink-soft">
+                          <Hash size={9} />{h.protocol}
+                        </span>
+                      )}
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        h.status === "closed" ? "bg-gray-100 text-ink-soft" : "bg-green-100 text-green-700"
+                      }`}>
+                        {h.status === "closed" ? "Encerrado" : "Aberto"}
+                      </span>
+                      <span className="ml-auto text-ink-soft">
+                        {h.opened_at ? new Date(h.opened_at).toLocaleDateString("pt-BR") : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

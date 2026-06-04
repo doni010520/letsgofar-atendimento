@@ -158,6 +158,25 @@ export async function getContactDetails(conversationId: string): Promise<Contact
   return (c as ContactDetails) ?? null;
 }
 
+/** Histórico de atendimentos do contato desta conversa. */
+export async function getContactHistory(conversationId: string) {
+  if (isPreview()) return [];
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .single();
+  if (!conv) return [];
+  const { data } = await supabase
+    .from("conversations")
+    .select("id, protocol, status, opened_at, closed_at")
+    .eq("contact_id", conv.contact_id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return (data ?? []) as { id: string; protocol: string | null; status: string; opened_at: string | null; closed_at: string | null }[];
+}
+
 /** Salva nome, observações e campos personalizados (CRM) do contato. */
 export async function updateContactDetails(
   conversationId: string,
@@ -722,4 +741,34 @@ export async function transferConversation(conversationId: string, opts: Transfe
 
   revalidatePath("/atendimento");
   return { ok: true };
+}
+
+/** Fixa/desfixa uma conversa. */
+export async function togglePin(conversationId: string, pinned: boolean) {
+  if (isPreview()) return { pinned };
+  const supabase = await createClient();
+  await supabase.from("conversations").update({ pinned }).eq("id", conversationId);
+  revalidatePath("/atendimento");
+  return { pinned };
+}
+
+/** Arquiva/desarquiva uma conversa. */
+export async function toggleArchive(conversationId: string, archived: boolean) {
+  if (isPreview()) return { archived };
+  const supabase = await createClient();
+  await supabase.from("conversations").update({ archived }).eq("id", conversationId);
+  revalidatePath("/atendimento");
+  return { archived };
+}
+
+/** Busca conversas por protocolo (global). */
+export async function searchByProtocol(protocol: string) {
+  if (isPreview()) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("conversation_overview")
+    .select("id, protocol, contact_name, contact_phone, status")
+    .ilike("protocol", `%${protocol.trim()}%`)
+    .limit(20);
+  return data ?? [];
 }

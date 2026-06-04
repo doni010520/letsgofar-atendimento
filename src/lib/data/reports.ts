@@ -9,6 +9,10 @@ export interface ReportData {
   byDepartment: { name: string; value: number }[];
 }
 
+export interface AgentReport { name: string; total: number; open: number; closed: number }
+export interface ClientReport { name: string; phone: string; total: number; last: string | null }
+export interface CsatReport { survey: string; avg: number; count: number; distribution: { note: number; count: number }[] }
+
 const STATUS_LABEL: Record<string, string> = {
   open: "Em andamento", queued: "Em espera", bot: "Na automação", closed: "Encerrados",
 };
@@ -90,4 +94,72 @@ export async function getReportData(): Promise<ReportData> {
     byChannel: topN(byChannelMap),
     byDepartment: topN(byDeptMap),
   };
+}
+
+/** Relatório por atendente. */
+export async function getAgentReports(): Promise<AgentReport[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const [{ data: convs }, { data: profiles }] = await Promise.all([
+    sb.from("conversations").select("assigned_user_id, status").not("assigned_user_id", "is", null).limit(5000),
+    sb.from("profiles").select("id, name"),
+  ]);
+  const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.name || p.id]));
+  const map: Record<string, { total: number; open: number; closed: number }> = {};
+  for (const c of convs ?? []) {
+    const k = c.assigned_user_id as string;
+    const e = (map[k] ??= { total: 0, open: 0, closed: 0 });
+    e.total++;
+    if (c.status === "open") e.open++;
+    if (c.status === "closed") e.closed++;
+  }
+  return Object.entries(map)
+    .map(([id, v]) => ({ name: nameOf.get(id) ?? id, ...v }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** Relatório por cliente (top contatos). */
+export async function getClientReports(): Promise<ClientReport[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data } = await sb
+    .from("conversations")
+    .select("contact_id, contacts(name, phone), created_at")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  const map: Record<string, { name: string; phone: string; total: number; last: string | null }> = {};
+  for (const c of (data ?? []) as unknown as { contact_id: string; contacts: { name: string; phone: string } | null; created_at: string }[]) {
+    const k = c.contact_id;
+    if (!map[k]) map[k] = { name: c.contacts?.name ?? "—", phone: c.contacts?.phone ?? "", total: 0, last: null };
+    map[k].total++;
+    if (!map[k].last) map[k].last = c.created_at;
+  }
+  return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 100);
+}
+
+/** Relatório CSAT. */
+export async function getCsatReport(): Promise<CsatReport[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data: convs } = await sb
+    .from("conversations")
+    .select("satisfaction, survey_id")
+    .not("satisfaction", "is", null)
+    .limit(5000);
+  const { data: surveys } = await sb.from("satisfaction_surveys").select("id, name");
+  const surveyName = new Map((surveys ?? []).map((s) => [s.id, s.name]));
+  const map: Record<string, { sum: number; count: number; dist: Record<number, number> }> = {};
+  for (const c of (convs ?? []) as { satisfaction: number; survey_id: string | null }[]) {
+    const k = c.survey_id ?? "__default";
+    const e = (map[k] ??= { sum: 0, count: 0, dist: {} });
+    e.sum += c.satisfaction;
+    e.count++;
+    e.dist[c.satisfaction] = (e.dist[c.satisfaction] ?? 0) + 1;
+  }
+  return Object.entries(map).map(([id, v]) => ({
+    survey: surveyName.get(id) ?? "Padrão",
+    avg: v.count ? Math.round((v.sum / v.count) * 10) / 10 : 0,
+    count: v.count,
+    distribution: [1, 2, 3, 4, 5].map((n) => ({ note: n, count: v.dist[n] ?? 0 })),
+  }));
 }
