@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { ConversationList } from "./conversation-list";
 import { ChatThread } from "./chat-thread";
+import { ContactPanel } from "./contact-panel";
 import { createClient } from "@/lib/supabase/client";
 
 /** Toca um bip curto de notificação via Web Audio (sem precisar de arquivo). */
@@ -76,6 +77,7 @@ export function Inbox({
   // Conversa-rascunho transitória (ao clicar num participante): só persiste ao digitar/enviar.
   const [draft, setDraft] = useState<ConversationOverview | null>(null);
   const [draftRealId, setDraftRealId] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const DRAFT_ID = "__draft__";
 
   // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
@@ -461,7 +463,7 @@ export function Inbox({
           onEdit={handleEdit}
           onDelete={handleDelete}
           onAuthorClick={handleOpenDirect}
-          onOpenContact={handleOpenContact}
+          onOpenPanel={() => setPanelOpen(true)}
           onType={handleDraftType}
           onAssign={handleAssign}
           onClose={handleClose}
@@ -472,6 +474,15 @@ export function Inbox({
         <div className="flex flex-1 items-center justify-center text-sm text-ink-soft">
           Selecione uma conversa para começar.
         </div>
+      )}
+
+      {selected && panelOpen && (
+        <ContactPanel
+          key={selected.id}
+          conversation={selected}
+          onClose={() => setPanelOpen(false)}
+          onOpenContact={handleOpenContact}
+        />
       )}
 
       {editing && (

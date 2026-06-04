@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, Info, Crown, Shield, Loader2 } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
-import { getGroupInfo, type GroupInfoResult } from "@/app/(app)/atendimento/actions";
-import { formatPhone } from "@/lib/utils";
 import type { ConversationOverview, Message } from "@/lib/types";
 
 export function ChatThread({
@@ -19,7 +17,7 @@ export function ChatThread({
   onEdit,
   onDelete,
   onAuthorClick,
-  onOpenContact,
+  onOpenPanel,
   onAssign,
   onClose,
   onToggleMute,
@@ -37,7 +35,7 @@ export function ChatThread({
   onEdit: (m: Message) => void;
   onDelete: (m: Message) => void;
   onAuthorClick: (m: Message) => void;
-  onOpenContact: (phone: string, name?: string) => void;
+  onOpenPanel: () => void;
   onAssign: () => void;
   onClose: () => void;
   onToggleMute: () => void;
@@ -45,19 +43,7 @@ export function ChatThread({
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [groupInfo, setGroupInfo] = useState<GroupInfoResult | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
-  const [infoLoading, setInfoLoading] = useState(false);
 
-  async function openGroupInfo() {
-    setInfoOpen(true);
-    setInfoLoading(true);
-    try {
-      setGroupInfo(await getGroupInfo(conversation.id));
-    } finally {
-      setInfoLoading(false);
-    }
-  }
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, conversation.id]);
@@ -71,7 +57,7 @@ export function ChatThread({
   return (
     <div className="flex h-full flex-1 flex-col bg-canvas">
       <header className="flex items-center justify-between border-b border-gray-100 bg-surface px-4 py-3">
-        <div className="flex items-center gap-3">
+        <button onClick={onOpenPanel} className="flex items-center gap-3 rounded-lg p-1 text-left transition hover:bg-gray-50" title="Ver dados">
           {conversation.contact_avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={conversation.contact_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
@@ -101,17 +87,8 @@ export function ChatThread({
               </span>
             </p>
           </div>
-        </div>
+        </button>
         <div className="flex gap-2">
-          {isGroup && (
-            <button
-              onClick={openGroupInfo}
-              title="Informações do grupo"
-              className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
-            >
-              <Info size={14} /> Info
-            </button>
-          )}
           <button
             onClick={onToggleMute}
             title={muted ? "Reativar notificações" : "Silenciar conversa"}
@@ -216,60 +193,6 @@ export function ChatThread({
         disabled={conversation.status === "closed"}
         sending={pending}
       />
-
-      {infoOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setInfoOpen(false)}>
-          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-card bg-surface shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-gray-100 p-4">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-ink"><Users size={18} /> Informações do grupo</h2>
-              <button onClick={() => setInfoOpen(false)} className="text-ink-soft hover:text-ink"><X size={18} /></button>
-            </div>
-            <div className="overflow-y-auto p-4">
-              {infoLoading && (
-                <div className="flex items-center justify-center gap-2 py-8 text-sm text-ink-soft">
-                  <Loader2 size={16} className="animate-spin" /> Carregando...
-                </div>
-              )}
-              {!infoLoading && groupInfo && (
-                <>
-                  <p className="text-lg font-semibold text-ink">{groupInfo.name ?? title}</p>
-                  {groupInfo.description && (
-                    <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm text-ink-soft">{groupInfo.description}</p>
-                  )}
-                  <p className="mt-4 mb-2 text-xs font-semibold uppercase text-ink-soft">
-                    {groupInfo.participants.length} participantes
-                  </p>
-                  <div className="space-y-1">
-                    {groupInfo.participants.map((p) => (
-                      <button
-                        key={p.phone}
-                        onClick={() => { setInfoOpen(false); onOpenContact(p.phone, p.name ?? undefined); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-gray-50"
-                      >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
-                          {(p.name ?? p.phone).slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-ink">{p.name ?? formatPhone(p.phone)}</span>
-                          {p.name && <span className="block truncate text-xs text-ink-soft">{formatPhone(p.phone)}</span>}
-                        </span>
-                        {p.isOwner ? (
-                          <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600"><Crown size={12} /> Dono</span>
-                        ) : p.isAdmin ? (
-                          <span className="flex items-center gap-1 text-[10px] font-medium text-brand"><Shield size={12} /> Admin</span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {!infoLoading && !groupInfo && (
-                <p className="py-8 text-center text-sm text-ink-soft">Não foi possível carregar as informações do grupo.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

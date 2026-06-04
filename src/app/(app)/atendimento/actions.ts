@@ -130,6 +130,56 @@ export async function resolveDirectContact(
   return { phone: digits, name: opts.name ?? contact?.name ?? null, existingId };
 }
 
+export interface ContactDetails {
+  id: string;
+  name: string | null;
+  phone: string;
+  avatar_url: string | null;
+  is_group: boolean;
+  notes: string | null;
+  custom_fields: Record<string, unknown>;
+}
+
+/** Detalhes do contato da conversa (para o painel lateral / CRM). */
+export async function getContactDetails(conversationId: string): Promise<ContactDetails | null> {
+  if (isPreview()) return null;
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .single();
+  if (!conv) return null;
+  const { data: c } = await supabase
+    .from("contacts")
+    .select("id, name, phone, avatar_url, is_group, notes, custom_fields")
+    .eq("id", conv.contact_id)
+    .single();
+  return (c as ContactDetails) ?? null;
+}
+
+/** Salva nome, observações e campos personalizados (CRM) do contato. */
+export async function updateContactDetails(
+  conversationId: string,
+  patch: { name?: string; notes?: string; custom_fields?: Record<string, unknown> },
+) {
+  if (isPreview()) return { ok: true };
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .single();
+  if (!conv) return { ok: false };
+  const upd: Record<string, unknown> = {};
+  if (patch.name !== undefined) upd.name = patch.name.trim() || null;
+  if (patch.notes !== undefined) upd.notes = patch.notes;
+  if (patch.custom_fields !== undefined) upd.custom_fields = patch.custom_fields;
+  await supabase.from("contacts").update(upd).eq("id", conv.contact_id);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
 export interface GroupInfoResult {
   name?: string;
   description?: string;
