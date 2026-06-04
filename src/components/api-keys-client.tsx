@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { Plus, X, Trash2, Copy, KeyRound } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { createApiKey, deleteApiKey } from "@/app/(app)/api/actions";
+import type { Channel } from "@/lib/types";
 
-interface ApiKey { id: string; name: string; created_at: string; last_used_at: string | null }
+interface ApiKey { id: string; name: string; channel_id: string | null; created_at: string; last_used_at: string | null }
 
-export function ApiKeysClient({ keys }: { keys: ApiKey[] }) {
+export function ApiKeysClient({ keys, channels }: { keys: ApiKey[]; channels: Channel[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
+  const chName = new Map(channels.map((c) => [c.id, c.name]));
 
   async function submit(fd: FormData) {
     setPending(true);
@@ -54,7 +56,11 @@ export function ApiKeysClient({ keys }: { keys: ApiKey[] }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-light text-brand"><KeyRound size={18} /></div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-ink">{k.name}</p>
-              <p className="text-xs text-ink-soft">Criada {new Date(k.created_at).toLocaleDateString("pt-BR")}{k.last_used_at ? ` · usada ${new Date(k.last_used_at).toLocaleDateString("pt-BR")}` : " · nunca usada"}</p>
+              <p className="text-xs text-ink-soft">
+                {k.channel_id ? `Canal: ${chName.get(k.channel_id) ?? k.channel_id} · ` : ""}
+                Criada {new Date(k.created_at).toLocaleDateString("pt-BR")}
+                {k.last_used_at ? ` · usada ${new Date(k.last_used_at).toLocaleDateString("pt-BR")}` : " · nunca usada"}
+              </p>
             </div>
             <button onClick={() => remove(k.id)} className="rounded p-1.5 text-ink-soft hover:bg-red-50 hover:text-danger"><Trash2 size={15} /></button>
           </Card>
@@ -72,6 +78,13 @@ export function ApiKeysClient({ keys }: { keys: ApiKey[] }) {
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Nome da chave</label>
                 <input name="name" required placeholder="Ex.: Integração n8n" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Canal (opcional — limita a chave a um canal)</label>
+                <select name="channel_id" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                  <option value="">Todos os canais</option>
+                  {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>

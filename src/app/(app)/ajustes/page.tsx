@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   SlidersHorizontal, Users, Plug, Star, Bookmark, Tag, UserCog,
-  Layers, ScrollText, Bot, ClipboardList, ArrowUpRight,
+  Layers, ScrollText, Bot, ClipboardList, ArrowUpRight, Clock,
 } from "lucide-react";
 import { Scroll } from "@/components/scroll";
 import { PageHeader } from "@/components/ui";
@@ -18,6 +18,7 @@ const CARDS = [
   { icon: ScrollText, title: "Logs", desc: "Verifique o histórico do seu sistema!", href: "/auditoria" },
   { icon: Bot, title: "Agente de IA", desc: "Acesse o seu agente de IA.", href: "/ajustes/ia" },
   { icon: ClipboardList, title: "Planos", desc: "Gerencie os planos do seu provedor.", href: "/ajustes/planos" },
+  { icon: Clock, title: "Horário de Atendimento", desc: "Defina os dias e horários de funcionamento.", href: "/ajustes/horario" },
 ];
 
 export default function AjustesPage() {

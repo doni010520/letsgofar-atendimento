@@ -11,6 +11,7 @@ export async function createApiKey(fd: FormData) {
   if (!session?.organization) throw new Error("Sessão inválida.");
 
   const name = String(fd.get("name") || "").trim() || "Chave";
+  const channelId = String(fd.get("channel_id") || "").trim() || null;
   const key = "mvf_" + crypto.randomBytes(24).toString("hex");
   const key_hash = crypto.createHash("sha256").update(key).digest("hex");
 
@@ -19,6 +20,7 @@ export async function createApiKey(fd: FormData) {
     organization_id: session.organization.id,
     name,
     key_hash,
+    channel_id: channelId,
     scopes: ["messages:send"],
   });
   if (error) throw new Error(error.message);

@@ -56,6 +56,22 @@ export default async function DashboardPage() {
           />
         </section>
 
+        {/* CTA API Oficial Meta */}
+        {!channels.some((c) => c.type === "meta_cloud") && (
+          <section className="mt-6">
+            <Link href="/canais" className="flex items-center gap-4 rounded-card border border-blue-200 bg-blue-50 p-4 transition hover:bg-blue-100">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                <Radio size={20} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-800">Conecte a API Oficial da Meta</p>
+                <p className="text-xs text-blue-600">Atenda com número verificado, selo verde e sem risco de banimento. Configure em Canais.</p>
+              </div>
+              <ArrowRight size={18} className="text-blue-400" />
+            </Link>
+          </section>
+        )}
+
         {/* Canais */}
         <section className="mt-8 pb-8">
           <div className="mb-4 flex items-center justify-between">

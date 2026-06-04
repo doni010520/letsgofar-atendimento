@@ -204,3 +204,12 @@ export async function deleteChannel(channelId: string) {
   revalidatePath("/canais");
   revalidatePath("/dashboard");
 }
+
+
+export async function renameChannel(channelId: string, name: string) {
+  const sb = await createClient();
+  const { error } = await sb.from("channels").update({ name: name.trim() }).eq("id", channelId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/canais");
+  revalidatePath("/dashboard");
+}

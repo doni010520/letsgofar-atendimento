@@ -294,20 +294,61 @@ export async function persistInbound(messages: InboundMessage[]) {
     }
 
     // ====== Mensagens automáticas por evento ======
-    if (!fromMe && !isGroup && isNew) {
-      // Boas-vindas (welcome) — só na 1ª msg da conversa
-      const { data: autoWelcome } = await db.from("auto_messages")
-        .select("body").eq("organization_id", org).eq("event", "welcome").eq("active", true)
-        .or(`channel_id.eq.${channel.id},channel_id.is.null`)
-        .limit(1).maybeSingle();
-      if (autoWelcome?.body) {
-        const to = msg.from;
-        await getProvider(channel as Channel).sendText({ to, text: autoWelcome.body }).catch(() => {});
-        await db.from("messages").insert({
-          organization_id: org, conversation_id: conversationId,
-          direction: "out", sender_type: "system", content_type: "text",
-          body: autoWelcome.body, status: "sent",
-        });
+    if (!fromMe && !isGroup) {
+      const autoSend = async (event: string) => {
+        const { data: am } = await db.from("auto_messages")
+          .select("body").eq("organization_id", org).eq("event", event).eq("active", true)
+          .or(`channel_id.eq.${channel.id},channel_id.is.null`)
+          .limit(1).maybeSingle();
+        if (am?.body) {
+          await getProvider(channel as Channel).sendText({ to: msg.from, text: am.body }).catch(() => {});
+          await db.from("messages").insert({
+            organization_id: org, conversation_id: conversationId,
+            direction: "out", sender_type: "system", content_type: "text",
+            body: am.body, status: "sent",
+          });
+        }
+        return !!am?.body;
+      };
+
+      if (isNew) {
+        // Horário de atendimento: checa se estamos fora do horário
+        const { data: hours } = await db.from("business_hours")
+          .select("day_of_week, start_time, end_time, active")
+          .eq("organization_id", org)
+          .eq("active", true);
+        if (hours && hours.length > 0) {
+          const { data: orgRow } = await db.from("organizations").select("settings").eq("id", org).maybeSingle();
+          const tz = ((orgRow?.settings as Record<string, unknown>)?.timezone_offset as number) ?? -3;
+          const now = new Date(Date.now() + tz * 3600000);
+          const dow = now.getUTCDay();
+          const hhmm = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
+          const todayHours = hours.filter((h: { day_of_week: number }) => h.day_of_week === dow);
+          const inHours = todayHours.some((h: { start_time: string; end_time: string }) => hhmm >= h.start_time && hhmm <= h.end_time);
+          if (!inHours) {
+            await autoSend("out_of_hours");
+          }
+        }
+        // Boas-vindas (welcome) — só na 1ª msg da conversa
+        await autoSend("welcome");
+      }
+
+      // Ausência (away) — se o atendente atribuído está offline
+      if (existing && convStatus === "open" && existing.status === "open") {
+        const { data: assignedConv } = await db.from("conversations")
+          .select("assigned_user_id").eq("id", conversationId).maybeSingle();
+        if (assignedConv?.assigned_user_id) {
+          const { data: agent } = await db.from("profiles")
+            .select("status").eq("id", assignedConv.assigned_user_id).maybeSingle();
+          if (agent?.status === "offline") {
+            await autoSend("away");
+          }
+        }
+      }
+
+      // Fila de espera (queue_wait) — se conversa está em espera
+      if (convStatus === "queued") {
+        await autoSend("queue_wait");
       }
     }
 

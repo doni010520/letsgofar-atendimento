@@ -772,3 +772,45 @@ export async function searchByProtocol(protocol: string) {
     .limit(20);
   return data ?? [];
 }
+
+/** Ação SGP manual no painel do contato (2ª via, PIX, liberação, status). */
+export async function sgpAction(conversationId: string, action: string, contrato: number): Promise<string> {
+  if (isPreview()) return "Modo preview.";
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const { sgpForOrg } = await import("@/lib/sgp");
+  const supabase = await createClient();
+  const sgp = await sgpForOrg(supabase as unknown as Parameters<typeof sgpForOrg>[0], session.organization.id);
+  if (!sgp) return "SGP não configurado. Cadastre a integração em Ajustes > Integrações.";
+  try {
+    switch (action) {
+      case "segunda_via": {
+        const r = await sgp.segundaVia({ contrato });
+        if (!r.ok) return r.mensagem ?? "Erro ao gerar 2ª via.";
+        const lines = r.faturas.map((f) =>
+          `Fatura ${f.fatura}: R$ ${f.valor?.toFixed(2)} (venc. ${f.vencimento})${f.linhaDigitavel ? `\nLinha: ${f.linhaDigitavel}` : ""}${f.link ? `\nLink: ${f.link}` : ""}`,
+        );
+        return lines.length ? lines.join("\n\n") : "Nenhuma fatura encontrada.";
+      }
+      case "pix": {
+        // Pega a 1ª fatura em aberto
+        const titulos = await sgp.titulosEmAberto({ contrato });
+        if (!titulos.length) return "Nenhuma fatura em aberto.";
+        const px = await sgp.gerarPix(titulos[0].fatura, contrato);
+        return px.codigoPix ?? "PIX não disponível para esta fatura.";
+      }
+      case "liberacao": {
+        const r = await sgp.liberacaoConfianca({ contrato });
+        return r.ok ? `Liberado! Protocolo: ${r.protocolo ?? "—"}` : (r.mensagem ?? "Não foi possível liberar.");
+      }
+      case "status": {
+        const r = await sgp.statusConexao({ contrato });
+        return r.online ? "Conexão ONLINE" : `Conexão OFFLINE${r.mensagem ? ` — ${r.mensagem}` : ""}`;
+      }
+      default:
+        return "Ação desconhecida.";
+    }
+  } catch (e) {
+    return `Erro SGP: ${(e as Error)?.message ?? "desconhecido"}`;
+  }
+}

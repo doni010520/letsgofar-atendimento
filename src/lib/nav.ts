@@ -15,6 +15,8 @@ import {
   Building2,
   Wallet,
   KeyRound,
+  Server,
+  Download,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,6 +66,8 @@ export const NAV: NavGroup[] = [
       { href: "/integracoes", label: "Integrações", icon: Plug },
       { href: "/api", label: "Chaves de API", icon: KeyRound },
       { href: "/auditoria", label: "Auditoria", icon: History },
+      { href: "/status", label: "Status servidores", icon: Server },
+      { href: "/api/export-contacts", label: "Exportar contatos", icon: Download },
     ],
   },
 ];

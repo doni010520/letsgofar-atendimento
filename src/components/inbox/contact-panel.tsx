@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash } from "lucide-react";
+import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash, Receipt, QrCode, Unlock, Wrench } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import {
   getContactDetails,
   updateContactDetails,
   getGroupInfo,
   getContactHistory,
+  sgpAction,
   type ContactDetails,
   type GroupInfoResult,
 } from "@/app/(app)/atendimento/actions";
@@ -177,6 +178,30 @@ export function ContactPanel({
               {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
               {saved ? "Salvo!" : "Salvar"}
             </button>
+
+            {/* Ações SGP (se contrato preenchido) */}
+            {fields.contrato && (
+              <div className="mt-3 border-t border-gray-100 pt-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase text-ink-soft">Ações SGP</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {([
+                    { action: "segunda_via", label: "2ª Via", icon: Receipt },
+                    { action: "pix", label: "PIX", icon: QrCode },
+                    { action: "liberacao", label: "Liberar", icon: Unlock },
+                    { action: "status", label: "Status", icon: Wrench },
+                  ] as const).map(({ action, label, icon: Icon }) => (
+                    <button key={action} type="button"
+                      onClick={async () => {
+                        const r = await sgpAction(conversation.id, action, parseInt(fields.contrato, 10));
+                        alert(typeof r === "string" ? r : JSON.stringify(r, null, 2));
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-lg bg-gray-50 px-2 py-2 text-xs font-medium text-ink transition hover:bg-gray-100">
+                      <Icon size={13} /> {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Histórico de atendimentos anteriores */}
             {history.length > 0 && (
