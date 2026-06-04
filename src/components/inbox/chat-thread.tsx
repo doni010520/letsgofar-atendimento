@@ -58,77 +58,52 @@ export function ChatThread({
 
   return (
     <div className="flex h-full flex-1 flex-col bg-canvas">
-      <header className="flex items-center justify-between border-b border-gray-100 bg-surface px-4 py-3">
-        <button onClick={onOpenPanel} className="flex items-center gap-3 rounded-lg p-1 text-left transition hover:bg-gray-50" title="Ver dados">
-          {conversation.contact_avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={conversation.contact_avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
-          ) : (
-            <div
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${
-                isGroup ? "bg-brand-light text-brand" : "bg-gray-200 text-gray-600"
-              }`}
-            >
-              {isGroup ? <Users size={18} /> : title.slice(0, 2).toUpperCase()}
+      <header className="shrink-0 border-b border-gray-100 bg-surface">
+        {/* Linha 1: avatar + nome + protocolo */}
+        <div className="flex items-center gap-3 px-4 pt-2.5 pb-1">
+          <button onClick={onOpenPanel} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-gray-50 p-1" title="Ver dados">
+            {conversation.contact_avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={conversation.contact_avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${isGroup ? "bg-brand-light text-brand" : "bg-gray-200 text-gray-600"}`}>
+                {isGroup ? <Users size={16} /> : title.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-ink">
+                <span className="truncate">{title}</span>
+                {isGroup && <span className="shrink-0 rounded bg-brand-light px-1 py-0.5 text-[9px] font-medium text-brand">Grupo</span>}
+                {muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
+              </p>
+              <p className="truncate text-[11px] text-ink-soft">
+                {isGroup ? "Conversa de grupo" : conversation.contact_phone}
+                {" · "}{conversation.channel_name}
+                {conversation.protocol && <span className="ml-1 font-mono text-[10px]">#{conversation.protocol}</span>}
+              </p>
             </div>
-          )}
-          <div>
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-              {title}
-              {isGroup && (
-                <span className="rounded bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                  Grupo
-                </span>
-              )}
-              {muted && <BellOff size={13} className="text-ink-soft" />}
-            </p>
-            <p className="flex items-center gap-1.5 text-xs text-ink-soft">
-              {isGroup ? "Conversa de grupo" : conversation.contact_phone} ·{" "}
-              <span className={isMeta ? "text-blue-600" : "text-gray-600"}>
-                {conversation.channel_name}
-              </span>
-              {conversation.protocol && (
-                <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
-                  <Hash size={10} />
-                  {conversation.protocol}
-                </span>
-              )}
-            </p>
-          </div>
-        </button>
-        <div className="flex gap-2">
-          <button
-            onClick={onToggleMute}
-            title={muted ? "Reativar notificações" : "Silenciar conversa"}
-            className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
-          >
-            {muted ? <BellOff size={14} /> : <Bell size={14} />}
-            {muted ? "Silenciado" : "Silenciar"}
+          </button>
+        </div>
+        {/* Linha 2: ações */}
+        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+          <button onClick={onToggleMute} title={muted ? "Reativar" : "Silenciar"} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
+            {muted ? <BellOff size={12} /> : <Bell size={12} />} {muted ? "Silenciado" : "Silenciar"}
           </button>
           {conversation.status !== "closed" && (
             <>
-              <button
-                onClick={onAssign}
-                className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
-              >
-                <UserCheck size={14} /> Assumir
+              <button onClick={onAssign} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
+                <UserCheck size={12} /> Assumir
               </button>
-              <button
-                onClick={onTransfer}
-                className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
-              >
-                <ArrowRightLeft size={14} /> Transferir
+              <button onClick={onTransfer} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
+                <ArrowRightLeft size={12} /> Transferir
               </button>
-              <button
-                onClick={onClose}
-                className="flex items-center gap-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-danger hover:bg-red-100"
-              >
-                <CheckCircle2 size={14} /> Encerrar
+              <button onClick={onClose} className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-danger hover:bg-red-100">
+                <CheckCircle2 size={12} /> Encerrar
               </button>
             </>
           )}
           {conversation.status === "closed" && (
-            <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-ink-soft">Encerrado</span>
+            <span className="rounded-md bg-gray-100 px-2 py-1 text-[11px] text-ink-soft">Encerrado</span>
           )}
         </div>
       </header>
