@@ -121,19 +121,39 @@ export function Inbox({
     if (live) markConversationRead(id).catch(() => {});
   }
 
-  // Polling de segurança: atualiza a inbox a cada 5s (independe do Realtime).
+  // Polling rápido: lista de conversas a cada 2s (leve — só a view).
   useEffect(() => {
     if (!live) return;
     let cancel = false;
+    let busy = false;
     const tick = async () => {
+      if (busy) return; // não acumula se o anterior ainda está rodando
+      busy = true;
       try {
         const convs = await fetchConversations();
         if (!cancel && Array.isArray(convs)) {
           setConversations(convs);
           maybePing(convs);
         }
-        if (!cancel && selectedId) {
-          const msgs = await fetchMessages(selectedId);
+      } catch { /* silencioso */ }
+      busy = false;
+    };
+    tick();
+    const t = setInterval(tick, 2000);
+    return () => { cancel = true; clearInterval(t); };
+  }, [live]);
+
+  // Polling de mensagens da conversa aberta a cada 3s.
+  useEffect(() => {
+    if (!live || !selectedId) return;
+    let cancel = false;
+    let busy = false;
+    const tick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const msgs = await fetchMessages(selectedId);
+        if (!cancel) {
           setMessagesByConv((prev) => {
             const cur = prev[selectedId] ?? [];
             const lastCur = cur[cur.length - 1];
@@ -142,16 +162,12 @@ export function Inbox({
             return { ...prev, [selectedId]: msgs };
           });
         }
-      } catch {
-        /* silencioso */
-      }
+      } catch { /* silencioso */ }
+      busy = false;
     };
-    tick(); // primeira atualização imediata
-    const t = setInterval(tick, 4000);
-    return () => {
-      cancel = true;
-      clearInterval(t);
-    };
+    tick();
+    const t = setInterval(tick, 3000);
+    return () => { cancel = true; clearInterval(t); };
   }, [live, selectedId]);
 
   // Realtime: mensagens recebidas (apenas direção "in"; as enviadas são otimistas).
