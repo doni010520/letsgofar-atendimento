@@ -4,6 +4,38 @@ import type { Channel } from "@/lib/types";
 import { storeInboundMedia } from "./media";
 import { rehostImageUrl } from "./avatar";
 import { runChatbot } from "./chatbot";
+import { getProvider } from "./index";
+
+// Cache de participantes por grupo (5 min) para resolver menções sem bater toda hora.
+const groupPartsCache = new Map<string, { at: number; parts: { phone: string; lid: string }[] }>();
+
+/** Troca "@<número/lid>" no texto pelo nome do participante (resolvido via grupo + contatos). */
+async function resolveMentions(db: DB, channel: Channel, groupJid: string, body: string): Promise<string> {
+  if (!/@\d{5,}/.test(body)) return body;
+  let cached = groupPartsCache.get(groupJid);
+  if (!cached || Date.now() - cached.at > 300000) {
+    const info = await getProvider(channel).getGroupInfo?.(groupJid).catch(() => null);
+    cached = { at: Date.now(), parts: info?.participants ?? [] };
+    groupPartsCache.set(groupJid, cached);
+  }
+  // digits (lid OU phone) → phone real
+  const toPhone = new Map<string, string>();
+  for (const p of cached.parts) {
+    if (p.lid) toPhone.set(p.lid, p.phone);
+    if (p.phone) toPhone.set(p.phone, p.phone);
+  }
+  const phones = [...new Set([...toPhone.values()])];
+  const names = new Map<string, string>();
+  if (phones.length) {
+    const { data: contacts } = await db.from("contacts").select("phone, name").in("phone", phones);
+    for (const c of contacts ?? []) if (c.name) names.set(c.phone, c.name);
+  }
+  return body.replace(/@(\d{5,})/g, (full, digits) => {
+    const phone = toPhone.get(digits) ?? digits;
+    const name = names.get(phone);
+    return name ? `@${name}` : full;
+  });
+}
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
@@ -143,6 +175,12 @@ export async function persistInbound(messages: InboundMessage[]) {
       const stored = await storeInboundMedia(db, channel as Channel, msg.externalId).catch(() => ({}) as { url?: string; transcription?: string });
       if (stored.url) mediaUrl = stored.url;
       if (!body && stored.transcription) body = stored.transcription;
+    }
+
+    // Menções em grupo: troca "@<número>" pelo nome do participante.
+    if (isGroup && body) {
+      const gjid = msg.chatJid || `${msg.from}@g.us`;
+      body = await resolveMentions(db, channel as Channel, gjid, body).catch(() => body);
     }
 
     // Citação: resolve trecho e AUTOR a partir da mensagem citada que já temos no banco
