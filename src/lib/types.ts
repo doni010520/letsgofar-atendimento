@@ -8,12 +8,102 @@ export type ContentType =
   | "text" | "image" | "audio" | "video" | "document"
   | "location" | "contact" | "template" | "sticker";
 
+export type AutoMessageEvent = "welcome" | "away" | "out_of_hours" | "close" | "queue_wait" | "agent_assign";
+
 export interface Organization {
   id: string;
   name: string;
   document: string | null;
-  settings: Record<string, unknown>;
+  settings: OrgSettings;
   created_at: string;
+}
+
+/** Configurações da organização (organizations.settings JSONB). */
+export interface OrgSettings {
+  // --- Geral ---
+  identify_agent?: boolean;
+  close_command?: string;              // palavra-chave do cliente p/ encerrar
+  close_command_message?: string;
+  allow_agent_reconnect?: boolean;
+  timezone_offset?: number;            // offset UTC (default -3)
+  ip_whitelist?: string[];
+  // --- Atendimento ---
+  auto_close_company_min?: number;     // encerrar se empresa não interagir
+  auto_close_client_min?: number;
+  auto_close_queue?: boolean;
+  auto_close_by_dept?: Record<string, number>;
+  auto_transfer_dept_id?: string;
+  auto_transfer_company_min?: number;
+  auto_transfer_client_min?: number;
+  require_classification?: "never" | "always" | "company" | "client";
+  require_close_reason?: boolean;
+  csat_policy?: "optional_on" | "optional_off" | "always" | "admin_only";
+  csat_select_survey?: boolean;
+  search_mode?: "none" | "own" | "all";
+  transfer_idle?: "none" | "manual" | "automation" | "both";
+  distribute_least_loaded?: boolean;
+  auto_send_assign_msg?: boolean;
+  transfer_online_only?: boolean;
+  away_msg_interval_min?: number;
+  hide_msgs_mode?: "none" | "queue" | "queue_automation";
+  allow_company_start?: boolean;
+  show_tags_on_card?: boolean;
+  read_confirmation?: boolean;
+  block_return_to_bot?: boolean;
+  close_no_msg_for_agents?: boolean;
+  follow_me_channel_id?: string;
+  // --- Chat V2 ---
+  v2_order_by?: "last_message" | "transfer_date";
+  v2_block_unassigned?: boolean;
+  v2_auto_transcribe?: boolean;
+  v2_use_address?: boolean;
+  v2_recurrence_enabled?: boolean;
+  v2_recurrence_days?: number;
+  v2_recurrence_low?: number;
+  v2_recurrence_medium?: number;
+  v2_recurrence_high?: number;
+  v2_open_erp_on_close?: "none" | "optional" | "required";
+  v2_queue_alert_count?: number;
+  v2_queue_alert_min?: number;
+  v2_queue_alert_popup?: boolean;
+  v2_queue_alert_sound?: boolean;
+  v2_queue_msg_enabled?: boolean;
+  v2_queue_msg_text?: string;
+  v2_queue_msg_interval_min?: number;
+  v2_show_only_internet?: boolean;
+  v2_show_cancelled?: boolean;
+  v2_show_titles?: boolean;
+  v2_promise_global?: boolean;
+  v2_promise_days?: number;
+  v2_search_all_boletos?: boolean;
+  v2_show_nonstandard_boletos?: boolean;
+  v2_boleto_days?: number;
+  v2_only_overdue_plus_next?: boolean;
+  v2_use_billing_link?: boolean;
+  v2_sidebar_collapsed?: boolean;
+  v2_show_channel_on_card?: boolean;
+  v2_color_no_interaction?: boolean;
+  v2_color_client_normal_sec?: number;
+  v2_color_client_normal?: string;
+  v2_color_client_medium_sec?: number;
+  v2_color_client_medium?: string;
+  v2_color_client_high_sec?: number;
+  v2_color_client_high?: string;
+  v2_color_agent_enabled?: boolean;
+  v2_color_agent_sec?: number;
+  v2_color_agent_color?: string;
+  v2_notify_high?: boolean;
+  // --- Permissões ---
+  v2_mask_cpf?: boolean;
+  v2_only_v2?: boolean;
+  v2_agent_see_closed?: boolean;
+  v2_hide_dashboard_agents?: boolean;
+  v2_agent_close_queue?: boolean;
+  v2_agent_bulk_close?: boolean;
+  v2_agent_manage_clients?: boolean;
+  v2_hide_contact_agents?: boolean;
+  // catch-all
+  [key: string]: unknown;
 }
 
 export interface Profile {
@@ -27,6 +117,7 @@ export interface Profile {
   status: "online" | "away" | "offline";
   whatsapp: string | null;
   notify: boolean;
+  totp_enabled?: boolean;
   created_at: string;
 }
 
@@ -86,11 +177,18 @@ export interface Campaign {
   id: string;
   organization_id: string;
   automation_id: string | null;
+  channel_id: string | null;
   name: string;
   status: CampaignStatus;
   audience: unknown[];
+  contact_filter: Record<string, unknown>;
   scheduled_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
   progress: number;
+  total_contacts: number;
+  sent_count: number;
+  failed_count: number;
   stats: Record<string, unknown>;
   created_at: string;
 }
@@ -122,6 +220,10 @@ export interface Contact {
   name: string | null;
   phone: string;
   avatar_url: string | null;
+  email?: string | null;
+  birthday?: string | null;
+  city?: string | null;
+  address?: string | null;
   custom_fields: Record<string, unknown>;
   notes: string | null;
   is_group?: boolean;
@@ -141,7 +243,12 @@ export interface Conversation {
   opened_at: string | null;
   closed_at: string | null;
   satisfaction: number | null;
+  close_reason: string | null;
+  survey_id: string | null;
+  awaiting_satisfaction: boolean;
   is_muted?: boolean;
+  pinned?: boolean;
+  archived?: boolean;
   created_at: string;
 }
 
@@ -161,15 +268,20 @@ export interface ConversationOverview {
   contact_name: string | null;
   contact_phone: string;
   contact_avatar: string | null;
+  contact_email?: string | null;
+  contact_city?: string | null;
   channel_name: string;
   channel_type: ChannelType;
   last_message_body: string | null;
   last_message_type: ContentType | null;
   last_message_direction: MessageDirection | null;
+  last_message_author?: string | null;
+  last_message_created_at?: string | null;
   is_group?: boolean;
   is_muted?: boolean;
+  pinned?: boolean;
+  archived?: boolean;
   contact_jid?: string | null;
-  last_message_author?: string | null;
   unread_count?: number;
   satisfaction?: number | null;
   close_reason?: string | null;
@@ -177,6 +289,9 @@ export interface ConversationOverview {
   assigned_name?: string | null;
   department_name?: string | null;
   department_color?: string | null;
+  survey_id?: string | null;
+  awaiting_satisfaction?: boolean;
+  closed_by?: string | null;
 }
 
 export interface Message {
@@ -201,5 +316,41 @@ export interface Message {
   is_deleted?: boolean;
   edited?: boolean;
   is_internal?: boolean;
+  forwarded?: boolean;
+  created_at: string;
+}
+
+export interface SatisfactionSurvey {
+  id: string;
+  organization_id: string;
+  name: string;
+  active: boolean;
+  scale_type: "stars" | "buttons";
+  scale_max: number;
+  question: string;
+  channels: string[];
+  close_after_min: number;
+  created_at: string;
+}
+
+export interface BusinessHour {
+  id: string;
+  organization_id: string;
+  department_id: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+}
+
+export interface AutoMessage {
+  id: string;
+  organization_id: string;
+  event: AutoMessageEvent;
+  channel_id: string | null;
+  department_id: string | null;
+  body: string;
+  active: boolean;
+  interval_min: number | null;
   created_at: string;
 }

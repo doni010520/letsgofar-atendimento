@@ -8,7 +8,7 @@ import { Button, Card } from "@/components/ui";
 export type CrudField = {
   name: string;
   label: string;
-  type?: "text" | "textarea" | "color" | "select";
+  type?: "text" | "textarea" | "color" | "select" | "number" | "checkbox";
   options?: { value: string; label: string }[];
   placeholder?: string;
   required?: boolean;
@@ -134,6 +134,14 @@ export function CrudManager({
                       <option value="">—</option>
                       {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
+                  ) : f.type === "checkbox" ? (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" name={f.name} defaultChecked={!!editing?.[f.name]} className="h-4 w-4 accent-brand" />
+                      <span className="text-sm text-ink">{f.placeholder ?? "Ativo"}</span>
+                    </label>
+                  ) : f.type === "number" ? (
+                    <input type="number" name={f.name} defaultValue={editing?.[f.name] ?? ""} placeholder={f.placeholder} required={f.required}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
                   ) : f.type === "color" ? (
                     <input type="color" name={f.name} defaultValue={editing?.[f.name] ?? "#00a8ff"}
                       className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />

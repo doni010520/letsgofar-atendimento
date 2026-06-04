@@ -6,7 +6,10 @@ import {
   MOCK_QUICK_REPLIES,
   PREVIEW_MODE,
 } from "@/lib/mock";
-import type { Department, Tag, TagScope, Profile, QuickReply } from "@/lib/types";
+import type {
+  Department, Tag, TagScope, Profile, QuickReply,
+  SatisfactionSurvey, BusinessHour, AutoMessage,
+} from "@/lib/types";
 
 export async function getDepartments(): Promise<Department[]> {
   if (PREVIEW_MODE) return MOCK_DEPARTMENTS;
@@ -38,4 +41,25 @@ export async function getQuickReplies(kind?: QuickReply["kind"]): Promise<QuickR
   if (kind) q = q.eq("kind", kind);
   const { data } = await q;
   return (data as QuickReply[]) ?? [];
+}
+
+export async function getSurveys(): Promise<SatisfactionSurvey[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data } = await sb.from("satisfaction_surveys").select("*").order("created_at");
+  return (data as SatisfactionSurvey[]) ?? [];
+}
+
+export async function getBusinessHours(): Promise<BusinessHour[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data } = await sb.from("business_hours").select("*").order("day_of_week");
+  return (data as BusinessHour[]) ?? [];
+}
+
+export async function getAutoMessages(): Promise<AutoMessage[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data } = await sb.from("auto_messages").select("*").order("event");
+  return (data as AutoMessage[]) ?? [];
 }

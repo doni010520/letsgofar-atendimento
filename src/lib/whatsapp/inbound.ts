@@ -30,11 +30,47 @@ async function resolveMentions(db: DB, channel: Channel, groupJid: string, body:
     const { data: contacts } = await db.from("contacts").select("phone, name").in("phone", phones);
     for (const c of contacts ?? []) if (c.name) names.set(c.phone, c.name);
   }
-  return body.replace(/@(\d{5,})/g, (full, digits) => {
+  // Primeiro passo: resolver via participantes do grupo.
+  // Segundo passo (fallback): para LIDs não resolvidos, buscar em mensagens anteriores
+  // (author_lid → author_name) ou nos contatos por telefone.
+  const unresolved: string[] = [];
+  let result = body.replace(/@(\d{5,})/g, (full, digits) => {
     const phone = toPhone.get(digits) ?? digits;
     const name = names.get(phone);
-    return name ? `@${name}` : full;
+    if (name) return `@${name}`;
+    unresolved.push(digits);
+    return full;
   });
+
+  // Fallback: busca nomes em mensagens anteriores por author_lid ou nos contatos por phone.
+  if (unresolved.length) {
+    for (const digits of unresolved) {
+      // Tenta por author_lid (mensagens de grupo guardam o LID do autor)
+      const { data: msg } = await db
+        .from("messages")
+        .select("author_name")
+        .eq("author_lid", digits)
+        .not("author_name", "is", null)
+        .limit(1)
+        .maybeSingle();
+      if (msg?.author_name) {
+        result = result.split(`@${digits}`).join(`@${msg.author_name}`);
+        continue;
+      }
+      // Tenta por phone (caso seja um número real, não LID)
+      const { data: contact } = await db
+        .from("contacts")
+        .select("name")
+        .eq("phone", digits)
+        .not("name", "is", null)
+        .limit(1)
+        .maybeSingle();
+      if (contact?.name) {
+        result = result.split(`@${digits}`).join(`@${contact.name}`);
+      }
+    }
+  }
+  return result;
 }
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
@@ -228,6 +264,52 @@ export async function persistInbound(messages: InboundMessage[]) {
       .from("conversations")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", conversationId);
+
+    // ====== CSAT: captura nota se aguardando satisfação ======
+    if (!fromMe && !isGroup && existing?.status === "closed") {
+      const { data: awaitingConv } = await db
+        .from("conversations")
+        .select("awaiting_satisfaction, survey_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (awaitingConv?.awaiting_satisfaction && body) {
+        const note = parseInt(body.trim(), 10);
+        if (note >= 1 && note <= 5) {
+          await db.from("conversations").update({
+            satisfaction: note,
+            awaiting_satisfaction: false,
+          }).eq("id", conversationId);
+          // Mensagem de agradecimento
+          const thanks = "Obrigado pela sua avaliação! Ficamos felizes em poder ajudar.";
+          const to = isGroup ? `${msg.from}@g.us` : msg.from;
+          await getProvider(channel as Channel).sendText({ to, text: thanks }).catch(() => {});
+          await db.from("messages").insert({
+            organization_id: org, conversation_id: conversationId,
+            direction: "out", sender_type: "system", content_type: "text",
+            body: thanks, status: "sent",
+          });
+          continue; // não precisa processar mais nada
+        }
+      }
+    }
+
+    // ====== Mensagens automáticas por evento ======
+    if (!fromMe && !isGroup && isNew) {
+      // Boas-vindas (welcome) — só na 1ª msg da conversa
+      const { data: autoWelcome } = await db.from("auto_messages")
+        .select("body").eq("organization_id", org).eq("event", "welcome").eq("active", true)
+        .or(`channel_id.eq.${channel.id},channel_id.is.null`)
+        .limit(1).maybeSingle();
+      if (autoWelcome?.body) {
+        const to = msg.from;
+        await getProvider(channel as Channel).sendText({ to, text: autoWelcome.body }).catch(() => {});
+        await db.from("messages").insert({
+          organization_id: org, conversation_id: conversationId,
+          direction: "out", sender_type: "system", content_type: "text",
+          body: autoWelcome.body, status: "sent",
+        });
+      }
+    }
 
     // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número).
     if (automation && !isGroup && !fromMe && (convStatus === "bot" || isNew)) {
