@@ -7,6 +7,13 @@ import { runChatbot } from "./chatbot";
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
+/** Hash curto e estável para cache-busting da foto re-hospedada. */
+function hashStr(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
 /**
  * Persiste mensagens recebidas via webhook: localiza o canal pelo external_id,
  * faz upsert do contato e da conversa em aberto, e grava a mensagem.
@@ -57,7 +64,7 @@ export async function persistInbound(messages: InboundMessage[]) {
         },
         { onConflict: "organization_id,phone", ignoreDuplicates: false },
       )
-      .select("id, name, avatar_url, is_group")
+      .select("id, name, avatar_url, avatar_src, is_group")
       .single();
 
     // Nome e foto vêm no objeto `chat` do webhook (contato e grupo). Preenche o que faltar.
@@ -65,11 +72,16 @@ export async function persistInbound(messages: InboundMessage[]) {
       const patch: Record<string, unknown> = {};
       if (!contact.name && msg.chatName) patch.name = msg.chatName;
       if (isGroup && msg.chatJid) patch.chat_jid = msg.chatJid; // JID completo do grupo
-      // Foto: re-hospeda a URL efêmera do WhatsApp no nosso Storage (durável, não quebra).
-      const hasOurAvatar = typeof contact.avatar_url === "string" && contact.avatar_url.includes("/storage/v1/");
-      if (!hasOurAvatar && msg.chatPhoto) {
+      // Foto: re-hospeda no nosso Storage. "src" = caminho da URL do WhatsApp (sem query
+      // de expiração) — muda quando a pessoa troca a foto → re-hospeda a nova.
+      const srcKey = msg.chatPhoto ? msg.chatPhoto.split("?")[0] : null;
+      const changed = srcKey && srcKey !== contact.avatar_src;
+      if (changed && msg.chatPhoto) {
         const durable = await rehostImageUrl(db, org, contact.id, msg.chatPhoto).catch(() => null);
-        if (durable) patch.avatar_url = durable;
+        if (durable) {
+          patch.avatar_url = `${durable}?v=${hashStr(srcKey)}`; // cache-busting ao trocar
+          patch.avatar_src = srcKey;
+        }
       }
       if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
     }
