@@ -36,3 +36,23 @@ export async function syncContactAvatar(db: DB, channel: Channel, contactId: str
 
   await db.from("contacts").update({ avatar_url: finalUrl }).eq("id", contactId);
 }
+
+/**
+ * Baixa uma imagem (ex.: foto do chat/grupo que vem em URL efêmera do WhatsApp)
+ * e re-hospeda no bucket público "avatars". Retorna a URL durável (ou null).
+ */
+export async function rehostImageUrl(db: DB, orgId: string, contactId: string, url: string): Promise<string | null> {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const buf = Buffer.from(await resp.arrayBuffer());
+    const path = `${orgId}/${contactId}.jpg`;
+    const { error } = await db.storage
+      .from("avatars")
+      .upload(path, buf, { contentType: resp.headers.get("content-type") || "image/jpeg", upsert: true });
+    if (error) return null;
+    return db.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+  } catch {
+    return null;
+  }
+}

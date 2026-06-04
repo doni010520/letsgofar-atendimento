@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { InboundMessage } from "./types";
 import type { Channel } from "@/lib/types";
 import { storeInboundMedia } from "./media";
+import { rehostImageUrl } from "./avatar";
 import { runChatbot } from "./chatbot";
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
@@ -63,8 +64,13 @@ export async function persistInbound(messages: InboundMessage[]) {
     if (contact) {
       const patch: Record<string, unknown> = {};
       if (!contact.name && msg.chatName) patch.name = msg.chatName;
-      if (!contact.avatar_url && msg.chatPhoto) patch.avatar_url = msg.chatPhoto;
       if (isGroup && msg.chatJid) patch.chat_jid = msg.chatJid; // JID completo do grupo
+      // Foto: re-hospeda a URL efêmera do WhatsApp no nosso Storage (durável, não quebra).
+      const hasOurAvatar = typeof contact.avatar_url === "string" && contact.avatar_url.includes("/storage/v1/");
+      if (!hasOurAvatar && msg.chatPhoto) {
+        const durable = await rehostImageUrl(db, org, contact.id, msg.chatPhoto).catch(() => null);
+        if (durable) patch.avatar_url = durable;
+      }
       if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
     }
 
