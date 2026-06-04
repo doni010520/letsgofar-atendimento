@@ -24,7 +24,7 @@ export function ChatThread({
 }: {
   conversation: ConversationOverview;
   messages: Message[];
-  onSend: (text: string, replyId?: string) => void;
+  onSend: (text: string, replyId?: string, mentions?: { name: string; phone: string }[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onSendLocation: () => void;
   onSendContact: () => void;
@@ -166,13 +166,24 @@ export function ChatThread({
       )}
 
       <Composer
-        onSend={(text) => {
-          onSend(text, replyTo?.external_id ?? undefined);
+        onSend={(text, mentions) => {
+          onSend(text, replyTo?.external_id ?? undefined, mentions);
           setReplyTo(null);
         }}
         onSendFile={onSendFile}
         onSendLocation={onSendLocation}
         onSendContact={onSendContact}
+        mentionCandidates={
+          conversation.is_group
+            ? Array.from(
+                new Map(
+                  messages
+                    .filter((m) => m.author_name && m.author_phone)
+                    .map((m) => [m.author_phone!, { name: m.author_name!, phone: m.author_phone! }]),
+                ).values(),
+              )
+            : undefined
+        }
         disabled={conversation.status === "closed"}
         sending={pending}
       />

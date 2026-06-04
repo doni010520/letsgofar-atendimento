@@ -144,10 +144,15 @@ export class UazapiProvider implements ChannelProvider {
     return "disconnected";
   }
 
-  async sendText({ to, text, replyId }: SendTextParams) {
+  async sendText({ to, text, replyId, mentions }: SendTextParams) {
     const r = await this.req("/send/text", {
       method: "POST",
-      body: JSON.stringify({ number: to, text, ...(replyId ? { replyid: replyId } : {}) }),
+      body: JSON.stringify({
+        number: to,
+        text,
+        ...(replyId ? { replyid: replyId } : {}),
+        ...(mentions && mentions.length ? { mentions: mentions.join(",") } : {}),
+      }),
     });
     return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }

@@ -4,6 +4,7 @@ export interface SendTextParams {
   to: string; // número no formato internacional, só dígitos
   text: string;
   replyId?: string; // id externo da mensagem citada (quote)
+  mentions?: string[]; // números (dígitos) a mencionar em grupo, ou ["all"]
 }
 
 export interface SendMediaParams {

@@ -287,7 +287,7 @@ export function Inbox({
     });
   }
 
-  function handleSend(text: string, replyId?: string) {
+  function handleSend(text: string, replyId?: string, mentions?: { name: string; phone: string }[]) {
     if (!selectedId) return;
     const optimistic: Message = {
       id: `tmp-${Date.now()}`,
@@ -315,7 +315,7 @@ export function Inbox({
     });
 
     startTransition(async () => {
-      await sendMessage(selectedId, text, replyId);
+      await sendMessage(selectedId, text, replyId, mentions);
       if (live) {
         const msgs = await fetchMessages(selectedId);
         setMessagesByConv((prev) => ({ ...prev, [selectedId]: msgs }));

@@ -83,7 +83,12 @@ export async function openDirectConversation(
   return { id };
 }
 
-export async function sendMessage(conversationId: string, text: string, replyToExternal?: string) {
+export async function sendMessage(
+  conversationId: string,
+  text: string,
+  replyToExternal?: string,
+  mentions?: { name: string; phone: string }[],
+) {
   const body = text.trim();
   if (!body) return { ok: false };
   if (isPreview()) return { ok: true }; // modo preview: client mantém otimista
@@ -135,7 +140,21 @@ export async function sendMessage(conversationId: string, text: string, replyToE
       .eq("id", conv.channel_id)
       .single();
     const to = recipientOf(conv);
-    const res = await getProvider(channel as Channel).sendText({ to, text: body, replyId: replyToExternal });
+    // Menções: no texto enviado, "@Nome" vira "@<número>" (o que o WhatsApp linka).
+    let waText = body;
+    const mentionNums: string[] = [];
+    for (const m of mentions ?? []) {
+      const digits = m.phone.replace(/\D/g, "");
+      if (!digits) continue;
+      mentionNums.push(digits);
+      waText = waText.split(`@${m.name}`).join(`@${digits}`);
+    }
+    const res = await getProvider(channel as Channel).sendText({
+      to,
+      text: waText,
+      replyId: replyToExternal,
+      mentions: mentionNums.length ? mentionNums : undefined,
+    });
     await supabase
       .from("messages")
       .update({ status: "sent", external_id: res.externalId ?? null })

@@ -4,18 +4,22 @@ import { useRef, useState } from "react";
 import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker } from "lucide-react";
 import { EmojiPicker } from "./emoji-picker";
 
+type Mention = { name: string; phone: string };
+
 export function Composer({
   onSend,
   onSendFile,
   onSendLocation,
   onSendContact,
+  mentionCandidates,
   disabled,
   sending,
 }: {
-  onSend: (text: string) => void;
+  onSend: (text: string, mentions?: Mention[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onSendLocation?: () => void;
   onSendContact?: () => void;
+  mentionCandidates?: Mention[];
   disabled?: boolean;
   sending?: boolean;
 }) {
@@ -23,16 +27,52 @@ export function Composer({
   const [recording, setRecording] = useState(false);
   const [attachMenu, setAttachMenu] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentions, setMentions] = useState<Mention[]>([]);
+  const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const stickerRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
+  const candidates = mentionCandidates ?? [];
+  const filtered =
+    mentionQuery != null && candidates.length
+      ? candidates.filter((c) => c.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
+      : [];
+
+  function updateMentionQuery(val: string, caret: number) {
+    const before = val.slice(0, caret);
+    const m = before.match(/(?:^|\s)@([^\s@]{0,30})$/);
+    setMentionQuery(candidates.length && m ? m[1] : null);
+  }
+
+  function pickMention(c: Mention) {
+    const ta = taRef.current;
+    const caret = ta?.selectionStart ?? text.length;
+    const before = text.slice(0, caret);
+    const after = text.slice(caret);
+    const m = before.match(/(?:^|\s)@([^\s@]*)$/);
+    const start = m ? caret - m[1].length - 1 : caret;
+    const newText = text.slice(0, start) + `@${c.name} ` + after;
+    setText(newText);
+    setMentions((prev) => (prev.some((x) => x.phone === c.phone) ? prev : [...prev, c]));
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      const pos = start + c.name.length + 2;
+      ta?.focus();
+      ta?.setSelectionRange(pos, pos);
+    });
+  }
+
   function submit() {
     const t = text.trim();
     if (!t) return;
-    onSend(t);
+    const used = mentions.filter((m) => t.includes(`@${m.name}`));
+    onSend(t, used.length ? used : undefined);
     setText("");
+    setMentions([]);
+    setMentionQuery(null);
   }
 
   function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -40,7 +80,6 @@ export function Composer({
     if (f) onSendFile(f);
     e.target.value = "";
   }
-
   function pickSticker(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (f) onSendFile(f, true);
@@ -73,15 +112,28 @@ export function Composer({
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-gray-100 bg-surface p-3">
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,audio/*,video/*,application/pdf"
-        className="hidden"
-        onChange={pickFile}
-      />
+    <div className="relative flex items-end gap-2 border-t border-gray-100 bg-surface p-3">
+      <input ref={fileRef} type="file" accept="image/*,audio/*,video/*,application/pdf" className="hidden" onChange={pickFile} />
       <input ref={stickerRef} type="file" accept="image/*" className="hidden" onChange={pickSticker} />
+
+      {/* Dropdown de menções */}
+      {filtered.length > 0 && (
+        <div className="absolute bottom-16 left-3 z-30 w-64 overflow-hidden rounded-lg border border-gray-100 bg-surface py-1 shadow-xl">
+          <p className="px-3 py-1 text-[10px] font-semibold uppercase text-ink-soft">Mencionar</p>
+          {filtered.map((c) => (
+            <button
+              key={c.phone}
+              onClick={() => pickMention(c)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-gray-50"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-light text-[10px] font-semibold text-brand">
+                {c.name.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="truncate">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="relative">
         <button
@@ -129,16 +181,24 @@ export function Composer({
       </div>
 
       <textarea
+        ref={taRef}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => { setText(e.target.value); updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
+        onClick={(e) => updateMentionQuery(text, (e.target as HTMLTextAreaElement).selectionStart ?? 0)}
         onKeyDown={(e) => {
+          if (filtered.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
+            e.preventDefault();
+            pickMention(filtered[0]);
+            return;
+          }
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             submit();
           }
+          if (e.key === "Escape") setMentionQuery(null);
         }}
         rows={1}
-        placeholder={recording ? "Gravando áudio..." : "Digite uma mensagem..."}
+        placeholder={recording ? "Gravando áudio..." : "Digite uma mensagem... ( @ menciona em grupos )"}
         disabled={disabled || recording}
         className="max-h-32 min-h-[42px] flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand disabled:bg-gray-50"
       />
