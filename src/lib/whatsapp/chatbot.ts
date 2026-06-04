@@ -1,5 +1,6 @@
 import type { createServiceClient } from "@/lib/supabase/server";
 import { getProvider } from "./index";
+import { getAiAgent, runAiTurn } from "./ai";
 import type { Channel } from "@/lib/types";
 
 type DB = ReturnType<typeof createServiceClient>;
@@ -22,6 +23,7 @@ interface ConvState {
   organization_id: string;
   channel_id: string;
   contact_phone: string;
+  contact_name?: string | null;
   is_group: boolean;
   bot_node_id: string | null;
 }
@@ -71,14 +73,57 @@ export async function runChatbot(
     });
   };
 
+  /**
+   * Processa um nó de IA: roda um turno do agente OpenAI (com tools do SGP).
+   * Retorna "bot"/"queued"/null para encerrar a execução, ou "next" para
+   * seguir ao próximo nó do fluxo (quando a IA resolveu e há continuação).
+   */
+  const aiNode = async (n: FlowNode): Promise<"bot" | "queued" | null | "next"> => {
+    const agent = await getAiAgent(db, conv.organization_id, conv.channel_id);
+    if (!agent) {
+      // Sem agente configurado → comportamento legado (mensagem estática).
+      await send(n.data?.content ?? "");
+      return "next";
+    }
+    const decision = await runAiTurn({
+      db,
+      organizationId: conv.organization_id,
+      conversationId: conv.id,
+      contactPhone: conv.contact_phone,
+      contactName: conv.contact_name,
+      agent,
+      nodeInstruction: n.data?.content,
+      userText,
+      sendToCustomer: send,
+    });
+    if (decision === "transfer") {
+      await clearState(db, conv.id);
+      return "queued";
+    }
+    if (decision === "wait") {
+      await saveState(db, conv.id, automation.id, n.id);
+      return "bot";
+    }
+    // resolvido: segue ao próximo nó se houver, senão fica ocioso (sem mudança).
+    if (outgoing(flow, n.id)[0]) return "next";
+    await clearState(db, conv.id);
+    return null;
+  };
+
   // Descobre o nó atual a processar.
   let currentId: string | null;
   if (!conv.bot_node_id) {
     const start = startNode(flow);
     currentId = start ? outgoing(flow, start.id)[0]?.target ?? null : null;
   } else {
-    // Estamos parados num nó (menu/condition) aguardando a mensagem do contato → escolhe o ramo.
+    // Estamos parados num nó aguardando a mensagem do contato.
     const cur = node(flow, conv.bot_node_id);
+    // Nó de IA: re-executa o agente com a nova mensagem (não troca de ramo).
+    if (kindOf(cur) === "ai" && cur) {
+      const r = await aiNode(cur);
+      if (r !== "next") return r;
+      currentId = outgoing(flow, cur.id)[0]?.target ?? null;
+    } else {
     const outs = outgoing(flow, conv.bot_node_id);
     const txt = userText.trim().toLowerCase();
     let chosen: FlowEdge | undefined;
@@ -100,6 +145,7 @@ export async function runChatbot(
       chosen = outs[0];
     }
     currentId = chosen?.target ?? null;
+    }
   }
 
   // Caminha pelos nós, enviando mensagens, até pausar (menu) ou terminar/transferir.
@@ -109,7 +155,13 @@ export async function runChatbot(
     if (!n) break;
     const k = kindOf(n);
 
-    if (k === "message" || k === "ai") {
+    if (k === "ai") {
+      const r = await aiNode(n);
+      if (r !== "next") return r;
+      currentId = outgoing(flow, currentId)[0]?.target ?? null;
+      continue;
+    }
+    if (k === "message") {
       await send(n.data?.content ?? "");
       const next = outgoing(flow, currentId)[0];
       if (!next) {

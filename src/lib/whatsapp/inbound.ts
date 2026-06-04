@@ -231,7 +231,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       const r = await runChatbot(
         db,
         channel as Channel,
-        { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, is_group: isGroup, bot_node_id: convBotNode },
+        { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: convBotNode },
         automation as { id: string; flow: { nodes: never[]; edges: never[] } },
         body ?? "",
       ).catch((e) => {
