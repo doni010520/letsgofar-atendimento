@@ -170,6 +170,7 @@ export interface ConversationOverview {
   is_muted?: boolean;
   contact_jid?: string | null;
   last_message_author?: string | null;
+  unread_count?: number;
 }
 
 export interface Message {

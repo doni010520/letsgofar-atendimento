@@ -92,6 +92,7 @@ export function ConversationList({
             isGroup && c.last_message_author && c.last_message_direction === "in"
               ? `${c.last_message_author.split(" ")[0]}: ${c.last_message_body ?? ""}`
               : (c.last_message_body ?? "—");
+          const unread = (c.unread_count ?? 0) > 0;
           return (
             <button
               key={c.id}
@@ -119,13 +120,20 @@ export function ConversationList({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium text-ink">
+                  <p className={cn("flex min-w-0 items-center gap-1 truncate text-sm", unread ? "font-bold text-ink" : "font-medium text-ink")}>
                     <span className="truncate">{title}</span>
                     {c.is_muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
                   </p>
-                  <span className="shrink-0 text-[10px] text-ink-soft">{time}</span>
+                  <span className={cn("shrink-0 text-[10px]", unread ? "font-semibold text-green-600" : "text-ink-soft")}>{time}</span>
                 </div>
-                <p className="truncate text-xs text-ink-soft">{preview}</p>
+                <div className="flex items-center gap-2">
+                  <p className={cn("min-w-0 flex-1 truncate text-xs", unread ? "font-semibold text-ink" : "text-ink-soft")}>{preview}</p>
+                  {unread && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1 text-[10px] font-bold text-white">
+                      {c.unread_count! > 99 ? "99+" : c.unread_count}
+                    </span>
+                  )}
+                </div>
                 <p className="truncate text-[10px] text-ink-soft/70">{c.channel_name}</p>
               </div>
             </button>
