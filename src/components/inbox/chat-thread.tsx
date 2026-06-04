@@ -20,12 +20,14 @@ export function ChatThread({
   onAssign,
   onClose,
   onToggleMute,
+  onType,
   pending,
 }: {
   conversation: ConversationOverview;
   messages: Message[];
   onSend: (text: string, replyId?: string, mentions?: { name: string; phone: string }[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
+  onType?: () => void;
   onSendLocation: () => void;
   onSendContact: () => void;
   onReact: (m: Message, emoji: string) => void;
@@ -173,6 +175,7 @@ export function ChatThread({
         onSendFile={onSendFile}
         onSendLocation={onSendLocation}
         onSendContact={onSendContact}
+        onType={onType}
         mentionCandidates={
           conversation.is_group
             ? Array.from(

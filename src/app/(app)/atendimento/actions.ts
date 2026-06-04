@@ -83,6 +83,53 @@ export async function openDirectConversation(
   return { id };
 }
 
+/**
+ * Resolve o telefone/nome de um participante SEM criar contato/conversa.
+ * Usado ao clicar num participante de grupo — só materializa ao digitar/enviar.
+ */
+export async function resolveDirectContact(
+  channelId: string,
+  opts: { phone?: string; lid?: string; name?: string; groupJid?: string },
+): Promise<{ phone: string | null; name: string | null; existingId: string | null }> {
+  if (isPreview()) return { phone: null, name: null, existingId: null };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const supabase = await createClient();
+
+  let digits = (opts.phone || "").replace(/\D/g, "");
+  if (!digits && opts.lid && opts.groupJid) {
+    const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
+    const parts = await getProvider(channel as Channel)
+      .getGroupParticipants?.(opts.groupJid)
+      .catch(() => [] as { lid: string; phone: string }[]);
+    const lidDigits = opts.lid.replace(/\D/g, "");
+    digits = (parts ?? []).find((p) => p.lid === lidDigits)?.phone ?? "";
+  }
+  if (!digits) return { phone: null, name: null, existingId: null };
+
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id, name")
+    .eq("organization_id", session.organization.id)
+    .eq("phone", digits)
+    .maybeSingle();
+
+  let existingId: string | null = null;
+  if (contact) {
+    const { data: ex } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("channel_id", channelId)
+      .eq("contact_id", contact.id)
+      .in("status", ["bot", "queued", "open"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    existingId = ex?.id ?? null;
+  }
+  return { phone: digits, name: opts.name ?? contact?.name ?? null, existingId };
+}
+
 export async function sendMessage(
   conversationId: string,
   text: string,

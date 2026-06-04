@@ -11,6 +11,7 @@ export function Composer({
   onSendFile,
   onSendLocation,
   onSendContact,
+  onType,
   mentionCandidates,
   disabled,
   sending,
@@ -19,6 +20,7 @@ export function Composer({
   onSendFile: (file: File, asSticker?: boolean) => void;
   onSendLocation?: () => void;
   onSendContact?: () => void;
+  onType?: () => void;
   mentionCandidates?: Mention[];
   disabled?: boolean;
   sending?: boolean;
@@ -183,7 +185,12 @@ export function Composer({
       <textarea
         ref={taRef}
         value={text}
-        onChange={(e) => { setText(e.target.value); updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!text.trim() && v.trim()) onType?.(); // primeiro caractere → materializa rascunho
+          setText(v);
+          updateMentionQuery(v, e.target.selectionStart ?? v.length);
+        }}
         onClick={(e) => updateMentionQuery(text, (e.target as HTMLTextAreaElement).selectionStart ?? 0)}
         onKeyDown={(e) => {
           if (filtered.length > 0 && (e.key === "Enter" || e.key === "Tab")) {

@@ -48,6 +48,7 @@ import {
   fetchMessages,
   fetchConversations,
   openDirectConversation,
+  resolveDirectContact,
 } from "@/app/(app)/atendimento/actions";
 import type { ConversationOverview, Message } from "@/lib/types";
 
@@ -72,6 +73,10 @@ export function Inbox({
   );
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  // Conversa-rascunho transitória (ao clicar num participante): só persiste ao digitar/enviar.
+  const [draft, setDraft] = useState<ConversationOverview | null>(null);
+  const [draftRealId, setDraftRealId] = useState<string | null>(null);
+  const DRAFT_ID = "__draft__";
 
   // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
   const maxInbound = (convs: ConversationOverview[]) =>
@@ -90,7 +95,8 @@ export function Inbox({
     if (newest > lastPingRef.current) lastPingRef.current = newest;
   }
 
-  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+  const selected =
+    conversations.find((c) => c.id === selectedId) ?? (selectedId === DRAFT_ID ? draft : null);
   const messages = selectedId ? messagesByConv[selectedId] ?? [] : [];
 
   // Carrega mensagens ao selecionar (se ainda não estiverem em cache) e marca como lida.
@@ -229,25 +235,71 @@ export function Inbox({
 
   function handleOpenDirect(m: Message) {
     if (!selected) return;
-    const channelId = selected.channel_id;
-    const groupJid = selected.contact_jid ?? undefined;
+    const grp = selected;
     startTransition(async () => {
-      const { id } = await openDirectConversation(channelId, {
+      const r = await resolveDirectContact(grp.channel_id, {
         phone: m.author_phone ?? undefined,
         lid: m.author_lid ?? undefined,
         name: m.author_name ?? undefined,
-        groupJid,
+        groupJid: grp.contact_jid ?? undefined,
       });
-      if (!id) {
+      if (!r.phone) {
         alert("Não consegui identificar o número deste participante.");
         return;
       }
+      // Já existe conversa? Abre a real.
+      if (r.existingId) {
+        const convs = await fetchConversations();
+        setConversations(convs);
+        setSelectedId(r.existingId);
+        const msgs = await fetchMessages(r.existingId);
+        setMessagesByConv((prev) => ({ ...prev, [r.existingId!]: msgs }));
+        return;
+      }
+      // Conversa-rascunho TRANSITÓRIA (não persiste até digitar/enviar).
+      setDraft({
+        ...grp,
+        id: DRAFT_ID,
+        contact_id: "",
+        contact_name: r.name,
+        contact_phone: r.phone,
+        contact_avatar: null,
+        is_group: false,
+        contact_jid: null,
+        status: "open",
+        last_message_at: null,
+        last_message_body: null,
+        last_message_direction: null,
+        last_message_author: null,
+      });
+      setDraftRealId(null);
+      setMessagesByConv((prev) => ({ ...prev, [DRAFT_ID]: [] }));
+      setSelectedId(DRAFT_ID);
+    });
+  }
+
+  // Cria de fato a conversa do rascunho (ao digitar ou enviar). Retorna o id real.
+  async function materializeDraft(): Promise<string | null> {
+    if (!draft) return null;
+    if (draftRealId) return draftRealId;
+    const { id } = await openDirectConversation(draft.channel_id, {
+      phone: draft.contact_phone,
+      name: draft.contact_name ?? undefined,
+    });
+    if (id) {
+      setDraftRealId(id);
       const convs = await fetchConversations();
       setConversations(convs);
-      setSelectedId(id);
-      const msgs = await fetchMessages(id);
-      setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
-    });
+    }
+    return id;
+  }
+
+  function handleDraftType() {
+    if (selectedId === DRAFT_ID && !draftRealId) {
+      startTransition(async () => {
+        await materializeDraft();
+      });
+    }
   }
 
   function handleReact(m: Message, emoji: string) {
@@ -289,6 +341,22 @@ export function Inbox({
 
   function handleSend(text: string, replyId?: string, mentions?: { name: string; phone: string }[]) {
     if (!selectedId) return;
+    // Rascunho: cria a conversa de verdade agora e envia nela.
+    if (selectedId === DRAFT_ID) {
+      startTransition(async () => {
+        const realId = await materializeDraft();
+        if (!realId) return;
+        await sendMessage(realId, text, replyId, mentions);
+        const convs = await fetchConversations();
+        setConversations(convs);
+        setSelectedId(realId);
+        const msgs = await fetchMessages(realId);
+        setMessagesByConv((prev) => ({ ...prev, [realId]: msgs }));
+        setDraft(null);
+        setDraftRealId(null);
+      });
+      return;
+    }
     const optimistic: Message = {
       id: `tmp-${Date.now()}`,
       organization_id: "",
@@ -387,6 +455,7 @@ export function Inbox({
           onEdit={handleEdit}
           onDelete={handleDelete}
           onAuthorClick={handleOpenDirect}
+          onType={handleDraftType}
           onAssign={handleAssign}
           onClose={handleClose}
           onToggleMute={handleToggleMute}
