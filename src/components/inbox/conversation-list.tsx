@@ -45,7 +45,7 @@ export function ConversationList({
   });
 
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-r border-gray-100 bg-surface">
+    <div className="flex h-full w-full shrink-0 flex-col border-r border-gray-100 bg-surface md:w-80">
       <div className="border-b border-gray-100 p-3">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />

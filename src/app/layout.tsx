@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MVF Chat — Multiatendimento WhatsApp",
   description: "Sistema de multiatendimento e automações via WhatsApp.",
+  manifest: "/manifest.json",
+  themeColor: "#00a8ff",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "MVF Chat" },
+  viewport: { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false },
 };
 
 export default function RootLayout({

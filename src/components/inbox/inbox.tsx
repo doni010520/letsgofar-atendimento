@@ -486,13 +486,17 @@ export function Inbox({
 
   return (
     <div className="flex h-full">
-      <ConversationList
-        conversations={conversations}
-        selectedId={selectedId}
-        onSelect={selectConversation}
-      />
+      {/* Mobile: mostra lista OU chat. Desktop: ambos. */}
+      <div className={`${selectedId ? "hidden md:flex" : "flex"} h-full w-full md:w-auto`}>
+        <ConversationList
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={selectConversation}
+        />
+      </div>
       {selected ? (
         <ChatThread
+          onBack={() => setSelectedId(null)}
           conversation={selected}
           messages={messages}
           onSend={handleSend}
@@ -512,7 +516,7 @@ export function Inbox({
           pending={isPending}
         />
       ) : (
-        <div className="flex flex-1 items-center justify-center text-sm text-ink-soft">
+        <div className="hidden flex-1 items-center justify-center text-sm text-ink-soft md:flex">
           Selecione uma conversa para começar.
         </div>
       )}

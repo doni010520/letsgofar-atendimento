@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -18,6 +18,7 @@ export function ChatThread({
   onDelete,
   onAuthorClick,
   onOpenPanel,
+  onBack,
   onAssign,
   onClose,
   onTransfer,
@@ -37,6 +38,7 @@ export function ChatThread({
   onDelete: (m: Message) => void;
   onAuthorClick: (m: Message) => void;
   onOpenPanel: () => void;
+  onBack?: () => void;
   onAssign: () => void;
   onClose: () => void;
   onTransfer: () => void;
@@ -60,7 +62,12 @@ export function ChatThread({
     <div className="flex h-full flex-1 flex-col bg-canvas">
       <header className="shrink-0 border-b border-gray-100 bg-surface">
         {/* Linha 1: avatar + nome + protocolo */}
-        <div className="flex items-center gap-3 px-4 pt-2.5 pb-1">
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 md:px-4">
+          {onBack && (
+            <button onClick={onBack} className="shrink-0 rounded-lg p-1.5 text-ink-soft hover:bg-gray-100 md:hidden" title="Voltar">
+              <ArrowLeft size={20} />
+            </button>
+          )}
           <button onClick={onOpenPanel} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-gray-50 p-1" title="Ver dados">
             {conversation.contact_avatar ? (
               // eslint-disable-next-line @next/next/no-img-element
