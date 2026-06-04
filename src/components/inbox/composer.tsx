@@ -115,7 +115,7 @@ export function Composer({
 
   return (
     <div className="relative flex items-end gap-2 border-t border-gray-100 bg-surface p-3">
-      <input ref={fileRef} type="file" accept="image/*,audio/*,video/*,application/pdf" className="hidden" onChange={pickFile} />
+      <input ref={fileRef} type="file" className="hidden" onChange={pickFile} />
       <input ref={stickerRef} type="file" accept="image/*" className="hidden" onChange={pickSticker} />
 
       {/* Dropdown de menções */}
