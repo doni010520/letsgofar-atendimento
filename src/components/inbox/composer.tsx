@@ -210,7 +210,7 @@ export function Composer({
           if (e.key === "Escape") setMentionQuery(null);
         }}
         rows={1}
-        placeholder={recording ? "Gravando áudio..." : "Digite uma mensagem... ( @ menciona em grupos )"}
+        placeholder={recording ? "Gravando áudio..." : "Digite uma mensagem..."}
         disabled={disabled || recording}
         style={{ height: "auto" }}
         onInput={(e) => {
