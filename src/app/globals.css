@@ -20,6 +20,21 @@
   --foreground: #1f2937;
 }
 
+/* Dark mode */
+html.dark {
+  --background: #111827;
+  --foreground: #e5e7eb;
+  --color-canvas: #111827;
+  --color-surface: #1f2937;
+  --color-ink: #e5e7eb;
+  --color-ink-soft: #9ca3af;
+  --color-brand-light: #1e3a5f;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
 html,
 body {
   background: var(--background);

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
 import {
   Check, CheckCheck, Clock, AlertCircle, FileText, Download,
-  Reply, SmilePlus, Pencil, Trash2, MoreVertical, X,
+  Reply, SmilePlus, Pencil, Trash2, MoreVertical, X, Forward,
 } from "lucide-react";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -212,6 +212,14 @@ function Actions({
                 <Pencil size={14} /> Editar
               </button>
             )}
+            <button onClick={() => {
+              setMenu(false);
+              const text = message.body ?? `[${message.content_type}]`;
+              navigator.clipboard.writeText(text);
+              alert("Mensagem copiada para a área de transferência. Cole em outra conversa para encaminhar.");
+            }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
+              <Forward size={14} /> Encaminhar
+            </button>
             <button onClick={() => { onDelete?.(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-danger hover:bg-red-50">
               <Trash2 size={14} /> Apagar
             </button>

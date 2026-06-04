@@ -352,6 +352,29 @@ export async function persistInbound(messages: InboundMessage[]) {
       }
     }
 
+    // ====== Comando para encerrar (cliente envia palavra-chave) ======
+    if (!fromMe && !isGroup && body && (convStatus === "open" || convStatus === "queued")) {
+      const { data: orgRow2 } = await db.from("organizations").select("settings").eq("id", org).maybeSingle();
+      const orgSettings = (orgRow2?.settings ?? {}) as Record<string, unknown>;
+      const closeCmd = String(orgSettings.close_command ?? "").trim();
+      if (closeCmd) {
+        const keywords = closeCmd.split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
+        if (keywords.some((k) => body!.toLowerCase().includes(k))) {
+          const closeMsg = String(orgSettings.close_command_message ?? "").trim();
+          if (closeMsg) {
+            await getProvider(channel as Channel).sendText({ to: msg.from, text: closeMsg }).catch(() => {});
+            await db.from("messages").insert({
+              organization_id: org, conversation_id: conversationId,
+              direction: "out", sender_type: "system", content_type: "text",
+              body: closeMsg, status: "sent",
+            });
+          }
+          await db.from("conversations").update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", conversationId);
+          continue;
+        }
+      }
+    }
+
     // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número).
     if (automation && !isGroup && !fromMe && (convStatus === "bot" || isNew)) {
       const r = await runChatbot(

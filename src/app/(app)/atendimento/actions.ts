@@ -248,13 +248,19 @@ export async function sendMessage(
   replyToExternal?: string,
   mentions?: { name: string; phone: string }[],
 ) {
-  const body = text.trim();
+  let body = text.trim();
   if (!body) return { ok: false };
   if (isPreview()) return { ok: true }; // modo preview: client mantém otimista
 
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
+
+  // Identificar atendente: prefixa o nome se configurado.
+  const orgSettings = (session.organization.settings ?? {}) as Record<string, unknown>;
+  if (orgSettings.identify_agent && session.profile?.name) {
+    body = `*${session.profile.name}:*\n${body}`;
+  }
 
   const { data: conv } = await supabase
     .from("conversation_overview")
@@ -338,12 +344,25 @@ export async function sendMessage(
 export async function assignToMe(conversationId: string) {
   if (isPreview()) return;
   const session = await getSession();
-  if (!session) throw new Error("Sessão inválida.");
+  if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
   await supabase
     .from("conversations")
     .update({ assigned_user_id: session.userId, status: "open" })
     .eq("id", conversationId);
+
+  // Mensagem de atribuição (se configurado).
+  const orgSettings = (session.organization.settings ?? {}) as Record<string, unknown>;
+  if (orgSettings.auto_send_assign_msg && session.profile?.name) {
+    const { data: autoMsg } = await supabase.from("auto_messages")
+      .select("body").eq("organization_id", session.organization.id)
+      .eq("event", "agent_assign").eq("active", true).limit(1).maybeSingle();
+    if (autoMsg?.body) {
+      const text = autoMsg.body.replace(/@atendente_nome/g, session.profile.name);
+      await sendMessage(conversationId, text);
+    }
+  }
+
   revalidatePath("/atendimento");
 }
 

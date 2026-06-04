@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash, Receipt, QrCode, Unlock, Wrench } from "lucide-react";
+import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash, Receipt, QrCode, Unlock, Wrench, Plus, Printer } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import {
   getContactDetails,
@@ -178,6 +178,18 @@ export function ContactPanel({
               {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
               {saved ? "Salvo!" : "Salvar"}
             </button>
+
+            {/* Ações rápidas */}
+            <div className="mt-3 flex gap-1.5">
+              <button type="button" onClick={() => window.print()}
+                className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-gray-50 py-2 text-xs font-medium text-ink transition hover:bg-gray-100">
+                <Printer size={13} /> Imprimir
+              </button>
+              <button type="button" onClick={() => onOpenContact(contact.phone, contact.name ?? undefined)}
+                className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-gray-50 py-2 text-xs font-medium text-ink transition hover:bg-gray-100">
+                <Plus size={13} /> Novo atendimento
+              </button>
+            </div>
 
             {/* Ações SGP (se contrato preenchido) */}
             {fields.contrato && (

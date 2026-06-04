@@ -76,6 +76,15 @@ export function KanbanBoard({
     [filtered],
   );
 
+  // Recorrência: conta quantas conversas cada contato tem (todas, não só filtradas)
+  const recurrenceCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of conversations) {
+      map[c.contact_id] = (map[c.contact_id] ?? 0) + 1;
+    }
+    return map;
+  }, [conversations]);
+
   return (
     <div className="flex h-full flex-col">
       {/* Abas + filtros */}
@@ -142,15 +151,25 @@ export function KanbanBoard({
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "board" && <Board conversations={filtered} onOpen={() => router.push("/atendimento")} />}
-        {tab === "closed" && <ClosedList items={closedToday} onOpen={() => router.push("/atendimento")} />}
+        {tab === "board" && <Board conversations={filtered} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} />}
+        {tab === "closed" && <ClosedList items={closedToday} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} />}
         {tab === "analytics" && <Analytics conversations={filtered} closedToday={closedToday} />}
       </div>
     </div>
   );
 }
 
-function Card({ c, onOpen }: { c: ConversationOverview; onOpen: () => void }) {
+/** Calcula a cor da borda por tempo sem interação (segundos). */
+function timeBorderColor(lastMsgAt: string | null): string | null {
+  if (!lastMsgAt) return null;
+  const sec = (Date.now() - new Date(lastMsgAt).getTime()) / 1000;
+  if (sec > 1800) return "#ef4444"; // >30min = vermelho
+  if (sec > 600) return "#f59e0b";  // >10min = amarelo
+  if (sec > 180) return "#22c55e";  // >3min = verde
+  return null;
+}
+
+function Card({ c, onOpen, recurrenceCount }: { c: ConversationOverview; onOpen: () => void; recurrenceCount?: number }) {
   const initials = (c.contact_name ?? c.contact_phone)
     .split(" ")
     .slice(0, 2)
@@ -159,10 +178,16 @@ function Card({ c, onOpen }: { c: ConversationOverview; onOpen: () => void }) {
   const time = c.last_message_at
     ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : "";
+  const borderColor = c.status !== "closed" ? timeBorderColor(c.last_message_created_at ?? c.last_message_at) : null;
+  const recLabel = recurrenceCount != null && recurrenceCount >= 2
+    ? recurrenceCount >= 10 ? "Alta recorrência" : recurrenceCount >= 5 ? "Média recorrência" : "Baixa recorrência"
+    : null;
+  const recColor = recurrenceCount != null && recurrenceCount >= 10 ? "text-red-600 bg-red-50" : recurrenceCount != null && recurrenceCount >= 5 ? "text-amber-600 bg-amber-50" : "text-green-600 bg-green-50";
   return (
     <button
       onClick={onOpen}
       className="w-full overflow-hidden rounded-lg bg-surface text-left shadow-sm transition hover:shadow-md"
+      style={borderColor ? { borderLeft: `3px solid ${borderColor}` } : undefined}
     >
       {c.department_color && <div className="h-1 w-full" style={{ backgroundColor: c.department_color }} />}
       <div className="p-3">
@@ -202,6 +227,11 @@ function Card({ c, onOpen }: { c: ConversationOverview; onOpen: () => void }) {
               {c.protocol}
             </span>
           )}
+          {recLabel && (
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${recColor}`}>
+              {recLabel}
+            </span>
+          )}
         </div>
 
         {c.last_message_body && <p className="mt-2 line-clamp-2 text-xs text-ink-soft">{c.last_message_body}</p>}
@@ -210,7 +240,7 @@ function Card({ c, onOpen }: { c: ConversationOverview; onOpen: () => void }) {
   );
 }
 
-function Board({ conversations, onOpen }: { conversations: ConversationOverview[]; onOpen: () => void }) {
+function Board({ conversations, onOpen, recurrenceCounts }: { conversations: ConversationOverview[]; onOpen: () => void; recurrenceCounts: Record<string, number> }) {
   return (
     <div className="grid h-full grid-cols-1 gap-4 overflow-hidden p-6 md:grid-cols-3">
       {COLUMNS.map((col) => {
@@ -227,7 +257,7 @@ function Board({ conversations, onOpen }: { conversations: ConversationOverview[
             <div className="flex-1 space-y-2 overflow-y-auto p-3">
               {items.length === 0 && <p className="pt-6 text-center text-xs text-ink-soft">Nenhum atendimento.</p>}
               {items.map((c) => (
-                <Card key={c.id} c={c} onOpen={onOpen} />
+                <Card key={c.id} c={c} onOpen={onOpen} recurrenceCount={recurrenceCounts?.[c.contact_id]} />
               ))}
             </div>
           </div>
@@ -237,7 +267,7 @@ function Board({ conversations, onOpen }: { conversations: ConversationOverview[
   );
 }
 
-function ClosedList({ items, onOpen }: { items: ConversationOverview[]; onOpen: () => void }) {
+function ClosedList({ items, onOpen, recurrenceCounts }: { items: ConversationOverview[]; onOpen: () => void; recurrenceCounts: Record<string, number> }) {
   return (
     <div className="h-full overflow-y-auto p-6">
       {items.length === 0 ? (
@@ -245,7 +275,7 @@ function ClosedList({ items, onOpen }: { items: ConversationOverview[]; onOpen: 
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((c) => (
-            <Card key={c.id} c={c} onOpen={onOpen} />
+            <Card key={c.id} c={c} onOpen={onOpen} recurrenceCount={recurrenceCounts?.[c.contact_id]} />
           ))}
         </div>
       )}

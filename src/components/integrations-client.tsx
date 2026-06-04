@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Trash2, Plug } from "lucide-react";
+import { Plus, X, Trash2, Plug, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button, Card } from "@/components/ui";
-import { createIntegration, deleteIntegration } from "@/app/(app)/integracoes/actions";
+import { createIntegration, deleteIntegration, testIntegration } from "@/app/(app)/integracoes/actions";
 import type { Integration } from "@/lib/types";
 
 export function IntegrationsClient({ integrations }: { integrations: Integration[] }) {
@@ -34,6 +34,12 @@ export function IntegrationsClient({ integrations }: { integrations: Integration
               <p className="truncate text-sm font-medium uppercase text-ink">{it.type}</p>
               <p className="truncate text-xs text-ink-soft">{String((it.config as { url?: string })?.url ?? "")}</p>
             </div>
+            <button onClick={async () => {
+              const r = await testIntegration(it.id);
+              alert(r.message);
+            }} className="rounded p-1.5 text-ink-soft hover:bg-green-50 hover:text-green-600" title="Testar conexão">
+              <CheckCircle2 size={15} />
+            </button>
             <button onClick={() => remove(it.id)} className="rounded p-1.5 text-ink-soft hover:bg-red-50 hover:text-danger"><Trash2 size={15} /></button>
           </Card>
         ))}

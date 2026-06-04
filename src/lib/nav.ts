@@ -17,6 +17,7 @@ import {
   KeyRound,
   Server,
   Download,
+  Contact,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,6 +58,7 @@ export const NAV: NavGroup[] = [
       { href: "/financeiro", label: "Financeiro", icon: Wallet },
       { href: "/atendentes", label: "Atendentes", icon: Users },
       { href: "/departamentos", label: "Departamentos", icon: Layers },
+      { href: "/clientes", label: "Clientes", icon: Contact },
       { href: "/ajustes", label: "Ajustes", icon: Settings },
     ],
   },

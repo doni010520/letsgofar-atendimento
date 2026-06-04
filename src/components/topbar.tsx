@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, Settings, MessageCircle, User, LogOut, ChevronDown } from "lucide-react";
+import { Bell, Settings, MessageCircle, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 
 export function Topbar({
@@ -51,6 +51,14 @@ export function Topbar({
           title="Notificações"
         >
           <Bell size={18} />
+        </button>
+        <button
+          onClick={() => document.documentElement.classList.toggle("dark")}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-gray-100 hover:text-ink"
+          title="Modo escuro"
+        >
+          <Moon size={18} className="hidden dark:block" />
+          <Sun size={18} className="dark:hidden" />
         </button>
 
         <div className="relative ml-2">
