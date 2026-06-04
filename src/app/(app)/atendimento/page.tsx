@@ -1,10 +1,16 @@
 import { Inbox } from "@/components/inbox/inbox";
 import { getConversations, getMessages } from "@/lib/data/conversations";
+import { getTags, getAgents, getDepartments } from "@/lib/data/management";
 import { getSession } from "@/lib/auth";
 import { PREVIEW_MODE } from "@/lib/mock";
 
 export default async function AtendimentoPage() {
-  const conversations = await getConversations();
+  const [conversations, tags, agents, departments] = await Promise.all([
+    getConversations(),
+    getTags("conversation"),
+    getAgents(),
+    getDepartments(),
+  ]);
   const first = conversations[0]?.id ?? null;
   const initialMessages = first ? await getMessages(first) : [];
 
@@ -20,6 +26,9 @@ export default async function AtendimentoPage() {
       initialSelectedId={first}
       initialMessages={initialMessages}
       userId={userId}
+      tags={tags}
+      agents={agents}
+      departments={departments}
       live={!PREVIEW_MODE}
     />
   );

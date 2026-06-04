@@ -328,14 +328,90 @@ export async function assignToMe(conversationId: string) {
   revalidatePath("/atendimento");
 }
 
-export async function closeConversation(conversationId: string) {
-  if (isPreview()) return;
+export interface CloseOptions {
+  reason?: string;
+  tagIds?: string[];
+  sendSurvey?: boolean;
+}
+
+const DEFAULT_SURVEY =
+  "Sua opinião é muito importante! De 1 a 5, como você avalia o nosso atendimento? (responda apenas com o número)";
+
+/** Envia a pesquisa de satisfação (CSAT) ao cliente e marca a conversa como aguardando nota. */
+async function sendSatisfactionSurvey(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  conversationId: string,
+) {
+  const { data: org } = await supabase.from("organizations").select("settings").eq("id", orgId).maybeSingle();
+  const csat = (org?.settings as { csat?: { message?: string } } | null)?.csat;
+  const text = csat?.message?.trim() || DEFAULT_SURVEY;
+  try {
+    const { to, channel } = await recipientFor(supabase, conversationId);
+    const res = await getProvider(channel).sendText({ to, text });
+    await supabase.from("messages").insert({
+      organization_id: orgId,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "system",
+      content_type: "text",
+      body: text,
+      status: "sent",
+      external_id: res.externalId ?? null,
+    });
+    await supabase.from("conversations").update({ awaiting_satisfaction: true }).eq("id", conversationId);
+  } catch (e) {
+    console.error("survey", e);
+  }
+}
+
+/** Encerra o atendimento: classificação (tags) + motivo + pesquisa opcional. */
+export async function closeConversation(conversationId: string, opts: CloseOptions = {}) {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
+
+  // Classificação do atendimento (substitui as tags atuais).
+  if (opts.tagIds) {
+    await supabase.from("conversation_tags").delete().eq("conversation_id", conversationId);
+    if (opts.tagIds.length) {
+      await supabase
+        .from("conversation_tags")
+        .insert(opts.tagIds.map((tag_id) => ({ conversation_id: conversationId, tag_id })));
+    }
+  }
+
   await supabase
     .from("conversations")
-    .update({ status: "closed", closed_at: new Date().toISOString() })
+    .update({
+      status: "closed",
+      closed_at: new Date().toISOString(),
+      close_reason: opts.reason?.trim() || null,
+    })
     .eq("id", conversationId);
+
+  // Registro interno do encerramento (histórico, não vai ao cliente).
+  if (opts.reason?.trim()) {
+    await supabase.from("messages").insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "system",
+      sender_id: session.userId,
+      content_type: "text",
+      body: `Atendimento encerrado — Motivo: ${opts.reason.trim()}`,
+      is_internal: true,
+      status: "sent",
+    });
+  }
+
+  if (opts.sendSurvey) {
+    await sendSatisfactionSurvey(supabase, session.organization.id, conversationId);
+  }
+
   revalidatePath("/atendimento");
+  return { ok: true };
 }
 
 function kindFromMime(mime: string): { kind: "image" | "audio" | "video" | "document"; content: ContentType } {
@@ -593,12 +669,57 @@ export async function toggleMute(conversationId: string, muted: boolean) {
   return { muted };
 }
 
-export async function transferConversation(conversationId: string, toUserId: string) {
-  if (isPreview()) return;
+export interface TransferOptions {
+  toUserId?: string | null;
+  toDepartmentId?: string | null;
+  internalNote?: string;
+  customerMessage?: string;
+}
+
+/**
+ * Transferência avançada: para uma pessoa e/ou departamento, com nota interna
+ * (só atendentes) e mensagem ao cliente (enviada de verdade).
+ */
+export async function transferConversation(conversationId: string, opts: TransferOptions) {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
-  await supabase
-    .from("conversations")
-    .update({ assigned_user_id: toUserId, status: "open" })
-    .eq("id", conversationId);
+
+  const update: Record<string, unknown> = {};
+  if (opts.toDepartmentId !== undefined) update.department_id = opts.toDepartmentId || null;
+  if (opts.toUserId) {
+    update.assigned_user_id = opts.toUserId;
+    update.status = "open";
+  } else if (opts.toDepartmentId) {
+    // Volta para a fila do departamento, sem atendente específico.
+    update.assigned_user_id = null;
+    update.status = "queued";
+  }
+  if (Object.keys(update).length) {
+    await supabase.from("conversations").update(update).eq("id", conversationId);
+  }
+
+  // Nota interna de transferência (não vai ao cliente).
+  if (opts.internalNote?.trim()) {
+    await supabase.from("messages").insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "system",
+      sender_id: session.userId,
+      content_type: "text",
+      body: opts.internalNote.trim(),
+      is_internal: true,
+      status: "sent",
+    });
+  }
+
+  // Mensagem ao cliente (enviada pelo provedor).
+  if (opts.customerMessage?.trim()) {
+    await sendMessage(conversationId, opts.customerMessage.trim());
+  }
+
   revalidatePath("/atendimento");
+  return { ok: true };
 }

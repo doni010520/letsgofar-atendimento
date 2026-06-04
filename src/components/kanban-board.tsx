@@ -1,8 +1,17 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Bot, Search, Hash, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ConversationOverview, ConversationStatus } from "@/lib/types";
+import type {
+  ConversationOverview,
+  ConversationStatus,
+  Channel,
+  Profile,
+  Department,
+  Tag,
+} from "@/lib/types";
 
 const COLUMNS: { status: ConversationStatus; title: string; dot: string; head: string }[] = [
   { status: "open", title: "Em andamento", dot: "bg-green-500", head: "text-green-700" },
@@ -10,8 +19,198 @@ const COLUMNS: { status: ConversationStatus; title: string; dot: string; head: s
   { status: "bot", title: "Na automação", dot: "bg-violet-500", head: "text-violet-700" },
 ];
 
-export function KanbanBoard({ conversations }: { conversations: ConversationOverview[] }) {
+const selectCls =
+  "rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5 text-xs text-ink outline-none focus:border-brand";
+
+function isToday(iso: string | null): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+export function KanbanBoard({
+  conversations,
+  tagMap,
+  channels,
+  agents,
+  departments,
+  tags,
+}: {
+  conversations: ConversationOverview[];
+  tagMap: Record<string, string[]>;
+  channels: Channel[];
+  agents: Profile[];
+  departments: Department[];
+  tags: Tag[];
+}) {
   const router = useRouter();
+  const [tab, setTab] = useState<"board" | "closed" | "analytics">("board");
+  const [channelId, setChannelId] = useState("");
+  const [agentId, setAgentId] = useState("");
+  const [deptId, setDeptId] = useState("");
+  const [tagId, setTagId] = useState("");
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return conversations.filter((c) => {
+      if (channelId && c.channel_id !== channelId) return false;
+      if (agentId && c.assigned_user_id !== agentId) return false;
+      if (deptId && c.department_id !== deptId) return false;
+      if (tagId && !(tagMap[c.id] ?? []).includes(tagId)) return false;
+      if (q) {
+        const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.protocol ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [conversations, channelId, agentId, deptId, tagId, search, tagMap]);
+
+  const closedToday = useMemo(
+    () => filtered.filter((c) => c.status === "closed" && isToday(c.closed_at)),
+    [filtered],
+  );
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Abas + filtros */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-surface px-6 py-2.5">
+        <div className="flex rounded-lg bg-gray-100 p-0.5 text-xs">
+          {(
+            [
+              ["board", "Board"],
+              ["closed", "Encerrados hoje"],
+              ["analytics", "Visão analítica"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={cn(
+                "rounded-md px-3 py-1.5 font-medium transition",
+                tab === k ? "bg-surface text-ink shadow-sm" : "text-ink-soft",
+              )}
+            >
+              {label}
+              {k === "closed" && closedToday.length > 0 && (
+                <span className="ml-1 rounded-full bg-gray-200 px-1.5 text-[10px]">{closedToday.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <div className="relative">
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-soft" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar nome, telefone ou protocolo…"
+              className={cn(selectCls, "w-56 pl-7")}
+            />
+          </div>
+          <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className={selectCls}>
+            <option value="">Todos canais</option>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className={selectCls}>
+            <option value="">Todos atendentes</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name || a.email}</option>
+            ))}
+          </select>
+          <select value={deptId} onChange={(e) => setDeptId(e.target.value)} className={selectCls}>
+            <option value="">Todos deptos</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          <select value={tagId} onChange={(e) => setTagId(e.target.value)} className={selectCls}>
+            <option value="">Todas tags</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {tab === "board" && <Board conversations={filtered} onOpen={() => router.push("/atendimento")} />}
+        {tab === "closed" && <ClosedList items={closedToday} onOpen={() => router.push("/atendimento")} />}
+        {tab === "analytics" && <Analytics conversations={filtered} closedToday={closedToday} />}
+      </div>
+    </div>
+  );
+}
+
+function Card({ c, onOpen }: { c: ConversationOverview; onOpen: () => void }) {
+  const initials = (c.contact_name ?? c.contact_phone)
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+  const time = c.last_message_at
+    ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full overflow-hidden rounded-lg bg-surface text-left shadow-sm transition hover:shadow-md"
+    >
+      {c.department_color && <div className="h-1 w-full" style={{ backgroundColor: c.department_color }} />}
+      <div className="p-3">
+        <div className="flex items-center gap-2">
+          {c.contact_avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={c.contact_avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          ) : (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">
+              {initials || "?"}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-ink">{c.contact_name ?? c.contact_phone}</p>
+            <p className="truncate text-[11px] text-ink-soft">{c.channel_name}</p>
+          </div>
+          <span className="shrink-0 text-[10px] text-ink-soft">{time}</span>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {c.status === "bot" && (
+            <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
+              <Bot size={11} /> AGENTE DE IA
+            </span>
+          )}
+          {c.assigned_name && (
+            <span className="rounded bg-brand-light px-1.5 py-0.5 text-[10px] font-medium text-brand">
+              {c.assigned_name}
+            </span>
+          )}
+          {c.department_name && (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-ink-soft">{c.department_name}</span>
+          )}
+          {c.protocol && (
+            <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
+              <Hash size={9} />
+              {c.protocol}
+            </span>
+          )}
+        </div>
+
+        {c.last_message_body && <p className="mt-2 line-clamp-2 text-xs text-ink-soft">{c.last_message_body}</p>}
+      </div>
+    </button>
+  );
+}
+
+function Board({ conversations, onOpen }: { conversations: ConversationOverview[]; onOpen: () => void }) {
   return (
     <div className="grid h-full grid-cols-1 gap-4 overflow-hidden p-6 md:grid-cols-3">
       {COLUMNS.map((col) => {
@@ -27,36 +226,82 @@ export function KanbanBoard({ conversations }: { conversations: ConversationOver
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto p-3">
               {items.length === 0 && <p className="pt-6 text-center text-xs text-ink-soft">Nenhum atendimento.</p>}
-              {items.map((c) => {
-                const initials = (c.contact_name ?? c.contact_phone).split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
-                const time = c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => router.push("/atendimento")}
-                    className="w-full rounded-lg bg-surface p-3 text-left shadow-sm transition hover:shadow-md"
-                  >
-                    <div className="flex items-center gap-2">
-                      {c.contact_avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.contact_avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-                      ) : (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">{initials || "?"}</div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink">{c.contact_name ?? c.contact_phone}</p>
-                        <p className="truncate text-[11px] text-ink-soft">{c.channel_name}</p>
-                      </div>
-                      <span className="shrink-0 text-[10px] text-ink-soft">{time}</span>
-                    </div>
-                    {c.last_message_body && <p className="mt-2 line-clamp-2 text-xs text-ink-soft">{c.last_message_body}</p>}
-                  </button>
-                );
-              })}
+              {items.map((c) => (
+                <Card key={c.id} c={c} onOpen={onOpen} />
+              ))}
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ClosedList({ items, onOpen }: { items: ConversationOverview[]; onOpen: () => void }) {
+  return (
+    <div className="h-full overflow-y-auto p-6">
+      {items.length === 0 ? (
+        <p className="pt-10 text-center text-sm text-ink-soft">Nenhum atendimento encerrado hoje.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((c) => (
+            <Card key={c.id} c={c} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Analytics({
+  conversations,
+  closedToday,
+}: {
+  conversations: ConversationOverview[];
+  closedToday: ConversationOverview[];
+}) {
+  const open = conversations.filter((c) => c.status === "open").length;
+  const queued = conversations.filter((c) => c.status === "queued").length;
+  const bot = conversations.filter((c) => c.status === "bot").length;
+
+  // TMA (tempo médio de atendimento) dos encerrados hoje.
+  const durations = closedToday
+    .filter((c) => c.opened_at && c.closed_at)
+    .map((c) => new Date(c.closed_at!).getTime() - new Date(c.opened_at!).getTime())
+    .filter((ms) => ms > 0);
+  const tmaMin = durations.length
+    ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length / 60000)
+    : 0;
+
+  const rated = closedToday.filter((c) => typeof c.satisfaction === "number");
+  const csat = rated.length
+    ? (rated.reduce((a, c) => a + (c.satisfaction ?? 0), 0) / rated.length).toFixed(1)
+    : "—";
+
+  const cards = [
+    { label: "Em andamento", value: open, color: "text-green-700" },
+    { label: "Em espera", value: queued, color: "text-amber-700" },
+    { label: "Na automação", value: bot, color: "text-violet-700" },
+    { label: "Encerrados hoje", value: closedToday.length, color: "text-ink" },
+    { label: "TMA (min)", value: tmaMin, color: "text-brand" },
+  ];
+
+  return (
+    <div className="h-full overflow-y-auto p-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {cards.map((c) => (
+          <div key={c.label} className="rounded-card bg-surface p-4 shadow-sm">
+            <p className="text-xs text-ink-soft">{c.label}</p>
+            <p className={cn("mt-1 text-2xl font-semibold", c.color)}>{c.value}</p>
+          </div>
+        ))}
+        <div className="rounded-card bg-surface p-4 shadow-sm">
+          <p className="text-xs text-ink-soft">Satisfação média</p>
+          <p className="mt-1 flex items-center gap-1 text-2xl font-semibold text-yellow-500">
+            <Star size={20} className="fill-yellow-400 text-yellow-400" /> {csat}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

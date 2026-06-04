@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -20,6 +20,7 @@ export function ChatThread({
   onOpenPanel,
   onAssign,
   onClose,
+  onTransfer,
   onToggleMute,
   onType,
   pending,
@@ -38,6 +39,7 @@ export function ChatThread({
   onOpenPanel: () => void;
   onAssign: () => void;
   onClose: () => void;
+  onTransfer: () => void;
   onToggleMute: () => void;
   pending?: boolean;
 }) {
@@ -80,11 +82,17 @@ export function ChatThread({
               )}
               {muted && <BellOff size={13} className="text-ink-soft" />}
             </p>
-            <p className="text-xs text-ink-soft">
+            <p className="flex items-center gap-1.5 text-xs text-ink-soft">
               {isGroup ? "Conversa de grupo" : conversation.contact_phone} ·{" "}
               <span className={isMeta ? "text-blue-600" : "text-gray-600"}>
                 {conversation.channel_name}
               </span>
+              {conversation.protocol && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
+                  <Hash size={10} />
+                  {conversation.protocol}
+                </span>
+              )}
             </p>
           </div>
         </button>
@@ -104,6 +112,12 @@ export function ChatThread({
                 className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
               >
                 <UserCheck size={14} /> Assumir
+              </button>
+              <button
+                onClick={onTransfer}
+                className="flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-ink hover:bg-gray-200"
+              >
+                <ArrowRightLeft size={14} /> Transferir
               </button>
               <button
                 onClick={onClose}
@@ -130,6 +144,15 @@ export function ChatThread({
             if (mm.external_id) byExt.set(mm.external_id.split(":").pop()!, mm);
           }
           return messages.map((m) => {
+            if (m.is_internal) {
+              return (
+                <div key={m.id} className="flex justify-center px-6 py-1">
+                  <div className="max-w-md rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-800 ring-1 ring-amber-100">
+                    <span className="font-medium">Nota interna</span> · {m.body}
+                  </div>
+                </div>
+              );
+            }
             let quotedAuthor: string | null | undefined = m.reply_author;
             let quotedExcerpt: string | null | undefined = m.reply_excerpt;
             if (m.reply_to_external) {

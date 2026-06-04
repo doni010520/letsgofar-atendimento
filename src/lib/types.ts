@@ -171,6 +171,12 @@ export interface ConversationOverview {
   contact_jid?: string | null;
   last_message_author?: string | null;
   unread_count?: number;
+  satisfaction?: number | null;
+  close_reason?: string | null;
+  bot_automation_id?: string | null;
+  assigned_name?: string | null;
+  department_name?: string | null;
+  department_color?: string | null;
 }
 
 export interface Message {
@@ -194,5 +200,6 @@ export interface Message {
   reactions?: { emoji: string; by: string }[];
   is_deleted?: boolean;
   edited?: boolean;
+  is_internal?: boolean;
   created_at: string;
 }

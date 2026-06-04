@@ -45,25 +45,33 @@ import {
   markConversationRead,
   assignToMe,
   closeConversation,
+  transferConversation,
   toggleMute,
   fetchMessages,
   fetchConversations,
   openDirectConversation,
   resolveDirectContact,
 } from "@/app/(app)/atendimento/actions";
-import type { ConversationOverview, Message } from "@/lib/types";
+import { CloseModal, TransferModal } from "./attendance-modals";
+import type { ConversationOverview, Message, Tag, Profile, Department } from "@/lib/types";
 
 export function Inbox({
   initialConversations,
   initialSelectedId,
   initialMessages,
   userId,
+  tags,
+  agents,
+  departments,
   live,
 }: {
   initialConversations: ConversationOverview[];
   initialSelectedId: string | null;
   initialMessages: Message[];
   userId: string | null;
+  tags: Tag[];
+  agents: Profile[];
+  departments: Department[];
   live: boolean;
 }) {
   const router = useRouter();
@@ -78,6 +86,8 @@ export function Inbox({
   const [draft, setDraft] = useState<ConversationOverview | null>(null);
   const [draftRealId, setDraftRealId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const DRAFT_ID = "__draft__";
 
   // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
@@ -428,11 +438,41 @@ export function Inbox({
   }
 
   function handleClose() {
+    if (!selectedId || selectedId === DRAFT_ID) return;
+    setClosing(true);
+  }
+
+  function confirmClose(opts: { reason: string; tagIds: string[]; sendSurvey: boolean }) {
     if (!selectedId) return;
-    setConversations((prev) =>
-      prev.map((c) => (c.id === selectedId ? { ...c, status: "closed" } : c)),
-    );
-    startTransition(() => closeConversation(selectedId));
+    const id = selectedId;
+    setClosing(false);
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, status: "closed" } : c)));
+    startTransition(async () => {
+      await closeConversation(id, opts);
+      await refetch(id);
+    });
+  }
+
+  function handleTransfer() {
+    if (!selectedId || selectedId === DRAFT_ID) return;
+    setTransferring(true);
+  }
+
+  function confirmTransfer(opts: {
+    toUserId: string | null;
+    toDepartmentId: string | null;
+    internalNote: string;
+    customerMessage: string;
+  }) {
+    if (!selectedId) return;
+    const id = selectedId;
+    setTransferring(false);
+    startTransition(async () => {
+      await transferConversation(id, opts);
+      const convs = await fetchConversations();
+      setConversations(convs);
+      await refetch(id);
+    });
   }
 
   function handleToggleMute() {
@@ -467,6 +507,7 @@ export function Inbox({
           onType={handleDraftType}
           onAssign={handleAssign}
           onClose={handleClose}
+          onTransfer={handleTransfer}
           onToggleMute={handleToggleMute}
           pending={isPending}
         />
@@ -482,6 +523,27 @@ export function Inbox({
           conversation={selected}
           onClose={() => setPanelOpen(false)}
           onOpenContact={handleOpenContact}
+        />
+      )}
+
+      {closing && selected && (
+        <CloseModal
+          tags={tags}
+          protocol={selected.protocol}
+          onConfirm={confirmClose}
+          onCancel={() => setClosing(false)}
+          pending={isPending}
+        />
+      )}
+
+      {transferring && selected && (
+        <TransferModal
+          agents={agents}
+          departments={departments}
+          currentUserId={userId}
+          onConfirm={confirmTransfer}
+          onCancel={() => setTransferring(false)}
+          pending={isPending}
         />
       )}
 
