@@ -198,7 +198,12 @@ export function Composer({
             pickMention(filtered[0]);
             return;
           }
-          if (e.key === "Enter" && !e.shiftKey) {
+          // Ctrl+Enter ou Shift+Enter = nova linha; Enter sozinho = enviar
+          if (e.key === "Enter" && (e.ctrlKey || e.shiftKey)) {
+            // deixa o browser inserir a quebra de linha normalmente
+            return;
+          }
+          if (e.key === "Enter") {
             e.preventDefault();
             submit();
           }
@@ -207,7 +212,13 @@ export function Composer({
         rows={1}
         placeholder={recording ? "Gravando áudio..." : "Digite uma mensagem... ( @ menciona em grupos )"}
         disabled={disabled || recording}
-        className="max-h-32 min-h-[42px] flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand disabled:bg-gray-50"
+        style={{ height: "auto" }}
+        onInput={(e) => {
+          const ta = e.currentTarget;
+          ta.style.height = "auto";
+          ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+        }}
+        className="min-h-[42px] max-h-[200px] flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand disabled:bg-gray-50"
       />
 
       {text.trim() ? (
