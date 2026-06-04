@@ -83,15 +83,17 @@ export async function persistInbound(messages: InboundMessage[]) {
       if (dup) continue;
     }
 
-    // Contato/grupo (upsert por organização + telefone/id). Não sobrescreve um
-    // nome já existente com null.
+    // Contato/grupo (upsert por organização + telefone/id).
+    // Para mensagens fromMe (eco do celular) em 1:1, NÃO passamos nome —
+    // o chat.name do webhook vem com o nome do DONO, não do contato.
+    const contactName = (fromMe && !isGroup) ? null : (msg.contactName ?? null);
     const { data: contact } = await db
       .from("contacts")
       .upsert(
         {
           organization_id: org,
           phone: msg.from,
-          name: msg.contactName ?? null,
+          name: contactName,
           is_group: isGroup,
         },
         { onConflict: "organization_id,phone", ignoreDuplicates: false },
@@ -100,9 +102,10 @@ export async function persistInbound(messages: InboundMessage[]) {
       .single();
 
     // Nome e foto vêm no objeto `chat` do webhook (contato e grupo). Preenche o que faltar.
+    // Não usa chatName em fromMe 1:1 (viria o nome do dono, não do contato).
     if (contact) {
       const patch: Record<string, unknown> = {};
-      if (!contact.name && msg.chatName) patch.name = msg.chatName;
+      if (!contact.name && msg.chatName && !(fromMe && !isGroup)) patch.name = msg.chatName;
       if (isGroup && msg.chatJid) patch.chat_jid = msg.chatJid; // JID completo do grupo
       // Foto: re-hospeda no nosso Storage. "src" = caminho da URL do WhatsApp (sem query
       // de expiração) — muda quando a pessoa troca a foto → re-hospeda a nova.
