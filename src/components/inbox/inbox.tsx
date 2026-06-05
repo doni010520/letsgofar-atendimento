@@ -51,6 +51,7 @@ import {
   fetchConversations,
   openDirectConversation,
   resolveDirectContact,
+  getGroupInfo,
 } from "@/app/(app)/atendimento/actions";
 import { CloseModal, TransferModal } from "./attendance-modals";
 import type { ConversationOverview, Message, Tag, Profile, Department } from "@/lib/types";
@@ -88,6 +89,7 @@ export function Inbox({
   const [panelOpen, setPanelOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [groupParticipants, setGroupParticipants] = useState<{ name: string; phone: string }[]>([]);
   const DRAFT_ID = "__draft__";
 
   // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
@@ -119,6 +121,17 @@ export function Inbox({
       setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
     }
     if (live) markConversationRead(id).catch(() => {});
+    // Se grupo, carrega participantes reais para menções.
+    const conv = conversations.find((c) => c.id === id);
+    if (conv?.is_group) {
+      getGroupInfo(id).then((g) => {
+        if (g?.participants) {
+          setGroupParticipants(g.participants.map((p) => ({ name: p.name ?? p.phone, phone: p.phone })));
+        }
+      }).catch(() => {});
+    } else {
+      setGroupParticipants([]);
+    }
   }
 
   // Polling rápido: lista de conversas a cada 2s (leve — só a view).
@@ -521,6 +534,7 @@ export function Inbox({
           onBack={() => setSelectedId(null)}
           conversation={selected}
           messages={messages}
+          groupParticipants={groupParticipants}
           onSend={handleSend}
           onSendFile={handleSendFile}
           onSendLocation={handleSendLocation}

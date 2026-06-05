@@ -9,6 +9,7 @@ import type { ConversationOverview, Message } from "@/lib/types";
 export function ChatThread({
   conversation,
   messages,
+  groupParticipants,
   onSend,
   onSendFile,
   onSendLocation,
@@ -28,6 +29,7 @@ export function ChatThread({
 }: {
   conversation: ConversationOverview;
   messages: Message[];
+  groupParticipants?: { name: string; phone: string }[];
   onSend: (text: string, replyId?: string, mentions?: { name: string; phone: string }[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
@@ -185,15 +187,17 @@ export function ChatThread({
         onSendContact={onSendContact}
         onType={onType}
         mentionCandidates={
-          conversation.is_group
-            ? Array.from(
-                new Map(
-                  messages
-                    .filter((m) => m.author_name && m.author_phone)
-                    .map((m) => [m.author_phone!, { name: m.author_name!, phone: m.author_phone! }]),
-                ).values(),
-              )
-            : undefined
+          conversation.is_group && groupParticipants?.length
+            ? groupParticipants
+            : conversation.is_group
+              ? Array.from(
+                  new Map(
+                    messages
+                      .filter((m) => m.author_name && m.author_phone)
+                      .map((m) => [m.author_phone!, { name: m.author_name!, phone: m.author_phone! }]),
+                  ).values(),
+                )
+              : undefined
         }
         disabled={conversation.status === "closed"}
         sending={pending}

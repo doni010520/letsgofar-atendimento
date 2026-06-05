@@ -254,6 +254,24 @@ export class UazapiProvider implements ChannelProvider {
     }
   }
 
+  /** Remove um participante do grupo. POST /group/updateParticipants */
+  async removeGroupParticipant(groupJid: string, phone: string): Promise<boolean> {
+    try {
+      await this.req("/group/updateParticipants", {
+        method: "POST",
+        body: JSON.stringify({
+          groupjid: groupJid,
+          action: "remove",
+          participants: [`${phone.replace(/\D/g, "")}@s.whatsapp.net`],
+        }),
+      });
+      return true;
+    } catch (e) {
+      console.error("removeGroupParticipant", (e as Error)?.message);
+      return false;
+    }
+  }
+
   /**
    * Baixa/descriptografa uma mídia recebida e retorna a URL hospedada na UAZAPI
    * (`/files/...`), o mimetype e, para áudio, a transcrição automática.

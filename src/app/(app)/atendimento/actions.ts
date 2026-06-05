@@ -833,3 +833,22 @@ export async function sgpAction(conversationId: string, action: string, contrato
     return `Erro SGP: ${(e as Error)?.message ?? "desconhecido"}`;
   }
 }
+
+/** Remove um participante de um grupo WhatsApp. */
+export async function removeGroupParticipant(conversationId: string, phone: string): Promise<{ ok: boolean; error?: string }> {
+  if (isPreview()) return { ok: false, error: "Modo preview." };
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("channel_id, is_group, contact_jid, contact_phone")
+    .eq("id", conversationId)
+    .single();
+  if (!conv?.is_group) return { ok: false, error: "Não é um grupo." };
+  const { data: channel } = await supabase.from("channels").select("*").eq("id", conv.channel_id).single();
+  if (!channel) return { ok: false, error: "Canal não encontrado." };
+  const jid = (conv.contact_jid as string) || `${conv.contact_phone}@g.us`;
+  const provider = getProvider(channel as Channel);
+  if (!provider.removeGroupParticipant) return { ok: false, error: "Provedor não suporta remoção de participantes." };
+  const ok = await provider.removeGroupParticipant(jid, phone);
+  return ok ? { ok: true } : { ok: false, error: "Falha ao remover participante." };
+}

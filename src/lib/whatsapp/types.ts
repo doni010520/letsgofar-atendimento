@@ -58,6 +58,8 @@ export interface ChannelProvider {
     owner?: string;
     participants: { phone: string; lid: string; isAdmin: boolean }[];
   }>;
+  /** Remove um participante de um grupo. */
+  removeGroupParticipant?(groupJid: string, phone: string): Promise<boolean>;
   /** Desconecta a sessão sem apagar (UAZAPI). */
   disconnect?(): Promise<void>;
   /** Apaga a instância no provedor (UAZAPI). */

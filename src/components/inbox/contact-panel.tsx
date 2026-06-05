@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash, Receipt, QrCode, Unlock, Wrench, Plus, Printer } from "lucide-react";
+import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash, Receipt, QrCode, Unlock, Wrench, Plus, Printer, UserMinus } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import {
   getContactDetails,
   updateContactDetails,
   getGroupInfo,
   getContactHistory,
+  removeGroupParticipant,
   sgpAction,
   type ContactDetails,
   type GroupInfoResult,
@@ -141,7 +142,24 @@ export function ContactPanel({
                     <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600"><Crown size={12} /> Dono</span>
                   ) : p.isAdmin ? (
                     <span className="flex items-center gap-1 text-[10px] font-medium text-brand"><Shield size={12} /> Admin</span>
-                  ) : null}
+                  ) : (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm(`Remover ${p.name ?? p.phone} do grupo?`)) return;
+                        const r = await removeGroupParticipant(conversation.id, p.phone);
+                        if (r.ok) {
+                          setGroup((g) => g ? { ...g, participants: g.participants.filter((x) => x.phone !== p.phone) } : g);
+                        } else {
+                          alert(r.error ?? "Falha ao remover.");
+                        }
+                      }}
+                      className="rounded p-1 text-ink-soft hover:bg-red-50 hover:text-danger"
+                      title="Remover do grupo"
+                    >
+                      <UserMinus size={13} />
+                    </button>
+                  )}
                 </button>
               ))}
             </div>
