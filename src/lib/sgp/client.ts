@@ -114,9 +114,9 @@ export class SgpClient {
     return normalizeTitulos(raw);
   }
 
-  /** Atalho: só os títulos em aberto/vencidos (status 1). */
+  /** Atalho: só os títulos ainda não pagos (filtra localmente). */
   async titulosEmAberto(by: { contrato?: number; cpfcnpj?: string }): Promise<SgpTitulo[]> {
-    const list = await this.listarTitulos({ ...by, status: 1 });
+    const list = await this.listarTitulos(by);
     return list.filter((t) => !t.pago);
   }
 
@@ -288,16 +288,18 @@ export function normalizeTitulos(raw: Record<string, unknown>): SgpTitulo[] {
       return {
         fatura: pickNum(t, ["id", "fatura"]) ?? 0,
         numeroDocumento: pickNum(t, ["numeroDocumento", "numero_documento"]),
-        contrato: pickNum(t, ["cliente_contrato", "contrato"]),
+        contrato: pickNum(t, ["clienteContrato", "cliente_contrato", "contrato"]),
         valor: pickNum(t, ["valor"]) ?? 0,
         valorCorrigido: pickNum(t, ["valorCorrigido", "valorcorrigido"]),
         vencimento: pickStr(t, ["dataVencimento", "vencimento_atualizado", "vencimento"]) ?? "",
         diasAtraso: pickNum(t, ["diasAtraso"]),
         status,
         pago: status ? PAGO.test(status) : (pickNum(t, ["statusid"]) === 2),
-        linhaDigitavel: pickStr(t, ["linhaDigitavel", "linhadigitavel", "codigoBarras"]),
+        linhaDigitavel: pickStr(t, ["linhaDigitavel", "linhadigitavel"]),
+        codigoBarras: pickStr(t, ["codigoBarras", "codigobarras"]),
         codigoPix: pickStr(t, ["codigoPix", "codigopix"]),
         link: pickStr(t, ["link"]),
+        linkCobranca: pickStr(t, ["link_cobranca", "linkCobranca"]),
       };
     });
 }
@@ -314,7 +316,9 @@ export function normalizeSegundaVia(raw: Record<string, unknown>): SgpSegundaVia
       valor: pickNum(l, ["valor"]) ?? 0,
       vencimento: pickStr(l, ["vencimento"]) ?? "",
       linhaDigitavel: pickStr(l, ["linhadigitavel", "linhaDigitavel"]),
+      codigoPix: pickStr(l, ["codigopix", "codigoPix"]),
       link: pickStr(l, ["link"]),
+      linkCobranca: pickStr(l, ["link_cobranca", "linkCobranca"]),
     })),
     raw,
   };

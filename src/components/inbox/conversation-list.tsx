@@ -87,11 +87,24 @@ export function ConversationList({
           const time = c.last_message_at
             ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
             : "";
+          // Rótulo de mídia (quando o body está vazio, mostra o tipo como o WhatsApp Web).
+          const mediaLabel: Record<string, string> = {
+            image: "📷 Foto",
+            video: "🎥 Vídeo",
+            audio: "🎵 Áudio",
+            document: "📄 Documento",
+            sticker: "🏷️ Figurinha",
+            location: "📍 Localização",
+            contact: "👤 Contato",
+            template: "📋 Template",
+          };
+          const bodyOrMedia = c.last_message_body
+            || (c.last_message_type ? mediaLabel[c.last_message_type] ?? `[${c.last_message_type}]` : "—");
           // Em grupos, prefixa a prévia com quem enviou a última mensagem.
           const preview =
             isGroup && c.last_message_author && c.last_message_direction === "in"
-              ? `${c.last_message_author.split(" ")[0]}: ${c.last_message_body ?? ""}`
-              : (c.last_message_body ?? "—");
+              ? `${c.last_message_author.split(" ")[0]}: ${bodyOrMedia}`
+              : bodyOrMedia;
           const unread = (c.unread_count ?? 0) > 0;
           return (
             <button

@@ -56,7 +56,7 @@ const cpfcnpj = (args.cpfcnpj ?? process.env.SGP_CPFCNPJ) ? onlyDigits(args.cpfc
 const contrato = (args.contrato ?? process.env.SGP_CONTRATO) ? Number(args.contrato ?? process.env.SGP_CONTRATO) : undefined;
 
 await call("api/ura/consultacliente/", { cpfcnpj, contrato });
-await call("api/ura/titulos/", { cpfcnpj, contrato, status: 1, limit: 10 });
+await call("api/ura/titulos/", { cpfcnpj, contrato, limit: 10 });
 if (contrato) await call("api/ura/verificaacesso/", { contrato });
 
 console.log("\nProbe concluído. Cole a saída aqui se algum shape divergir do esperado.");

@@ -62,8 +62,10 @@ export interface SgpTitulo {
   status?: string;            // ex.: "Gerado", "Pago", "Vencido"
   pago?: boolean;
   linhaDigitavel?: string;
+  codigoBarras?: string;
   codigoPix?: string;
-  link?: string;              // link do boleto (pode ser caminho relativo)
+  link?: string;              // link do boleto (PDF)
+  linkCobranca?: string;      // página pública de pagamento (boleto+PIX)
 }
 
 /** Resultado de gerar 2ª via (uma ou mais faturas com linha digitável/link). */
@@ -77,7 +79,9 @@ export interface SgpSegundaVia {
     valor: number;
     vencimento: string;
     linhaDigitavel?: string;
+    codigoPix?: string;
     link?: string;
+    linkCobranca?: string;
   }[];
   raw?: unknown;
 }

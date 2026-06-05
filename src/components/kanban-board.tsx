@@ -234,7 +234,11 @@ function Card({ c, onOpen, recurrenceCount }: { c: ConversationOverview; onOpen:
           )}
         </div>
 
-        {c.last_message_body && <p className="mt-2 line-clamp-2 text-xs text-ink-soft">{c.last_message_body}</p>}
+        {(() => {
+          const ml: Record<string, string> = { image: "📷 Foto", video: "🎥 Vídeo", audio: "🎵 Áudio", document: "📄 Documento", sticker: "🏷️ Figurinha", location: "📍 Localização", contact: "👤 Contato" };
+          const txt = c.last_message_body || (c.last_message_type ? ml[c.last_message_type] : null);
+          return txt ? <p className="mt-2 line-clamp-2 text-xs text-ink-soft">{txt}</p> : null;
+        })()}
       </div>
     </button>
   );

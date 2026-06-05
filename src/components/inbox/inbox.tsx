@@ -442,7 +442,10 @@ export function Inbox({
       setConversations((prev) => {
         const idx = prev.findIndex((c) => c.id === convId);
         if (idx < 0) return prev;
-        const updated = { ...prev[idx], last_message_at: new Date().toISOString(), last_message_direction: "out" as const };
+        const ml: Record<string, string> = { "image/": "📷 Foto", "video/": "🎥 Vídeo", "audio/": "🎵 Áudio" };
+        const mediaPreview = Object.entries(ml).find(([k]) => file.type.startsWith(k))?.[1] ?? "📄 Documento";
+        const cap = (file as File & { caption?: string }).caption;
+        const updated = { ...prev[idx], last_message_body: cap || mediaPreview, last_message_at: new Date().toISOString(), last_message_direction: "out" as const };
         return [updated, ...prev.filter((_, i) => i !== idx)];
       });
     });
