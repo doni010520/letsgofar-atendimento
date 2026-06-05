@@ -197,6 +197,7 @@ export function ChatThread({
         }
         disabled={conversation.status === "closed"}
         sending={pending}
+        focusTrigger={replyTo}
       />
     </div>
   );

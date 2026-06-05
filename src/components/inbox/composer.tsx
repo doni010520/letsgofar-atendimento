@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker } from "lucide-react";
 import { EmojiPicker } from "./emoji-picker";
 
@@ -15,6 +15,7 @@ export function Composer({
   mentionCandidates,
   disabled,
   sending,
+  focusTrigger,
 }: {
   onSend: (text: string, mentions?: Mention[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
@@ -24,9 +25,14 @@ export function Composer({
   mentionCandidates?: Mention[];
   disabled?: boolean;
   sending?: boolean;
+  focusTrigger?: unknown;
 }) {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
+
+  // Foco automático no textarea ao mudar o focusTrigger (ex.: ao clicar "Responder").
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (focusTrigger != null) taRef.current?.focus(); }, [focusTrigger]);
   const [attachMenu, setAttachMenu] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
