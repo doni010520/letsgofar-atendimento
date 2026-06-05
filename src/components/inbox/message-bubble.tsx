@@ -21,6 +21,47 @@ function colorForName(name: string): string {
   return AUTHOR_COLORS[h % AUTHOR_COLORS.length];
 }
 
+/** Transforma URLs e telefones no texto em links clicáveis. */
+function Linkify({ text, className }: { text: string; className?: string }) {
+  // Regex: URLs (http/https/wa.me/etc) ou números de telefone formatados
+  const URL_RE = /(?:https?:\/\/|www\.)[^\s<]+|wa\.me\/[^\s<]+/gi;
+  const parts: (string | { url: string; display: string })[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    let url = match[0];
+    const display = url;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    parts.push({ url, display });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  if (parts.length === 1 && typeof parts[0] === "string") {
+    return <p className={className}>{text}</p>;
+  }
+  return (
+    <p className={className}>
+      {parts.map((p, i) =>
+        typeof p === "string" ? (
+          <span key={i}>{p}</span>
+        ) : (
+          <a
+            key={i}
+            href={p.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline break-all hover:opacity-80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {p.display}
+          </a>
+        ),
+      )}
+    </p>
+  );
+}
+
 function MediaContent({ message, onImageClick }: { message: Message; onImageClick?: (url: string) => void }) {
   const url = message.media_url;
   if (!url) return null;
@@ -129,7 +170,7 @@ export function MessageBubble({
           ) : (
             message.content_type !== "text" && <p className="mb-1 text-xs opacity-80">[{message.content_type}]</p>
           )}
-          {message.body && <p className="whitespace-pre-wrap break-words">{message.body}</p>}
+          {message.body && <Linkify text={message.body} className="whitespace-pre-wrap break-words" />}
           <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", out ? "text-white/70" : "text-ink-soft")}>
             {message.edited && <span className="italic">editada</span>}
             {time}
