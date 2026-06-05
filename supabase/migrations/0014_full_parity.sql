@@ -122,7 +122,8 @@ select
   dp.name as department_name, dp.color as department_color,
   lm.body as last_message_body, lm.content_type as last_message_type,
   lm.direction as last_message_direction, lm.author_name as last_message_author,
-  lm.created_at as last_message_created_at
+  lm.created_at as last_message_created_at,
+  coalesce(ur.cnt, 0)::int as unread_count
 from conversations c
 join contacts ct on ct.id = c.contact_id
 join channels ch on ch.id = c.channel_id
@@ -134,7 +135,12 @@ left join lateral (
   where m.conversation_id = c.id and coalesce(m.is_internal, false) = false
   order by m.created_at desc
   limit 1
-) lm on true;
+) lm on true
+left join lateral (
+  select count(*) as cnt
+  from messages m2
+  where m2.conversation_id = c.id and m2.direction = 'in' and m2.status <> 'read'
+) ur on true;
 
 -- =========================== REALTIME nas tabelas novas ===========================
 alter publication supabase_realtime add table satisfaction_surveys;
