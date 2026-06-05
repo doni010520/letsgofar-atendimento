@@ -536,6 +536,18 @@ export function Inbox({
     });
   }
 
+  // Atalho da lista: pausa a IA de uma conversa sem precisar abri-la.
+  function handlePauseAiQuick(id: string) {
+    if (id === DRAFT_ID) return;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ai_enabled: false, status: "open", assigned_user_id: userId } : c)),
+    );
+    startTransition(async () => {
+      await setConversationAi(id, false);
+      if (id === selectedId) await refetch(id);
+    });
+  }
+
   return (
     <div className="flex h-full">
       {/* Mobile: mostra lista OU chat. Desktop: ambos. */}
@@ -544,6 +556,7 @@ export function Inbox({
           conversations={conversations}
           selectedId={selectedId}
           onSelect={selectConversation}
+          onPauseAi={handlePauseAiQuick}
         />
       </div>
       {selected ? (

@@ -329,13 +329,29 @@ export async function sendMessage(
     await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
   }
 
+  // Se o atendente respondeu numa conversa que estava na IA, a IA para
+  // automaticamente (equivalente ao "atendente assumiu ao interagir").
+  const wasBot = conv.status === "bot";
   await supabase
     .from("conversations")
     .update({
       last_message_at: new Date().toISOString(),
-      status: conv.status === "closed" ? "open" : conv.status,
+      status: conv.status === "closed" ? "open" : wasBot ? "open" : conv.status,
+      ...(wasBot ? { ai_enabled: false, assigned_user_id: session.userId } : {}),
     })
     .eq("id", conversationId);
+  if (wasBot) {
+    await supabase.from("messages").insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "system",
+      content_type: "text",
+      body: `IA pausada — ${session.profile?.name ?? "atendente"} assumiu ao responder.`,
+      is_internal: true,
+      status: "sent",
+    });
+  }
 
   revalidatePath("/atendimento");
   return { ok: true };
@@ -346,9 +362,10 @@ export async function assignToMe(conversationId: string) {
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
+  // Assumir = humano no comando → a IA para nesta conversa (não reengaja).
   await supabase
     .from("conversations")
-    .update({ assigned_user_id: session.userId, status: "open" })
+    .update({ assigned_user_id: session.userId, status: "open", ai_enabled: false })
     .eq("id", conversationId);
 
   // Mensagem de atribuição (se configurado).

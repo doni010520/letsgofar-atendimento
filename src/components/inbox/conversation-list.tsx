@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Users, BellOff } from "lucide-react";
+import { Search, Users, BellOff, BotOff, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConversationOverview, ConversationStatus } from "@/lib/types";
 
@@ -9,7 +9,6 @@ const FILTERS: { key: ConversationStatus | "all"; label: string }[] = [
   { key: "all", label: "Todos" },
   { key: "queued", label: "Em espera" },
   { key: "open", label: "Em andamento" },
-  { key: "bot", label: "Na automação (IA)" },
   { key: "closed", label: "Encerrados" },
 ];
 
@@ -24,10 +23,12 @@ export function ConversationList({
   conversations,
   selectedId,
   onSelect,
+  onPauseAi,
 }: {
   conversations: ConversationOverview[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onPauseAi?: (id: string) => void;
 }) {
   const [filter, setFilter] = useState<ConversationStatus | "all">("all");
   const [query, setQuery] = useState("");
@@ -106,12 +107,16 @@ export function ConversationList({
               ? `${c.last_message_author.split(" ")[0]}: ${bodyOrMedia}`
               : bodyOrMedia;
           const unread = (c.unread_count ?? 0) > 0;
+          const aiActive = c.status === "bot" && c.ai_enabled !== false;
           return (
-            <button
+            <div
               key={c.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect(c.id)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(c.id)}
               className={cn(
-                "flex w-full items-center gap-3 border-b border-gray-50 px-3 py-3 text-left transition hover:bg-gray-50",
+                "group flex w-full cursor-pointer items-center gap-3 border-b border-gray-50 px-3 py-3 text-left transition hover:bg-gray-50",
                 selectedId === c.id && "bg-brand-light hover:bg-brand-light",
               )}
             >
@@ -135,9 +140,21 @@ export function ConversationList({
                 <div className="flex items-center justify-between gap-2">
                   <p className={cn("flex min-w-0 items-center gap-1 truncate text-sm", unread ? "font-bold text-ink" : "font-medium text-ink")}>
                     <span className="truncate">{title}</span>
+                    {aiActive && <Bot size={12} className="shrink-0 text-violet-500" aria-label="Atendida pela IA" />}
                     {c.is_muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
                   </p>
-                  <span className={cn("shrink-0 text-[10px]", unread ? "font-semibold text-green-600" : "text-ink-soft")}>{time}</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {aiActive && onPauseAi && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onPauseAi(c.id); }}
+                        title="Pausar IA e assumir"
+                        className="rounded p-0.5 text-ink-soft opacity-0 transition hover:bg-violet-100 hover:text-violet-700 group-hover:opacity-100"
+                      >
+                        <BotOff size={14} />
+                      </button>
+                    )}
+                    <span className={cn("text-[10px]", unread ? "font-semibold text-green-600" : "text-ink-soft")}>{time}</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <p className={cn("min-w-0 flex-1 truncate text-xs", unread ? "font-semibold text-ink" : "text-ink-soft")}>{preview}</p>
@@ -149,7 +166,7 @@ export function ConversationList({
                 </div>
                 <p className="truncate text-[10px] text-ink-soft/70">{c.channel_name}</p>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
