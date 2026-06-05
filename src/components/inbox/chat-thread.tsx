@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -24,6 +24,7 @@ export function ChatThread({
   onClose,
   onTransfer,
   onToggleMute,
+  onToggleAi,
   onType,
   pending,
 }: {
@@ -45,6 +46,7 @@ export function ChatThread({
   onClose: () => void;
   onTransfer: () => void;
   onToggleMute: () => void;
+  onToggleAi: () => void;
   pending?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -58,6 +60,8 @@ export function ChatThread({
   const isMeta = conversation.channel_type === "meta_cloud";
   const isGroup = !!conversation.is_group;
   const muted = !!conversation.is_muted;
+  const aiPaused = conversation.ai_enabled === false;
+  const aiHandling = !aiPaused && conversation.status === "bot";
   const title = conversation.contact_name ?? (isGroup ? "Grupo" : conversation.contact_phone);
 
   return (
@@ -83,6 +87,8 @@ export function ChatThread({
               <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-ink">
                 <span className="truncate">{title}</span>
                 {isGroup && <span className="shrink-0 rounded bg-brand-light px-1 py-0.5 text-[9px] font-medium text-brand">Grupo</span>}
+                {aiHandling && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"><Bot size={9} /> IA</span>}
+                {aiPaused && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium text-ink-soft"><BotOff size={9} /> IA pausada</span>}
                 {muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
               </p>
               <p className="truncate text-[11px] text-ink-soft">
@@ -100,6 +106,17 @@ export function ChatThread({
           </button>
           {conversation.status !== "closed" && (
             <>
+              {!isGroup && (
+                aiPaused ? (
+                  <button onClick={onToggleAi} title="Devolver o atendimento para a IA" className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-200">
+                    <Bot size={12} /> Reativar IA
+                  </button>
+                ) : (
+                  <button onClick={onToggleAi} title="Pausar a IA e assumir o atendimento" className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
+                    <BotOff size={12} /> Pausar IA
+                  </button>
+                )
+              )}
               <button onClick={onAssign} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
                 <UserCheck size={12} /> Assumir
               </button>

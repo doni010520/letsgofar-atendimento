@@ -174,10 +174,11 @@ export async function persistInbound(messages: InboundMessage[]) {
     let conversationId: string;
     let convStatus = "queued";
     let convBotNode: string | null = null;
+    let convAiEnabled = true;
     let isNew = false;
     const { data: existing } = await db
       .from("conversations")
-      .select("id, status, bot_node_id")
+      .select("id, status, bot_node_id, ai_enabled")
       .eq("channel_id", channel.id)
       .eq("contact_id", contact!.id)
       .in("status", ["bot", "queued", "open"])
@@ -189,6 +190,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       conversationId = existing.id;
       convStatus = existing.status;
       convBotNode = existing.bot_node_id;
+      convAiEnabled = (existing as { ai_enabled?: boolean }).ai_enabled !== false;
     } else {
       isNew = true;
       convStatus = fromMe ? "open" : automation ? "bot" : "queued";
@@ -376,7 +378,7 @@ export async function persistInbound(messages: InboundMessage[]) {
     }
 
     // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número).
-    if (automation && !isGroup && !fromMe && (convStatus === "bot" || isNew)) {
+    if (automation && !isGroup && !fromMe && convAiEnabled && (convStatus === "bot" || isNew)) {
       const r = await runChatbot(
         db,
         channel as Channel,

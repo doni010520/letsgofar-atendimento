@@ -171,6 +171,26 @@ export interface Integration {
   created_at: string;
 }
 
+export interface AiAgentConfigJson {
+  temperature?: number;
+  tone?: string;
+  agent_name?: string;
+  knowledge?: string;
+  base_prompt?: string;
+}
+
+export interface AiAgent {
+  id: string;
+  organization_id: string;
+  channel_id: string | null;
+  name: string;
+  prompt: string | null;
+  model: string | null;
+  config: AiAgentConfigJson;
+  active: boolean;
+  created_at: string;
+}
+
 export type CampaignStatus = "draft" | "scheduled" | "running" | "paused" | "done" | "failed";
 
 export interface Campaign {
@@ -286,6 +306,7 @@ export interface ConversationOverview {
   satisfaction?: number | null;
   close_reason?: string | null;
   bot_automation_id?: string | null;
+  ai_enabled?: boolean;
   assigned_name?: string | null;
   department_name?: string | null;
   department_color?: string | null;

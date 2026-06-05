@@ -47,6 +47,7 @@ import {
   closeConversation,
   transferConversation,
   toggleMute,
+  setConversationAi,
   fetchMessages,
   fetchConversations,
   openDirectConversation,
@@ -519,6 +520,22 @@ export function Inbox({
     startTransition(() => toggleMute(selectedId, next).then(() => undefined));
   }
 
+  function handleToggleAi() {
+    if (!selectedId || selectedId === DRAFT_ID) return;
+    const next = selected?.ai_enabled === false; // se está pausada, reativa
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedId
+          ? { ...c, ai_enabled: next, status: next ? "bot" : "open", assigned_user_id: next ? c.assigned_user_id : userId }
+          : c,
+      ),
+    );
+    startTransition(async () => {
+      await setConversationAi(selectedId, next);
+      await refetch(selectedId);
+    });
+  }
+
   return (
     <div className="flex h-full">
       {/* Mobile: mostra lista OU chat. Desktop: ambos. */}
@@ -549,6 +566,7 @@ export function Inbox({
           onClose={handleClose}
           onTransfer={handleTransfer}
           onToggleMute={handleToggleMute}
+          onToggleAi={handleToggleAi}
           pending={isPending}
         />
       ) : (

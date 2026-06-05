@@ -9,7 +9,7 @@ const FILTERS: { key: ConversationStatus | "all"; label: string }[] = [
   { key: "all", label: "Todos" },
   { key: "queued", label: "Em espera" },
   { key: "open", label: "Em andamento" },
-  { key: "bot", label: "Bot" },
+  { key: "bot", label: "Na automação (IA)" },
   { key: "closed", label: "Encerrados" },
 ];
 

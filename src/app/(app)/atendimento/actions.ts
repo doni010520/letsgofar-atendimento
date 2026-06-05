@@ -698,6 +698,44 @@ export async function sendContactMessage(conversationId: string, fullName: strin
   return { ok: true };
 }
 
+/**
+ * Pausa (assume) ou reativa o atendimento por IA nesta conversa.
+ * - Pausar (enabled=false): atendente assume; o chatbot não reengaja, mesmo
+ *   em mensagem nova (block_return_to_bot por conversa).
+ * - Reativar (enabled=true): devolve a conversa para a automação (status "bot").
+ */
+export async function setConversationAi(conversationId: string, enabled: boolean) {
+  if (isPreview()) return { enabled };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const supabase = await createClient();
+
+  const patch: Record<string, unknown> = { ai_enabled: enabled };
+  if (enabled) {
+    patch.status = "bot";
+  } else {
+    patch.status = "open";
+    patch.assigned_user_id = session.userId;
+  }
+  await supabase.from("conversations").update(patch).eq("id", conversationId);
+
+  await supabase.from("messages").insert({
+    organization_id: session.organization.id,
+    conversation_id: conversationId,
+    direction: "out",
+    sender_type: "system",
+    content_type: "text",
+    body: enabled
+      ? "Atendimento devolvido para a IA."
+      : `IA pausada — atendimento assumido${session.profile?.name ? ` por ${session.profile.name}` : ""}.`,
+    is_internal: true,
+    status: "sent",
+  });
+
+  revalidatePath("/atendimento");
+  return { enabled };
+}
+
 /** Silencia/dessilencia uma conversa (grupo ou contato). */
 export async function toggleMute(conversationId: string, muted: boolean) {
   if (isPreview()) return { muted };
