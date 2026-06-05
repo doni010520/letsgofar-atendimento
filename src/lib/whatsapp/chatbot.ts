@@ -1,6 +1,6 @@
 import type { createServiceClient } from "@/lib/supabase/server";
 import { getProvider } from "./index";
-import { getAiAgent, runAiTurn } from "./ai";
+import { getAiAgent, runAiTurn, type AiTurnResult } from "./ai";
 import type { Channel } from "@/lib/types";
 
 type DB = ReturnType<typeof createServiceClient>;
@@ -85,7 +85,7 @@ export async function runChatbot(
       await send(n.data?.content ?? "");
       return "next";
     }
-    const decision = await runAiTurn({
+    const result = await runAiTurn({
       db,
       organizationId: conv.organization_id,
       conversationId: conv.id,
@@ -96,11 +96,12 @@ export async function runChatbot(
       userText,
       sendToCustomer: send,
     });
-    if (decision === "transfer") {
+    if (result.decision === "transfer") {
+      await routeTransfer(db, conv.organization_id, conv.id, result.transfer);
       await clearState(db, conv.id);
       return "queued";
     }
-    if (decision === "wait") {
+    if (result.decision === "wait") {
       await saveState(db, conv.id, automation.id, n.id);
       return "bot";
     }
@@ -198,6 +199,58 @@ export async function runChatbot(
   }
   await clearState(db, conv.id);
   return "queued";
+}
+
+/**
+ * Roteia a transferência da IA para um departamento no formato SETOR/CIDADE
+ * (ex.: FINANCEIRO/IGUAI) e registra uma nota interna. Se não houver
+ * departamento correspondente, apenas registra a nota — a conversa entra na
+ * fila geral. Atribui ao POOL (department), não a um atendente específico.
+ */
+async function routeTransfer(db: DB, orgId: string, convId: string, transfer: AiTurnResult["transfer"]) {
+  const setor = transfer?.setor;
+  const cidade = transfer?.cidade?.trim();
+  let deptName: string | undefined;
+  let deptId: string | null = null;
+
+  if (setor) {
+    const { data: depts } = await db
+      .from("departments")
+      .select("id, name")
+      .eq("organization_id", orgId);
+    const list = (depts ?? []) as { id: string; name: string }[];
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
+    const setorN = norm(setor);
+    const cidadeN = cidade ? norm(cidade) : "";
+    // Prioriza casar SETOR + CIDADE; depois só o SETOR.
+    const match =
+      (cidadeN && list.find((d) => norm(d.name).includes(setorN) && norm(d.name).includes(cidadeN))) ||
+      list.find((d) => norm(d.name).includes(setorN));
+    if (match) {
+      deptId = match.id;
+      deptName = match.name;
+    }
+  }
+
+  await db
+    .from("conversations")
+    .update({ status: "queued", ...(deptId ? { department_id: deptId } : {}) })
+    .eq("id", convId);
+
+  const destino =
+    deptName ?? ([setor?.toUpperCase(), cidade?.toUpperCase()].filter(Boolean).join("/") || "fila geral");
+  const motivo = transfer?.motivo ? ` — ${transfer.motivo}` : "";
+  await db.from("messages").insert({
+    organization_id: orgId,
+    conversation_id: convId,
+    direction: "out",
+    sender_type: "system",
+    content_type: "text",
+    body: `Atendimento transferido pela automação para *${destino}*${motivo}.`,
+    is_internal: true,
+    status: "sent",
+  });
 }
 
 async function saveState(db: DB, convId: string, automationId: string, nodeId: string) {

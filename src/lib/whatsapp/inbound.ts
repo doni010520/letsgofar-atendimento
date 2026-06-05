@@ -12,65 +12,65 @@ const groupPartsCache = new Map<string, { at: number; parts: { phone: string; li
 /** Troca "@<número/lid>" no texto pelo nome do participante (resolvido via grupo + contatos). */
 async function resolveMentions(db: DB, channel: Channel, groupJid: string, body: string): Promise<string> {
   if (!/@\d{5,}/.test(body)) return body;
+
+  // 1) Cache de participantes do grupo (LID → phone).
   let cached = groupPartsCache.get(groupJid);
   if (!cached || Date.now() - cached.at > 300000) {
     const info = await getProvider(channel).getGroupInfo?.(groupJid).catch(() => null);
     cached = { at: Date.now(), parts: info?.participants ?? [] };
     groupPartsCache.set(groupJid, cached);
   }
-  // digits (lid OU phone) → phone real
+
+  // Mapa: qualquer forma de ID (lid, phone, lid parcial) → phone real.
   const toPhone = new Map<string, string>();
   for (const p of cached.parts) {
     if (p.lid) toPhone.set(p.lid, p.phone);
     if (p.phone) toPhone.set(p.phone, p.phone);
+    // LIDs podem ter sufixos/prefixos — registra os últimos 10-15 dígitos também.
+    if (p.lid && p.lid.length > 10) toPhone.set(p.lid.slice(-12), p.phone);
   }
+
+  // 2) Nomes dos contatos.
   const phones = [...new Set([...toPhone.values()])];
   const names = new Map<string, string>();
   if (phones.length) {
     const { data: contacts } = await db.from("contacts").select("phone, name").in("phone", phones);
     for (const c of contacts ?? []) if (c.name) names.set(c.phone, c.name);
   }
-  // Primeiro passo: resolver via participantes do grupo.
-  // Segundo passo (fallback): para LIDs não resolvidos, buscar em mensagens anteriores
-  // (author_lid → author_name) ou nos contatos por telefone.
-  const unresolved: string[] = [];
-  let result = body.replace(/@(\d{5,})/g, (full, digits) => {
-    const phone = toPhone.get(digits) ?? digits;
-    const name = names.get(phone);
-    if (name) return `@${name}`;
-    unresolved.push(digits);
-    return full;
-  });
 
-  // Fallback: busca nomes em mensagens anteriores por author_lid ou nos contatos por phone.
-  if (unresolved.length) {
-    for (const digits of unresolved) {
-      // Tenta por author_lid (mensagens de grupo guardam o LID do autor)
-      const { data: msg } = await db
-        .from("messages")
-        .select("author_name")
-        .eq("author_lid", digits)
-        .not("author_name", "is", null)
-        .limit(1)
-        .maybeSingle();
-      if (msg?.author_name) {
-        result = result.split(`@${digits}`).join(`@${msg.author_name}`);
-        continue;
-      }
-      // Tenta por phone (caso seja um número real, não LID)
-      const { data: contact } = await db
-        .from("contacts")
-        .select("name")
-        .eq("phone", digits)
-        .not("name", "is", null)
-        .limit(1)
-        .maybeSingle();
-      if (contact?.name) {
-        result = result.split(`@${digits}`).join(`@${contact.name}`);
-      }
+  // 3) Pré-carrega nomes por author_lid de mensagens recentes deste grupo.
+  const lidNames = new Map<string, string>();
+  const { data: recentMsgs } = await db
+    .from("messages")
+    .select("author_lid, author_name")
+    .not("author_lid", "is", null)
+    .not("author_name", "is", null)
+    .limit(200);
+  for (const m of (recentMsgs ?? []) as { author_lid: string; author_name: string }[]) {
+    if (m.author_lid && m.author_name) {
+      lidNames.set(m.author_lid, m.author_name);
+      // Match parcial (últimos dígitos).
+      if (m.author_lid.length > 8) lidNames.set(m.author_lid.slice(-12), m.author_name);
     }
   }
-  return result;
+
+  // 4) Substitui @digits pelo nome.
+  return body.replace(/@(\d{5,})/g, (full, digits: string) => {
+    // Tenta via participantes do grupo.
+    const phone = toPhone.get(digits);
+    if (phone) {
+      const name = names.get(phone);
+      if (name) return `@${name}`;
+    }
+    // Tenta via author_lid de mensagens (match exato e parcial).
+    const fromLid = lidNames.get(digits) ?? lidNames.get(digits.slice(-12));
+    if (fromLid) return `@${fromLid}`;
+    // Tenta como telefone direto nos contatos.
+    const fromPhone = names.get(digits);
+    if (fromPhone) return `@${fromPhone}`;
+    // Último recurso: mantém o original.
+    return full;
+  });
 }
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);

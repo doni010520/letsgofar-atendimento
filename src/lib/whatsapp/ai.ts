@@ -14,6 +14,18 @@ export interface AiAgentConfig {
 /** Decisão de controle do fluxo após um turno do agente. */
 export type AiDecision = "wait" | "transfer" | "done";
 
+/** Setor de destino quando o agente transfere para humano. */
+export type AiSetor = "financeiro" | "suporte" | "comercial";
+
+/** Resultado de um turno do agente. */
+export interface AiTurnResult {
+  decision: AiDecision;
+  /** Preenchido quando decision === "transfer". */
+  transfer?: { setor?: AiSetor; cidade?: string; motivo?: string };
+  /** Resumo, quando o agente finaliza. */
+  summary?: string;
+}
+
 interface OpenAIMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
@@ -22,6 +34,72 @@ interface OpenAIMessage {
 }
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+
+const BUSINESS_HOURS = "Segunda a sexta: das 07:30 às 21:00\nSábado: das 07:30 às 17:30\n(Domingos e feriados: fechado)";
+
+/** Hora atual no fuso da operação (Bahia, sem horário de verão). */
+function nowBR(): { saudacao: string; descricao: string } {
+  const now = new Date();
+  const hour = Number(
+    new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", hour: "2-digit", hour12: false }).format(now),
+  );
+  const descricao = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Bahia",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+  const saudacao = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  return { saudacao, descricao };
+}
+
+/**
+ * Prompt padrão do agente da MVF NET — encoda o comportamento observado no
+ * Chatmix real (ver AI_AGENT_BRIEF.md / AI_PATTERN.md). Usado quando o agente
+ * não tem `prompt` próprio configurado. Tom, mensagens verbatim, fluxo e
+ * gatilhos de transferência seguem o original.
+ */
+function defaultMvfPrompt(): string {
+  const { saudacao } = nowBR();
+  return `Você é o atendente virtual da *MVF NET*, um provedor de internet (ISP). Você atende o PRIMEIRO contato no WhatsApp. Fale em português do Brasil, tom cordial e objetivo, mensagens curtas para WhatsApp. Use *negrito* (asteriscos) do WhatsApp para destacar e emojis com moderação (😊🕐💬🚀).
+
+FLUXO QUE VOCÊ DEVE SEGUIR (não pule etapas):
+1. SAUDAÇÃO (só na primeira mensagem): "${saudacao}\\nBem vindo ao atendimento virtual da *MVF NET*". Ajuste Bom dia/Boa tarde/Boa noite ao horário atual informado abaixo.
+2. QUALIFICAÇÃO: pergunte "Só para confirmar, você já é nosso cliente? Basta me dizer *Sim* ou *Não*!".
+   - Se NÃO for cliente → é um lead: diga que vai levar ao setor comercial e use transferir_para_humano(setor="comercial").
+   - Se SIM → siga para o passo 3.
+3. COLETA DE DOCUMENTO: peça "Por favor, informe o *CPF* ou *CNPJ* para o qual deseja atendimento.".
+4. VALIDAÇÃO: chame a tool consultar_cliente com o CPF/CNPJ informado.
+   - Não encontrado/ inválido → "Ops!! O *CPF/CNPJ* informado é invalido." e peça de novo. Após 2 tentativas sem sucesso, use transferir_para_humano(setor="suporte", motivo="cliente não localizado no sistema").
+   - Encontrado → responda "Um momento por favor" e em seguida "Como posso ajudar?". Guarde o número do contrato (contratoId) para as próximas ações.
+5. INTENÇÃO (interprete a mensagem do cliente):
+   - FINANCEIRO / 2ª via / pagamento: se o cliente quer pagar ou pedir boleto, use faturas_em_aberto e segunda_via para enviar o link de pagamento e a linha digitável; se ele quiser PIX, use gerar_pix. Se o cliente ENVIAR um COMPROVANTE (imagem/PDF), responda "Recebemos seu comprovante. Muito obrigado!", registre com registrar_comprovante e transfira para o financeiro com transferir_para_humano(setor="financeiro").
+   - SUPORTE TÉCNICO (internet ruim/sem conexão): faça a TRIAGEM você mesmo, conversando:
+       a) "A sua conexão está com problema apenas no *cabo*, apenas no *Wi-Fi* ou nos *dois*?"
+       b) Se Wi-Fi: pergunte se está longe do roteador, se há paredes/móveis no caminho, se o roteador está dentro de rack/atrás de móvel.
+       c) Proponha reiniciar o equipamento: "Vamos reiniciar seu equipamento rapidinho para tentar normalizar a conexão, tudo bem? 😊" e depois "Aguarde cerca de 1 minuto até ele estabilizar e me avise se melhorou.".
+       d) Você pode usar status_conexao(contrato) para checar se o serviço está online.
+       e) Se NÃO resolver, ou o cliente pedir um especialista/humano → transferir_para_humano(setor="suporte"). Se for um defeito que precisa de visita técnica, use abrir_chamado antes de transferir.
+   - COMERCIAL (instalação, novo plano, mudança de plano): "Claro! Vou levar sua solicitação para o setor comercial para verificar as opções." → transferir_para_humano(setor="comercial").
+   - DESBLOQUEIO / liberação por confiança: se o cliente está bloqueado por falta de pagamento e promete pagar, você pode usar liberacao_confianca(contrato).
+
+PIX da empresa (quando o cliente pedir como pagar): "Caso precise fazer o pagamento, pode ser via PIX:\\n*PIX CNPJ 07.861.662/0001-03\\nSEZA E CRUZ LTDA ou MVF NETWORK*".
+
+GATILHOS DE TRANSFERÊNCIA (use transferir_para_humano):
+- O cliente pede explicitamente falar com atendente/humano/especialista.
+- CPF/CNPJ inválido após 2 tentativas.
+- Comprovante de pagamento recebido (→ financeiro).
+- Intenção comercial (→ comercial).
+- Triagem de suporte não resolvida (→ suporte).
+Sempre escolha o setor correto (financeiro, suporte ou comercial). Quando souber a cidade do cliente, informe-a na transferência.
+
+REGRAS:
+- Nunca invente dados do cliente, faturas, valores ou status — sempre obtenha pelas tools do SGP.
+- Não prometa prazos de atendimento além de informar o HORÁRIO DE ATENDIMENTO:\n${BUSINESS_HOURS}
+- Envie códigos PIX e linhas digitáveis em uma mensagem própria, sem texto extra junto, para o cliente copiar fácil.
+- Seja breve. Não repita a saudação a cada mensagem.`;
+}
 
 /** Lê o agente de IA ativo da organização (casando o canal, ou global). */
 export async function getAiAgent(db: DB, orgId: string, channelId: string): Promise<AiAgentConfig | null> {
@@ -150,13 +228,30 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "registrar_comprovante",
+      description:
+        "Registra que o cliente enviou um comprovante de pagamento (imagem/PDF). Use antes de transferir para o financeiro.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transferir_para_humano",
       description:
-        "Transfere o atendimento para um atendente humano quando você não consegue resolver, o cliente pede um humano, ou o assunto exige intervenção manual.",
+        "Transfere o atendimento para o POOL de atendentes de um departamento quando você não consegue resolver, o cliente pede um humano, ou o assunto exige intervenção manual. Escolha o setor correto.",
       parameters: {
         type: "object",
-        properties: { motivo: { type: "string", description: "Motivo da transferência." } },
-        required: ["motivo"],
+        properties: {
+          setor: {
+            type: "string",
+            enum: ["financeiro", "suporte", "comercial"],
+            description: "Departamento de destino conforme a intenção do cliente.",
+          },
+          cidade: { type: "string", description: "Cidade do cliente (ex.: IGUAI, IBICUI, CANAA), quando souber." },
+          motivo: { type: "string", description: "Motivo curto da transferência." },
+        },
+        required: ["setor", "motivo"],
       },
     },
   },
@@ -175,7 +270,7 @@ const TOOLS = [
 
 /** Executa uma ferramenta do SGP e devolve um resultado serializável p/ o modelo. */
 async function executeTool(name: string, args: Record<string, unknown>, sgp: SgpClient | null): Promise<unknown> {
-  if (name === "transferir_para_humano" || name === "finalizar_atendimento") {
+  if (name === "transferir_para_humano" || name === "finalizar_atendimento" || name === "registrar_comprovante") {
     return { ok: true };
   }
   if (!sgp) {
@@ -264,11 +359,11 @@ export interface AiTurnContext {
 }
 
 /** Roda UM turno do agente de IA (uma mensagem do cliente → resposta + ações). */
-export async function runAiTurn(ctx: AiTurnContext): Promise<AiDecision> {
+export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     await ctx.sendToCustomer("No momento não consigo te atender automaticamente. Vou te transferir para um atendente.");
-    return "transfer";
+    return { decision: "transfer", transfer: { motivo: "IA indisponível (sem chave OpenAI)" } };
   }
 
   const sgp = await sgpForOrg(ctx.db, ctx.organizationId).catch(() => null);
@@ -295,13 +390,13 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiDecision> {
     }))
     .filter((m) => m.content);
 
+  const { saudacao, descricao } = nowBR();
   const system = [
-    ctx.agent.prompt?.trim() ||
-      "Você é um atendente virtual cordial e objetivo de um provedor de internet. Ajude o cliente usando as ferramentas do sistema (SGP). Responda em português do Brasil, de forma curta e clara para WhatsApp.",
+    ctx.agent.prompt?.trim() || defaultMvfPrompt(),
     ctx.agent.knowledge?.trim() ? `\n\nBase de conhecimento:\n${ctx.agent.knowledge.trim()}` : "",
     ctx.nodeInstruction?.trim() ? `\n\nInstrução desta etapa: ${ctx.nodeInstruction.trim()}` : "",
-    `\n\nDados do contato atual — nome: ${ctx.contactName ?? "desconhecido"}; telefone: ${ctx.contactPhone}.`,
-    "\n\nRegras: nunca invente dados; sempre confirme via ferramentas. Se não puder resolver ou o cliente pedir um humano, use transferir_para_humano. Quando o problema for resolvido, use finalizar_atendimento. Envie códigos PIX e linhas digitáveis em mensagem própria, sem formatação extra.",
+    `\n\nMomento atual: ${descricao} (horário de Brasília). Saudação adequada agora: "${saudacao}".`,
+    `\nDados do contato atual — nome: ${ctx.contactName ?? "desconhecido"}; telefone: ${ctx.contactPhone}.`,
   ].join("");
 
   const messages: OpenAIMessage[] = [
@@ -314,6 +409,8 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiDecision> {
   }
 
   let decision: AiDecision = "wait";
+  let transfer: AiTurnResult["transfer"];
+  let summary: string | undefined;
 
   for (let step = 0; step < 6; step++) {
     let data: { choices?: { message: OpenAIMessage }[] };
@@ -331,13 +428,13 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiDecision> {
       if (!res.ok) {
         console.error("openai", res.status, (await res.text()).slice(0, 300));
         await ctx.sendToCustomer("Tive um problema técnico. Vou te transferir para um atendente.");
-        return "transfer";
+        return { decision: "transfer", transfer: { motivo: "erro técnico no agente" } };
       }
       data = await res.json();
     } catch (e) {
       console.error("openai net", (e as Error)?.message);
       await ctx.sendToCustomer("Tive um problema técnico. Vou te transferir para um atendente.");
-      return "transfer";
+      return { decision: "transfer", transfer: { motivo: "erro técnico no agente" } };
     }
 
     const choice = data.choices?.[0]?.message;
@@ -352,8 +449,19 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiDecision> {
         } catch {
           /* ignora args inválidos */
         }
-        if (tc.function.name === "transferir_para_humano") decision = "transfer";
-        if (tc.function.name === "finalizar_atendimento") decision = "done";
+        if (tc.function.name === "transferir_para_humano") {
+          decision = "transfer";
+          const setor = typeof args.setor === "string" ? (args.setor as AiSetor) : undefined;
+          transfer = {
+            setor,
+            cidade: typeof args.cidade === "string" ? args.cidade : undefined,
+            motivo: typeof args.motivo === "string" ? args.motivo : undefined,
+          };
+        }
+        if (tc.function.name === "finalizar_atendimento") {
+          decision = "done";
+          summary = typeof args.resumo === "string" ? args.resumo : undefined;
+        }
         const result = await executeTool(tc.function.name, args, sgp);
         messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
       }
@@ -365,5 +473,5 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiDecision> {
     break;
   }
 
-  return decision;
+  return { decision, transfer, summary };
 }
