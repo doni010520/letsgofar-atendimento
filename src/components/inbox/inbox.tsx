@@ -143,21 +143,19 @@ export function Inbox({
   useEffect(() => {
     if (!live) return;
     let cancel = false;
-    let busy = false;
     const tick = async () => {
-      if (busy) return; // não acumula se o anterior ainda está rodando
-      busy = true;
       try {
         const convs = await fetchConversations();
         if (!cancel && Array.isArray(convs)) {
           setConversations(convs);
           maybePing(convs);
         }
-      } catch { /* silencioso */ }
-      busy = false;
+      } catch (e) {
+        console.warn("[poll:convs]", e);
+      }
     };
     tick();
-    const t = setInterval(tick, 2000);
+    const t = setInterval(tick, 2500);
     return () => { cancel = true; clearInterval(t); };
   }, [live]);
 
@@ -165,10 +163,7 @@ export function Inbox({
   useEffect(() => {
     if (!live || !selectedId) return;
     let cancel = false;
-    let busy = false;
     const tick = async () => {
-      if (busy) return;
-      busy = true;
       try {
         const msgs = await fetchMessages(selectedId);
         if (!cancel) {
@@ -180,8 +175,9 @@ export function Inbox({
             return { ...prev, [selectedId]: msgs };
           });
         }
-      } catch { /* silencioso */ }
-      busy = false;
+      } catch (e) {
+        console.warn("[poll:msgs]", e);
+      }
     };
     tick();
     const t = setInterval(tick, 3000);
