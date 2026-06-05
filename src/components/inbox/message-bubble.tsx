@@ -10,6 +10,12 @@ import {
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+/** Formata hora de forma determinística (sem toLocaleTimeString que causa hydration mismatch). */
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 // Paleta de cores por participante (estilo WhatsApp) — determinística pelo nome.
 const AUTHOR_COLORS = [
   "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2", "#c2185b", "#0097a7",
@@ -118,9 +124,7 @@ export function MessageBubble({
   const [menu, setMenu] = useState(false);
   const [emoji, setEmoji] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
-  const time = message.created_at
-    ? new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : "";
+  const time = message.created_at ? fmtTime(message.created_at) : "";
   const reactions = message.reactions ?? [];
 
   if (message.is_deleted) {

@@ -253,7 +253,7 @@ export function ContactPanel({
                         {h.status === "closed" ? "Encerrado" : "Aberto"}
                       </span>
                       <span className="ml-auto text-ink-soft">
-                        {h.opened_at ? new Date(h.opened_at).toLocaleDateString("pt-BR") : "—"}
+                        {h.opened_at ? (() => { const d = new Date(h.opened_at); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })() : "—"}
                       </span>
                     </div>
                   ))}

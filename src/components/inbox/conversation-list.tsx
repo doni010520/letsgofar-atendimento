@@ -13,6 +13,12 @@ const STATUS_TABS: { key: ConversationStatus | "all"; label: string }[] = [
   { key: "closed", label: "Encerrados" },
 ];
 
+/** Formata hora de forma determinística (sem toLocaleTimeString que causa hydration mismatch). */
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 const STATUS_DOT: Record<ConversationStatus, string> = {
   bot: "bg-violet-500",
   queued: "bg-amber-500",
@@ -260,12 +266,7 @@ export function ConversationList({
             .slice(0, 2)
             .map((w) => w[0]?.toUpperCase())
             .join("");
-          const time = c.last_message_at
-            ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "";
+          const time = c.last_message_at ? fmtTime(c.last_message_at) : "";
           const mediaLabel: Record<string, string> = {
             image: "📷 Foto",
             video: "🎥 Vídeo",
