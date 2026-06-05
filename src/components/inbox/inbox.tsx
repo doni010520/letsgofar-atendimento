@@ -91,6 +91,8 @@ export function Inbox({
   const [closing, setClosing] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [groupParticipants, setGroupParticipants] = useState<{ name: string; phone: string }[]>([]);
+  // Mensagem do grupo que será citada como quote na conversa privada (reply private).
+  const [privateReplyMsg, setPrivateReplyMsg] = useState<Message | null>(null);
   const DRAFT_ID = "__draft__";
 
   // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
@@ -117,6 +119,8 @@ export function Inbox({
   // Carrega mensagens ao selecionar (se ainda não estiverem em cache) e marca como lida.
   async function selectConversation(id: string) {
     setSelectedId(id);
+    // Limpa reply-private quando o usuário muda de conversa manualmente
+    setPrivateReplyMsg(null);
     if (!messagesByConv[id]) {
       const msgs = await fetchMessages(id);
       setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
@@ -280,6 +284,13 @@ export function Inbox({
     startDirect(selected, { phone: m.author_phone ?? undefined, lid: m.author_lid ?? undefined, name: m.author_name ?? undefined });
   }
 
+  /** "Responder no privado": abre o 1:1 com a mensagem do grupo como citação pré-preenchida. */
+  function handleReplyPrivate(m: Message) {
+    if (!selected) return;
+    setPrivateReplyMsg(m);
+    startDirect(selected, { phone: m.author_phone ?? undefined, lid: m.author_lid ?? undefined, name: m.author_name ?? undefined });
+  }
+
   function handleOpenContact(phone: string, name?: string) {
     if (!selected) return;
     startDirect(selected, { phone, name });
@@ -389,12 +400,25 @@ export function Inbox({
 
   function handleSend(text: string, replyId?: string, mentions?: { name: string; phone: string }[]) {
     if (!selectedId) return;
+
+    // "Responder no privado": a mensagem do grupo não pode ser citada via replyId
+    // (cross-chat), então prefixamos o texto com a citação e enviamos sem replyId.
+    let finalText = text;
+    let finalReplyId = replyId;
+    if (privateReplyMsg && replyId === privateReplyMsg.external_id) {
+      const author = privateReplyMsg.author_name ?? "Participante";
+      const excerpt = (privateReplyMsg.body ?? `[${privateReplyMsg.content_type}]`).slice(0, 200);
+      finalText = `> *${author}:*\n> ${excerpt.split("\n").join("\n> ")}\n\n${text}`;
+      finalReplyId = undefined;
+      setPrivateReplyMsg(null);
+    }
+
     // Rascunho: cria a conversa de verdade agora e envia nela.
     if (selectedId === DRAFT_ID) {
       startTransition(async () => {
         const realId = await materializeDraft();
         if (!realId) return;
-        await sendMessage(realId, text, replyId, mentions);
+        await sendMessage(realId, finalText, finalReplyId, mentions);
         const convs = await fetchConversations();
         setConversations(convs);
         setSelectedId(realId);
@@ -413,7 +437,7 @@ export function Inbox({
       sender_type: "agent",
       sender_id: userId,
       content_type: "text",
-      body: text,
+      body: finalText,
       media_url: null,
       status: "pending",
       external_id: null,
@@ -426,12 +450,12 @@ export function Inbox({
     setConversations((prev) => {
       const idx = prev.findIndex((c) => c.id === selectedId);
       if (idx < 0) return prev;
-      const updated = { ...prev[idx], last_message_body: text, last_message_at: optimistic.created_at, last_message_direction: "out" as const };
+      const updated = { ...prev[idx], last_message_body: finalText, last_message_at: optimistic.created_at, last_message_direction: "out" as const };
       return [updated, ...prev.filter((_, i) => i !== idx)];
     });
 
     startTransition(async () => {
-      await sendMessage(selectedId, text, replyId, mentions);
+      await sendMessage(selectedId, finalText, finalReplyId, mentions);
       if (live) {
         const msgs = await fetchMessages(selectedId);
         setMessagesByConv((prev) => ({ ...prev, [selectedId]: msgs }));
@@ -573,6 +597,7 @@ export function Inbox({
           onEdit={handleEdit}
           onDelete={handleDelete}
           onAuthorClick={handleOpenDirect}
+          onReplyPrivate={selected.is_group ? handleReplyPrivate : undefined}
           onOpenPanel={() => setPanelOpen(true)}
           onType={handleDraftType}
           onAssign={handleAssign}
@@ -580,6 +605,7 @@ export function Inbox({
           onTransfer={handleTransfer}
           onToggleMute={handleToggleMute}
           onToggleAi={handleToggleAi}
+          initialReplyTo={!selected.is_group && privateReplyMsg ? privateReplyMsg : undefined}
           pending={isPending}
         />
       ) : (

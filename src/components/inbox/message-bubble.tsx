@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
 import {
   Check, CheckCheck, Clock, AlertCircle, FileText, Download,
-  Reply, SmilePlus, Pencil, Trash2, MoreVertical, X, Forward,
+  Reply, SmilePlus, Pencil, Trash2, MoreVertical, X, Forward, MessageSquare,
 } from "lucide-react";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -53,6 +53,7 @@ export function MessageBubble({
   onEdit,
   onDelete,
   onAuthorClick,
+  onReplyPrivate,
   quotedAuthor,
   quotedExcerpt,
 }: {
@@ -62,6 +63,7 @@ export function MessageBubble({
   onEdit?: (m: Message) => void;
   onDelete?: (m: Message) => void;
   onAuthorClick?: (m: Message) => void;
+  onReplyPrivate?: (m: Message) => void;
   quotedAuthor?: string | null;
   quotedExcerpt?: string | null;
 }) {
@@ -86,7 +88,7 @@ export function MessageBubble({
 
   return (
     <div className={cn("group flex items-end gap-1", out ? "justify-end" : "justify-start")}>
-      {out && <Actions {...{ message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete }} />}
+      {out && <Actions {...{ message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete, onReplyPrivate }} />}
       <div className="relative max-w-[70%]">
         <div
           onDoubleClick={() => onReply?.(message)}
@@ -142,7 +144,7 @@ export function MessageBubble({
           </div>
         )}
       </div>
-      {!out && <Actions {...{ message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete }} />}
+      {!out && <Actions {...{ message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete, onReplyPrivate }} />}
 
       {lightbox && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" onClick={() => setLightbox(null)}>
@@ -172,10 +174,11 @@ export function MessageBubble({
 }
 
 function Actions({
-  message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete,
+  message, menu, setMenu, emoji, setEmoji, onReply, onReact, onEdit, onDelete, onReplyPrivate,
 }: {
   message: Message; menu: boolean; setMenu: (v: boolean) => void; emoji: boolean; setEmoji: (v: boolean) => void;
   onReply?: (m: Message) => void; onReact?: (m: Message, e: string) => void; onEdit?: (m: Message) => void; onDelete?: (m: Message) => void;
+  onReplyPrivate?: (m: Message) => void;
 }) {
   const out = message.direction === "out";
   return (
@@ -207,6 +210,11 @@ function Actions({
             <button onClick={() => { onReply?.(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
               <Reply size={14} /> Responder
             </button>
+            {!out && onReplyPrivate && (message.author_phone || message.author_lid) && (
+              <button onClick={() => { onReplyPrivate(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
+                <MessageSquare size={14} /> Responder no privado
+              </button>
+            )}
             {out && (
               <button onClick={() => { onEdit?.(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
                 <Pencil size={14} /> Editar

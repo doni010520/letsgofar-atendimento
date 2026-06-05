@@ -18,6 +18,7 @@ export function ChatThread({
   onEdit,
   onDelete,
   onAuthorClick,
+  onReplyPrivate,
   onOpenPanel,
   onBack,
   onAssign,
@@ -25,6 +26,7 @@ export function ChatThread({
   onTransfer,
   onToggleMute,
   onToggleAi,
+  initialReplyTo,
   onType,
   pending,
 }: {
@@ -40,6 +42,7 @@ export function ChatThread({
   onEdit: (m: Message) => void;
   onDelete: (m: Message) => void;
   onAuthorClick: (m: Message) => void;
+  onReplyPrivate?: (m: Message) => void;
   onOpenPanel: () => void;
   onBack?: () => void;
   onAssign: () => void;
@@ -47,6 +50,7 @@ export function ChatThread({
   onTransfer: () => void;
   onToggleMute: () => void;
   onToggleAi: () => void;
+  initialReplyTo?: Message | null;
   pending?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -56,6 +60,8 @@ export function ChatThread({
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, conversation.id]);
   useEffect(() => setReplyTo(null), [conversation.id]);
+  // Pré-preenche o reply quando vem de "Responder no privado"
+  useEffect(() => { if (initialReplyTo) setReplyTo(initialReplyTo); }, [initialReplyTo]);
 
   const isMeta = conversation.channel_type === "meta_cloud";
   const isGroup = !!conversation.is_group;
@@ -172,6 +178,7 @@ export function ChatThread({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onAuthorClick={onAuthorClick}
+                onReplyPrivate={isGroup ? onReplyPrivate : undefined}
                 quotedAuthor={quotedAuthor}
                 quotedExcerpt={quotedExcerpt}
               />
