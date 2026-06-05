@@ -198,6 +198,29 @@ export function Composer({
           updateMentionQuery(v, e.target.selectionStart ?? v.length);
         }}
         onClick={(e) => updateMentionQuery(text, (e.target as HTMLTextAreaElement).selectionStart ?? 0)}
+        onPaste={(e) => {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          for (const item of Array.from(items)) {
+            if (item.type.startsWith("image/")) {
+              e.preventDefault();
+              const blob = item.getAsFile();
+              if (blob) {
+                const ext = item.type.split("/")[1] ?? "png";
+                onSendFile(new File([blob], `paste-${Date.now()}.${ext}`, { type: item.type }));
+              }
+              return;
+            }
+          }
+        }}
+        onDrop={(e) => {
+          const files = e.dataTransfer?.files;
+          if (files?.length) {
+            e.preventDefault();
+            for (const f of Array.from(files)) onSendFile(f);
+          }
+        }}
+        onDragOver={(e) => e.preventDefault()}
         onKeyDown={(e) => {
           if (filtered.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
             e.preventDefault();
