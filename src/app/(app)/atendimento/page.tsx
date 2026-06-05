@@ -4,6 +4,8 @@ import { getTags, getAgents, getDepartments } from "@/lib/data/management";
 import { getSession } from "@/lib/auth";
 import { PREVIEW_MODE } from "@/lib/mock";
 
+export const dynamic = "force-dynamic";
+
 export default async function AtendimentoPage() {
   const [conversations, tags, agents, departments] = await Promise.all([
     getConversations(),
