@@ -431,6 +431,9 @@ export function Inbox({
     const fd = new FormData();
     fd.set("conversationId", convId);
     fd.set("file", file);
+    // Legenda vinda do modal de preview (propriedade custom no File).
+    const caption = (file as File & { caption?: string }).caption;
+    if (caption) fd.set("caption", caption);
     if (asSticker) fd.set("kind", "sticker");
     startTransition(async () => {
       await sendMediaMessage(fd);
