@@ -139,21 +139,24 @@ export function Inbox({
     }
   }
 
-  // Polling rápido: lista de conversas a cada 2s (leve — só a view).
+  // Polling rápido: lista de conversas a cada 2.5s (leve — só a view).
   useEffect(() => {
-    if (!live) return;
+    if (!live) { console.log("[poll] live=false, polling desligado"); return; }
     let cancel = false;
+    let n = 0;
     const tick = async () => {
       try {
         const convs = await fetchConversations();
         if (!cancel && Array.isArray(convs)) {
           setConversations(convs);
           maybePing(convs);
+          if (n++ < 3) console.log(`[poll:convs] ok, ${convs.length} conversas`);
         }
       } catch (e) {
-        console.warn("[poll:convs]", e);
+        console.warn("[poll:convs] ERRO:", e);
       }
     };
+    console.log("[poll] iniciando polling de conversas");
     tick();
     const t = setInterval(tick, 2500);
     return () => { cancel = true; clearInterval(t); };
