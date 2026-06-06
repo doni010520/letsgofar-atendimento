@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
+import { AgentCreateSchema, AgentUpdateSchema, fdToObj, parse } from "@/lib/validation";
 
 function ensureReal() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase para gerenciar atendentes.");
@@ -13,12 +14,9 @@ export async function createAgent(fd: FormData) {
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
 
-  const name = String(fd.get("name") || "").trim();
-  const email = String(fd.get("email") || "").trim().toLowerCase();
-  const password = String(fd.get("password") || "");
-  const role = String(fd.get("role") || "agent");
-  const department_id = String(fd.get("department_id") || "") || null;
-  if (!email || password.length < 6) throw new Error("Informe e-mail e uma senha de no mínimo 6 caracteres.");
+  const input = parse(AgentCreateSchema, fdToObj(fd));
+  const { name, email, password, role } = input;
+  const department_id = input.department_id ?? null;
 
   const admin = createServiceClient();
   const { data: created, error: authErr } = await admin.auth.admin.createUser({
@@ -44,14 +42,15 @@ export async function createAgent(fd: FormData) {
 
 export async function updateAgent(id: string, fd: FormData) {
   ensureReal();
+  const input = parse(AgentUpdateSchema, fdToObj(fd));
   const sb = await createClient();
   const { error } = await sb
     .from("profiles")
     .update({
-      name: String(fd.get("name") || "").trim(),
-      role: String(fd.get("role") || "agent"),
-      department_id: String(fd.get("department_id") || "") || null,
-      status: String(fd.get("status") || "offline"),
+      name: input.name,
+      role: input.role,
+      department_id: input.department_id ?? null,
+      status: input.status,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);

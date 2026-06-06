@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { orgInsert, orgUpdate, orgDelete } from "@/lib/crud-helpers";
+import { AutomationSchema, fdToObj, parse } from "@/lib/validation";
 
 export async function createAutomation(fd: FormData) {
+  const input = parse(AutomationSchema, fdToObj(fd));
   await orgInsert("automations", {
-    name: String(fd.get("name") || "").trim(),
-    channel_id: String(fd.get("channel_id") || "") || null,
-    trigger: String(fd.get("trigger") || "").trim() || null,
+    name: input.name,
+    channel_id: input.channel_id ?? null,
+    trigger: input.trigger ?? null,
   });
   revalidatePath("/automacoes");
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 /**
  * Cron endpoint — roda a cada minuto (ou via external cron).
@@ -9,9 +10,16 @@ import { createServiceClient } from "@/lib/supabase/server";
  * Protegido por CRON_SECRET (env var).
  */
 export async function GET(req: Request) {
+  // Rate limit: máximo 10 req/min por IP (cron deve bater no máximo 1x/min).
+  const rl = rateLimit(`cron:${getClientIp(req)}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
+  }
+
   const url = new URL(req.url);
   const secret = url.searchParams.get("secret");
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+  // Fail-closed: sem CRON_SECRET configurado, o endpoint permanece bloqueado.
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

@@ -1,5 +1,6 @@
 import { SgpClient } from "./client";
 import { type SgpConfig, SgpError } from "./types";
+import { decryptSgpConfig } from "@/lib/crypto";
 
 export { SgpClient } from "./client";
 export * from "./types";
@@ -17,7 +18,8 @@ type AnyDb = {
 };
 
 function parseConfig(config: unknown): SgpConfig {
-  const c = (config ?? {}) as Record<string, unknown>;
+  const raw = (config ?? {}) as Record<string, string>;
+  const c = decryptSgpConfig(raw);
   const str = (v: unknown) => String(v ?? "").trim();
   return {
     url: str(c.url),

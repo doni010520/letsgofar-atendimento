@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   parseMetaWebhook,
   parseMetaEchoes,
@@ -24,8 +25,8 @@ export async function GET(request: Request) {
 /** Valida a assinatura X-Hub-Signature-256 (HMAC-SHA256 com o App Secret). */
 function validSignature(raw: string, header: string | null): boolean {
   const secret = process.env.META_APP_SECRET;
-  if (!secret) return true; // sem secret configurado (dev): não bloqueia
-  if (!header) return false;
+  // Fail-closed: sem secret configurado, rejeita todos os POSTs.
+  if (!secret || !header) return false;
   const expected = "sha256=" + crypto.createHmac("sha256", secret).update(raw).digest("hex");
   try {
     return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(header));
@@ -35,6 +36,14 @@ function validSignature(raw: string, header: string | null): boolean {
 }
 
 export async function POST(request: Request) {
+  // Rate limit: 200 req/min por IP.
+  const rl = rateLimit(`meta:${getClientIp(request)}`, 200, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Too Many Requests" }, {
+      status: 429,
+      headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+    });
+  }
   try {
     const raw = await request.text();
     if (!validSignature(raw, request.headers.get("x-hub-signature-256"))) {
