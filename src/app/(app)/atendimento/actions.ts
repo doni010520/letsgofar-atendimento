@@ -18,6 +18,14 @@ export async function fetchConversations() {
   return getConversations();
 }
 
+/** Retorna status dos canais (para mostrar banner de desconectado). */
+export async function fetchChannelStatuses(): Promise<{ id: string; name: string; status: string }[]> {
+  if (isPreview()) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("channels").select("id, name, status");
+  return (data as { id: string; name: string; status: string }[]) ?? [];
+}
+
 /**
  * Abre (ou cria) uma conversa 1:1 com um participante — ex.: clicar no nome num grupo.
  * Se só houver o LID (mensagem comum de grupo), resolve o telefone via /group/info.

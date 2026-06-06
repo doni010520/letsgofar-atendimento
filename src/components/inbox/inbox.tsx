@@ -50,6 +50,7 @@ import {
   setConversationAi,
   fetchMessages,
   fetchConversations,
+  fetchChannelStatuses,
   openDirectConversation,
   resolveDirectContact,
   getGroupInfo,
@@ -93,6 +94,8 @@ export function Inbox({
   const [groupParticipants, setGroupParticipants] = useState<{ name: string; phone: string }[]>([]);
   // Mensagem do grupo que será citada como quote na conversa privada (reply private).
   const [privateReplyMsg, setPrivateReplyMsg] = useState<Message | null>(null);
+  // Status dos canais (para banner de desconectado).
+  const [disconnectedChannels, setDisconnectedChannels] = useState<{ id: string; name: string }[]>([]);
   const DRAFT_ID = "__draft__";
 
   // Notificação sonora: guarda o timestamp da mensagem recebida mais recente já "ouvida".
@@ -139,24 +142,27 @@ export function Inbox({
     }
   }
 
-  // Polling rápido: lista de conversas a cada 2.5s (leve — só a view).
+  // Polling rápido: lista de conversas a cada 2.5s + status dos canais a cada 15s.
   useEffect(() => {
-    if (!live) { console.log("[poll] live=false, polling desligado"); return; }
+    if (!live) return;
     let cancel = false;
-    let n = 0;
+    let channelTick = 0;
     const tick = async () => {
       try {
         const convs = await fetchConversations();
         if (!cancel && Array.isArray(convs)) {
           setConversations(convs);
           maybePing(convs);
-          if (n++ < 3) console.log(`[poll:convs] ok, ${convs.length} conversas`);
         }
-      } catch (e) {
-        console.warn("[poll:convs] ERRO:", e);
+      } catch { /* silencioso */ }
+      // Checa canais a cada ~15s (6 ticks × 2.5s)
+      if (channelTick++ % 6 === 0) {
+        try {
+          const chs = await fetchChannelStatuses();
+          if (!cancel) setDisconnectedChannels(chs.filter((c) => c.status !== "connected"));
+        } catch { /* silencioso */ }
       }
     };
-    console.log("[poll] iniciando polling de conversas");
     tick();
     const t = setInterval(tick, 2500);
     return () => { cancel = true; clearInterval(t); };
@@ -571,12 +577,34 @@ export function Inbox({
     });
   }
 
+  // Conversas filtradas: esconde as de canais desconectados.
+  const disconnectedIds = new Set(disconnectedChannels.map((c) => c.id));
+  const visibleConversations = disconnectedIds.size > 0
+    ? conversations.filter((c) => !disconnectedIds.has(c.channel_id))
+    : conversations;
+  const allDisconnected = disconnectedChannels.length > 0 && visibleConversations.length === 0 && conversations.length > 0;
+
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col">
+      {/* Banner de canais desconectados */}
+      {disconnectedChannels.length > 0 && (
+        <div className={`flex items-center gap-2 px-4 py-2 text-sm ${allDisconnected ? "bg-red-500 text-white" : "bg-amber-50 text-amber-800 border-b border-amber-100"}`}>
+          <span className="text-lg">{allDisconnected ? "🔌" : "⚠️"}</span>
+          <span className="flex-1">
+            {allDisconnected
+              ? "Todos os números estão desconectados. Acesse Canais para reconectar."
+              : `${disconnectedChannels.length} canal(is) desconectado(s): ${disconnectedChannels.map((c) => c.name).join(", ")}`}
+          </span>
+          <a href="/canais" className={`shrink-0 rounded-lg px-3 py-1 text-xs font-medium ${allDisconnected ? "bg-white text-red-600 hover:bg-red-50" : "bg-amber-100 text-amber-800 hover:bg-amber-200"}`}>
+            Reconectar
+          </a>
+        </div>
+      )}
+      <div className="flex flex-1 overflow-hidden">
       {/* Mobile: mostra lista OU chat. Desktop: ambos. */}
       <div className={`${selectedId ? "hidden md:flex" : "flex"} h-full w-full md:w-auto`}>
         <ConversationList
-          conversations={conversations}
+          conversations={visibleConversations}
           selectedId={selectedId}
           onSelect={selectConversation}
           onPauseAi={handlePauseAiQuick}
@@ -672,6 +700,7 @@ export function Inbox({
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
