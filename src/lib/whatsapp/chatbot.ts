@@ -1,6 +1,6 @@
 import type { createServiceClient } from "@/lib/supabase/server";
 import { getProvider } from "./index";
-import { getAiAgent, runAiTurn, type AiTurnResult } from "./ai";
+import { getAiAgent, runAiTurn, isAiAllowed, type AiTurnResult } from "./ai";
 import type { Channel } from "@/lib/types";
 
 type DB = ReturnType<typeof createServiceClient>;
@@ -84,6 +84,12 @@ export async function runChatbot(
       // Sem agente configurado → comportamento legado (mensagem estática).
       await send(n.data?.content ?? "");
       return "next";
+    }
+    // Allowlist: se o agente está restrito, só responde a números liberados.
+    // Número não liberado → entrega à fila humana sem a IA responder.
+    if (agent.restrictToAllowlist && !(await isAiAllowed(db, conv.organization_id, conv.contact_phone))) {
+      await clearState(db, conv.id);
+      return "queued";
     }
     const result = await runAiTurn({
       db,

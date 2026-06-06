@@ -177,6 +177,17 @@ export interface AiAgentConfigJson {
   agent_name?: string;
   knowledge?: string;
   base_prompt?: string;
+  /** Se true (padrão), o agente só responde a números da allowlist. */
+  restrict_to_allowlist?: boolean;
+}
+
+export interface AiAllowedNumber {
+  id: string;
+  organization_id: string;
+  phone: string;
+  label: string | null;
+  active: boolean;
+  created_at: string;
 }
 
 export interface AiAgent {

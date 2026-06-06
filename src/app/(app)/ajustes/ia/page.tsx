@@ -3,14 +3,17 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { Scroll } from "@/components/scroll";
 import { PageHeader, Card } from "@/components/ui";
 import { AiAgentList, type AiAgentRow } from "@/components/ai-agent-form";
+import { AiAllowlist } from "@/components/ai-allowlist";
 import { getChannels } from "@/lib/data/channels";
 import { getSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PREVIEW_MODE } from "@/lib/mock";
+import type { AiAllowedNumber } from "@/lib/types";
 
 export default async function AiAgentPage() {
   const channels = await getChannels();
   let agents: AiAgentRow[] = [];
+  let allowed: AiAllowedNumber[] = [];
   if (!PREVIEW_MODE) {
     const session = await getSession();
     if (session?.organization) {
@@ -21,6 +24,12 @@ export default async function AiAgentPage() {
         .eq("organization_id", session.organization.id)
         .order("created_at", { ascending: true });
       agents = (data as AiAgentRow[]) ?? [];
+      const { data: nums } = await sb
+        .from("ai_allowed_numbers")
+        .select("id, organization_id, phone, label, active, created_at")
+        .eq("organization_id", session.organization.id)
+        .order("created_at", { ascending: true });
+      allowed = (nums as AiAllowedNumber[]) ?? [];
     }
   }
 
@@ -44,6 +53,7 @@ export default async function AiAgentPage() {
       </Card>
 
       <AiAgentList agents={agents} channels={channels} />
+      {!PREVIEW_MODE && <AiAllowlist numbers={allowed} />}
     </Scroll>
   );
 }

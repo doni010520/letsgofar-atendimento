@@ -21,6 +21,7 @@ export interface AiAgentRow {
     use_emojis?: boolean;
     execute_actions?: boolean;
     single_message?: boolean;
+    restrict_to_allowlist?: boolean;
   };
 }
 
@@ -232,6 +233,17 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                 </div>
                 <label className="relative inline-flex cursor-pointer items-center">
                   <input type="checkbox" name="active" defaultChecked={agent?.active ?? false} className="peer sr-only" />
+                  <div className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-brand" />
+                  <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition peer-checked:translate-x-5" />
+                </label>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">Responder apenas a números liberados</p>
+                  <p className="text-xs text-ink-soft">Recomendado. A IA só atende os números da allowlist (abaixo da lista de agentes); os demais vão para a fila humana.</p>
+                </div>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input type="checkbox" name="restrict_to_allowlist" defaultChecked={c.restrict_to_allowlist ?? true} className="peer sr-only" />
                   <div className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-brand" />
                   <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition peer-checked:translate-x-5" />
                 </label>

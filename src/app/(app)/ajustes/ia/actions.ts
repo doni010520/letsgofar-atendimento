@@ -27,6 +27,7 @@ export async function saveAiAgent(fd: FormData) {
       use_emojis: fd.get("use_emojis") === "on",
       execute_actions: fd.get("execute_actions") === "on",
       single_message: fd.get("single_message") === "on",
+      restrict_to_allowlist: fd.get("restrict_to_allowlist") === "on",
     },
   };
 
@@ -47,6 +48,45 @@ export async function deleteAiAgent(id: string) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
   const sb = await createClient();
   const { error } = await sb.from("ai_agents").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/ajustes/ia");
+}
+
+/* ----------------- Allowlist: números liberados para a IA ----------------- */
+
+/** Adiciona (ou reativa) um número à allowlist da IA. */
+export async function addAllowedNumber(fd: FormData) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const phone = String(fd.get("phone") || "").replace(/\D+/g, "");
+  if (phone.length < 8) throw new Error("Informe um número válido (com DDD).");
+  const label = String(fd.get("label") || "").trim() || null;
+  const sb = await createClient();
+  const { error } = await sb
+    .from("ai_allowed_numbers")
+    .upsert(
+      { organization_id: session.organization.id, phone, label, active: true },
+      { onConflict: "organization_id,phone" },
+    );
+  if (error) throw new Error(error.message);
+  revalidatePath("/ajustes/ia");
+}
+
+/** Ativa/desativa um número da allowlist. */
+export async function toggleAllowedNumber(id: string, active: boolean) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
+  const sb = await createClient();
+  const { error } = await sb.from("ai_allowed_numbers").update({ active }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/ajustes/ia");
+}
+
+/** Remove um número da allowlist. */
+export async function removeAllowedNumber(id: string) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
+  const sb = await createClient();
+  const { error } = await sb.from("ai_allowed_numbers").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/ajustes/ia");
 }
