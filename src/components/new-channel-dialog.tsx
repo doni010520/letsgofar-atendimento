@@ -6,7 +6,6 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui";
 import { createChannel } from "@/app/(app)/canais/actions";
 import { QrConnectModal } from "@/components/qr-connect-modal";
-import { MetaConnectButton } from "@/components/meta-connect-button";
 
 type ChannelType = "uazapi" | "meta_cloud";
 
@@ -83,18 +82,15 @@ export function NewChannelDialog() {
 
               {type === "meta_cloud" && (
                 <>
-                  <MetaConnectButton
-                    onConnected={() => {
-                      setOpen(false);
-                      router.refresh();
-                    }}
-                  />
-                  <div className="flex items-center gap-2 py-1 text-[11px] text-ink-soft">
-                    <span className="h-px flex-1 bg-gray-200" /> ou inserir credenciais manualmente{" "}
-                    <span className="h-px flex-1 bg-gray-200" />
-                  </div>
-                  <Field name="phone_number_id" label="Phone Number ID (Meta)" placeholder="ID do número" />
-                  <Field name="access_token" label="Access Token (Meta)" placeholder="Token permanente" />
+                  <Field name="phone_number_id" label="Phone Number ID" placeholder="Ex: 120596359925687" required />
+                  <Field name="access_token" label="Token permanente" placeholder="Token do System User (EAAV...)" required />
+                  <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    Obtenha o Phone Number ID e o token permanente no{" "}
+                    <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline">
+                      Meta for Developers
+                    </a>{" "}
+                    → WhatsApp → Configuração da produção.
+                  </p>
                 </>
               )}
 

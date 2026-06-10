@@ -21,7 +21,7 @@ export class MetaProvider implements ChannelProvider {
   constructor(channel: Channel) {
     const c = channel.credentials as MetaCreds;
     this.phoneNumberId = c?.phone_number_id ?? channel.external_id ?? undefined;
-    this.accessToken = c?.access_token;
+    this.accessToken = c?.access_token || process.env.META_ACCESS_TOKEN;
   }
 
   private async graph(path: string, body: unknown) {
