@@ -8,7 +8,7 @@ import { Button, Card } from "@/components/ui";
 export type CrudField = {
   name: string;
   label: string;
-  type?: "text" | "textarea" | "color" | "select" | "number" | "checkbox";
+  type?: "text" | "textarea" | "color" | "select" | "number" | "checkbox" | "multiselect";
   options?: { value: string; label: string }[];
   placeholder?: string;
   required?: boolean;
@@ -134,6 +134,22 @@ export function CrudManager({
                       <option value="">—</option>
                       {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
+                  ) : f.type === "multiselect" ? (
+                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                      {(f.options ?? []).length === 0 && (
+                        <p className="px-1 py-1 text-xs text-ink-soft">Nenhuma opção disponível.</p>
+                      )}
+                      {f.options?.map((o) => {
+                        const cur = editing?.[f.name];
+                        const checked = Array.isArray(cur) ? cur.includes(o.value) : false;
+                        return (
+                          <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm">
+                            <input type="checkbox" name={f.name} value={o.value} defaultChecked={checked} className="h-4 w-4 accent-brand" />
+                            <span className="text-ink">{o.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   ) : f.type === "checkbox" ? (
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" name={f.name} defaultChecked={!!editing?.[f.name]} className="h-4 w-4 accent-brand" />

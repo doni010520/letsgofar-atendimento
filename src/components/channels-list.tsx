@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { MoreVertical, Power, Trash2, Plug } from "lucide-react";
+import { MoreVertical, Power, Trash2, Plug, Search } from "lucide-react";
 import { ChannelCard } from "@/components/channel-card";
 import { QrConnectModal } from "@/components/qr-connect-modal";
 import { disconnectChannel, deleteChannel, syncChannelStatus } from "@/app/(app)/canais/actions";
@@ -13,6 +13,13 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
   const [connect, setConnect] = useState<{ id: string; phone?: string } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return channels;
+    return channels.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q));
+  }, [channels, query]);
 
   // Ao abrir, sincroniza o status real de cada canal não-Meta (a UAZAPI é a fonte
   // da verdade). Se algo mudou no banco, atualiza a tela.
@@ -47,8 +54,22 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
 
   return (
     <>
+      {channels.length > 0 && (
+        <div className="relative mb-4 max-w-sm">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar canal por nome ou telefone..."
+            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
+          />
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {channels.map((c) => {
+        {filtered.length === 0 && (
+          <p className="col-span-full py-6 text-center text-sm text-ink-soft">Nenhum canal encontrado.</p>
+        )}
+        {filtered.map((c) => {
           const clickable = c.type !== "meta_cloud"; // UAZAPI: clicar reabre conexão (QR/código)
           const menuBtn = (
             <button

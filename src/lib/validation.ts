@@ -118,6 +118,7 @@ export const IntegrationSchema = z.object({
 export const AutomationSchema = z.object({
   name: zName,
   channel_id: z.string().uuid("Canal inválido.").nullable().optional(),
+  integration_id: z.string().uuid("Integração inválida.").nullable().optional(),
   trigger: z.string().max(200).nullable().optional(),
 });
 

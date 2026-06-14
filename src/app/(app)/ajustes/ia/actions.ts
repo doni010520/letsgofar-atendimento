@@ -24,9 +24,13 @@ export async function saveAiAgent(fd: FormData) {
       temperature,
       knowledge: String(fd.get("knowledge") || "").trim() || undefined,
       greeting: String(fd.get("greeting") || "").trim() || undefined,
+      tone: String(fd.get("tone") || "").trim() || undefined,
+      base_prompt: String(fd.get("base_prompt") || "").trim() || undefined,
+      voice: String(fd.get("voice") || "").trim() || undefined,
       use_emojis: fd.get("use_emojis") === "on",
       execute_actions: fd.get("execute_actions") === "on",
       single_message: fd.get("single_message") === "on",
+      audio_replies: fd.get("audio_replies") === "on",
       restrict_to_allowlist: fd.get("restrict_to_allowlist") === "on",
     },
   };

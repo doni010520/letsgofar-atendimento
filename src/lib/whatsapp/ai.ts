@@ -1,5 +1,5 @@
 import type { createServiceClient } from "@/lib/supabase/server";
-import { sgpForOrg, type SgpClient } from "@/lib/sgp";
+import { sgpForOrg, sgpForIntegration, type SgpClient } from "@/lib/sgp";
 
 type DB = ReturnType<typeof createServiceClient>;
 
@@ -28,6 +28,10 @@ export interface AiAgentConfig {
   /** Knobs da UI. */
   useEmojis?: boolean;
   singleMessage?: boolean;
+  /** Se true, responde ao cliente em áudio (TTS) em vez de texto. */
+  audioReplies?: boolean;
+  /** Voz do TTS (OpenAI): alloy, echo, fable, onyx, nova, shimmer. */
+  voice?: string;
   /** Se false, o agente só consulta o SGP — não executa ações que alteram o sistema. */
   executeActions: boolean;
   /** Se true (padrão), o agente só responde a números da allowlist. */
@@ -145,6 +149,8 @@ export async function getAiAgent(db: DB, orgId: string, channelId: string): Prom
     greeting?: string;
     use_emojis?: boolean;
     single_message?: boolean;
+    audio_replies?: boolean;
+    voice?: string;
     execute_actions?: boolean;
     restrict_to_allowlist?: boolean;
   };
@@ -161,6 +167,8 @@ export async function getAiAgent(db: DB, orgId: string, channelId: string): Prom
     greeting: cfg.greeting?.trim() || undefined,
     useEmojis: cfg.use_emojis,
     singleMessage: cfg.single_message,
+    audioReplies: cfg.audio_replies === true,
+    voice: cfg.voice?.trim() || "alloy",
     executeActions: cfg.execute_actions !== false, // default: pode executar
     restrictToAllowlist: cfg.restrict_to_allowlist !== false, // default: restringe à allowlist
   };
@@ -422,6 +430,8 @@ async function executeTool(name: string, args: Record<string, unknown>, sgp: Sgp
 export interface AiTurnContext {
   db: DB;
   organizationId: string;
+  /** ID da integração SGP vinculada à automação. Se presente, usa esse SGP específico. */
+  integrationId?: string | null;
   conversationId: string;
   contactPhone: string;
   contactName?: string | null;
@@ -430,6 +440,33 @@ export interface AiTurnContext {
   userText: string;
   /** Envia a mensagem ao cliente (e registra como mensagem do bot). */
   sendToCustomer: (text: string) => Promise<void>;
+  /** Envia a resposta em áudio (TTS). Opcional; se ausente, cai para texto. */
+  sendAudioToCustomer?: (audio: { buffer: Buffer; mime: string }, transcript: string) => Promise<void>;
+}
+
+/** Gera áudio (TTS) a partir do texto usando a OpenAI. Retorna OGG/Opus (ideal p/ WhatsApp). */
+async function ttsSpeak(apiKey: string, text: string, voice: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  try {
+    const res = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini-tts",
+        voice: voice || "alloy",
+        input: text.slice(0, 4000),
+        response_format: "opus",
+      }),
+    });
+    if (!res.ok) {
+      console.error("tts", res.status, (await res.text()).slice(0, 200));
+      return null;
+    }
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { buffer, mime: "audio/ogg" };
+  } catch (e) {
+    console.error("tts net", (e as Error)?.message);
+    return null;
+  }
 }
 
 /**
@@ -506,7 +543,9 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     return { decision: "transfer", transfer: { motivo: "IA indisponível (sem chave OpenAI)" } };
   }
 
-  const sgp = await sgpForOrg(ctx.db, ctx.organizationId).catch(() => null);
+  const sgp = ctx.integrationId
+    ? await sgpForIntegration(ctx.db, ctx.integrationId).catch(() => null)
+    : await sgpForOrg(ctx.db, ctx.organizationId).catch(() => null);
 
   // Histórico recente (exclui notas internas).
   const { data: hist } = await ctx.db
@@ -606,7 +645,17 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     }
 
     // Sem tool calls → resposta final ao cliente.
-    if (choice.content?.trim()) await ctx.sendToCustomer(choice.content.trim());
+    const finalText = choice.content?.trim();
+    if (finalText) {
+      // Áudio (TTS) quando habilitado e há canal de áudio; senão texto.
+      if (ctx.agent.audioReplies && ctx.sendAudioToCustomer) {
+        const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "alloy");
+        if (audio) await ctx.sendAudioToCustomer(audio, finalText);
+        else await ctx.sendToCustomer(finalText);
+      } else {
+        await ctx.sendToCustomer(finalText);
+      }
+    }
     break;
   }
 

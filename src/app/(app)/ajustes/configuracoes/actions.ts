@@ -21,6 +21,10 @@ export async function saveSettings(fd: FormData) {
     const v = parseFloat(String(fd.get(k) || ""));
     return Number.isNaN(v) ? undefined : v;
   };
+  const arr = (k: string) => {
+    const list = String(fd.get(k) || "").split(/[\n,;]/).map((x) => x.trim()).filter(Boolean);
+    return list.length ? list : undefined;
+  };
 
   const patch: OrgSettings = {
     // Geral
@@ -29,6 +33,8 @@ export async function saveSettings(fd: FormData) {
     close_command_message: str("close_command_message"),
     allow_agent_reconnect: bool("allow_agent_reconnect"),
     timezone_offset: num("timezone_offset"),
+    ip_whitelist: arr("ip_whitelist"),
+    follow_me_channel_id: str("follow_me_channel_id"),
     // Atendimento
     auto_close_company_min: num("auto_close_company_min"),
     auto_close_client_min: num("auto_close_client_min"),
@@ -39,6 +45,8 @@ export async function saveSettings(fd: FormData) {
     require_classification: (str("require_classification") as OrgSettings["require_classification"]) ?? "never",
     require_close_reason: bool("require_close_reason"),
     csat_policy: (str("csat_policy") as OrgSettings["csat_policy"]) ?? "optional_on",
+    csat_select_survey: bool("csat_select_survey"),
+    hide_msgs_mode: (str("hide_msgs_mode") as OrgSettings["hide_msgs_mode"]) ?? "none",
     search_mode: (str("search_mode") as OrgSettings["search_mode"]) ?? "all",
     transfer_idle: (str("transfer_idle") as OrgSettings["transfer_idle"]) ?? "none",
     distribute_least_loaded: bool("distribute_least_loaded"),
@@ -64,7 +72,36 @@ export async function saveSettings(fd: FormData) {
     v2_queue_alert_sound: bool("v2_queue_alert_sound"),
     v2_sidebar_collapsed: bool("v2_sidebar_collapsed"),
     v2_show_channel_on_card: bool("v2_show_channel_on_card"),
+    v2_notify_high: bool("v2_notify_high"),
+    // Mensagem automática de fila (V2)
+    v2_queue_msg_enabled: bool("v2_queue_msg_enabled"),
+    v2_queue_msg_text: str("v2_queue_msg_text"),
+    v2_queue_msg_interval_min: num("v2_queue_msg_interval_min"),
+    // Exibição de cards (V2)
+    v2_show_only_internet: bool("v2_show_only_internet"),
+    v2_show_cancelled: bool("v2_show_cancelled"),
+    v2_show_titles: bool("v2_show_titles"),
+    v2_use_address: bool("v2_use_address"),
+    // Promessa de pagamento (V2)
+    v2_promise_global: bool("v2_promise_global"),
+    v2_promise_days: num("v2_promise_days"),
+    // Boletos (V2)
+    v2_search_all_boletos: bool("v2_search_all_boletos"),
+    v2_show_nonstandard_boletos: bool("v2_show_nonstandard_boletos"),
+    v2_boleto_days: num("v2_boleto_days"),
+    v2_only_overdue_plus_next: bool("v2_only_overdue_plus_next"),
+    v2_use_billing_link: bool("v2_use_billing_link"),
+    // Cores por tempo (V2)
     v2_color_no_interaction: bool("v2_color_no_interaction"),
+    v2_color_client_normal_sec: num("v2_color_client_normal_sec"),
+    v2_color_client_normal: str("v2_color_client_normal"),
+    v2_color_client_medium_sec: num("v2_color_client_medium_sec"),
+    v2_color_client_medium: str("v2_color_client_medium"),
+    v2_color_client_high_sec: num("v2_color_client_high_sec"),
+    v2_color_client_high: str("v2_color_client_high"),
+    v2_color_agent_enabled: bool("v2_color_agent_enabled"),
+    v2_color_agent_sec: num("v2_color_agent_sec"),
+    v2_color_agent_color: str("v2_color_agent_color"),
     // Permissões
     v2_mask_cpf: bool("v2_mask_cpf"),
     v2_only_v2: bool("v2_only_v2"),

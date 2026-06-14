@@ -44,6 +44,7 @@ import {
   deleteMessageAction,
   markConversationRead,
   assignToMe,
+  addInternalNote,
   closeConversation,
   transferConversation,
   toggleMute,
@@ -56,7 +57,7 @@ import {
   getGroupInfo,
 } from "@/app/(app)/atendimento/actions";
 import { CloseModal, TransferModal } from "./attendance-modals";
-import type { ConversationOverview, Message, Tag, Profile, Department } from "@/lib/types";
+import type { ConversationOverview, Message, Tag, Profile, Department, Channel } from "@/lib/types";
 
 export function Inbox({
   initialConversations,
@@ -66,6 +67,8 @@ export function Inbox({
   tags,
   agents,
   departments,
+  channels,
+  quickReplies,
   live,
 }: {
   initialConversations: ConversationOverview[];
@@ -75,6 +78,8 @@ export function Inbox({
   tags: Tag[];
   agents: Profile[];
   departments: Department[];
+  channels?: Channel[];
+  quickReplies?: { title: string; content: string; shortcut: string | null }[];
   live: boolean;
 }) {
   const router = useRouter();
@@ -91,6 +96,13 @@ export function Inbox({
   const [panelOpen, setPanelOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [noting, setNoting] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  // Modal "novo atendimento" (outbound).
+  const [newConvOpen, setNewConvOpen] = useState(false);
+  const [ncChannel, setNcChannel] = useState("");
+  const [ncPhone, setNcPhone] = useState("");
+  const [ncName, setNcName] = useState("");
   const [groupParticipants, setGroupParticipants] = useState<{ name: string; phone: string }[]>([]);
   // Mensagem do grupo que será citada como quote na conversa privada (reply private).
   const [privateReplyMsg, setPrivateReplyMsg] = useState<Message | null>(null);
@@ -523,6 +535,50 @@ export function Inbox({
     setTransferring(true);
   }
 
+  function handleAddNote() {
+    if (!selectedId || selectedId === DRAFT_ID) return;
+    setNoteText("");
+    setNoting(true);
+  }
+
+  function openNewConversation() {
+    const list = channels ?? [];
+    setNcChannel(list[0]?.id ?? "");
+    setNcPhone("");
+    setNcName("");
+    setNewConvOpen(true);
+  }
+
+  function confirmNewConversation() {
+    const phone = ncPhone.replace(/\D/g, "");
+    if (!ncChannel || !phone) return;
+    setNewConvOpen(false);
+    startTransition(async () => {
+      const { id } = await openDirectConversation(ncChannel, { phone, name: ncName.trim() || undefined });
+      if (!id) {
+        alert("Não foi possível abrir o atendimento.");
+        return;
+      }
+      const convs = await fetchConversations();
+      setConversations(convs);
+      setSelectedId(id);
+      const msgs = await fetchMessages(id);
+      setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
+    });
+  }
+
+  function confirmNote() {
+    if (!selectedId) return;
+    const id = selectedId;
+    const text = noteText.trim();
+    if (!text) return;
+    setNoting(false);
+    startTransition(async () => {
+      await addInternalNote(id, text);
+      await refetch(id);
+    });
+  }
+
   function confirmTransfer(opts: {
     toUserId: string | null;
     toDepartmentId: string | null;
@@ -608,6 +664,7 @@ export function Inbox({
           selectedId={selectedId}
           onSelect={selectConversation}
           onPauseAi={handlePauseAiQuick}
+          onNewConversation={(channels?.length ?? 0) > 0 ? openNewConversation : undefined}
         />
       </div>
       {selected ? (
@@ -630,9 +687,11 @@ export function Inbox({
           onAssign={handleAssign}
           onClose={handleClose}
           onTransfer={handleTransfer}
+          onAddNote={handleAddNote}
           onToggleMute={handleToggleMute}
           onToggleAi={handleToggleAi}
           initialReplyTo={!selected.is_group && privateReplyMsg ? privateReplyMsg : undefined}
+          quickReplies={quickReplies}
           pending={isPending}
         />
       ) : (
@@ -669,6 +728,95 @@ export function Inbox({
           onCancel={() => setTransferring(false)}
           pending={isPending}
         />
+      )}
+
+      {newConvOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setNewConvOpen(false)}>
+          <div className="w-full max-w-md rounded-card bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-ink">Novo atendimento</h2>
+              <button onClick={() => setNewConvOpen(false)} className="text-ink-soft hover:text-ink"><X size={18} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Canal</label>
+                <select
+                  value={ncChannel}
+                  onChange={(e) => setNcChannel(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                >
+                  {(channels ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Telefone (com DDI+DDD, só números)</label>
+                <input
+                  value={ncPhone}
+                  onChange={(e) => setNcPhone(e.target.value)}
+                  placeholder="5573999998888"
+                  inputMode="numeric"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Nome (opcional)</label>
+                <input
+                  value={ncName}
+                  onChange={(e) => setNcName(e.target.value)}
+                  placeholder="Nome do contato"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+              </div>
+              {(channels ?? []).find((c) => c.id === ncChannel)?.type === "meta_cloud" && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                  Canal Meta oficial: fora da janela de 24h, só mensagens de template (HSM) são entregues.
+                </p>
+              )}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setNewConvOpen(false)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-ink hover:bg-gray-200">
+                Cancelar
+              </button>
+              <button onClick={confirmNewConversation} disabled={!ncChannel || !ncPhone.replace(/\D/g, "")} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-40">
+                Abrir atendimento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {noting && selected && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setNoting(false)}>
+          <div className="w-full max-w-md rounded-card bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-ink">Nota interna</h2>
+              <button onClick={() => setNoting(false)} className="text-ink-soft hover:text-ink"><X size={18} /></button>
+            </div>
+            <p className="mb-2 text-xs text-ink-soft">Visível apenas para a equipe — não é enviada ao cliente.</p>
+            <textarea
+              autoFocus
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmNote(); }
+                if (e.key === "Escape") setNoting(false);
+              }}
+              rows={3}
+              placeholder="Anotação sobre o atendimento..."
+              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setNoting(false)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-ink hover:bg-gray-200">
+                Cancelar
+              </button>
+              <button onClick={confirmNote} disabled={!noteText.trim()} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-40">
+                Adicionar nota
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editing && (

@@ -18,9 +18,13 @@ export interface AiAgentRow {
     temperature?: number;
     knowledge?: string;
     greeting?: string;
+    tone?: string;
+    base_prompt?: string;
     use_emojis?: boolean;
     execute_actions?: boolean;
     single_message?: boolean;
+    audio_replies?: boolean;
+    voice?: string;
     restrict_to_allowlist?: boolean;
   };
 }
@@ -30,6 +34,16 @@ const MODELS = [
   { id: "gpt-4o", label: "GPT-4o (mais capaz)" },
   { id: "gpt-4.1-mini", label: "GPT-4.1 mini" },
   { id: "gpt-4.1", label: "GPT-4.1" },
+];
+
+const TONES = ["Profissional", "Amigável", "Casual", "Formal", "Empático", "Direto", "Divertido"];
+const VOICES = [
+  { id: "alloy", label: "Alloy (neutra)" },
+  { id: "nova", label: "Nova (feminina)" },
+  { id: "shimmer", label: "Shimmer (feminina suave)" },
+  { id: "echo", label: "Echo (masculina)" },
+  { id: "onyx", label: "Onyx (masculina grave)" },
+  { id: "fable", label: "Fable (expressiva)" },
 ];
 
 const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
@@ -124,6 +138,10 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [pending, setPending] = useState(false);
+  const cfg0 = agent?.config ?? {};
+  const [temp, setTemp] = useState<number>(typeof cfg0.temperature === "number" ? cfg0.temperature : 0.4);
+  const [audio, setAudio] = useState<boolean>(!!cfg0.audio_replies);
+  const [advanced, setAdvanced] = useState(false);
 
   async function submit(fd: FormData) {
     setPending(true);
@@ -199,11 +217,29 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                   placeholder="Ex.: Atue como um especialista em suporte técnico, mantendo um tom profissional e empático."
                   className={`${inputCls} resize-none font-mono`} />
               </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Modelo</label>
+                  <select name="model" defaultValue={agent?.model ?? "gpt-4o-mini"} className={inputCls}>
+                    {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Tom de voz</label>
+                  <select name="tone" defaultValue={c.tone ?? ""} className={inputCls}>
+                    <option value="">Padrão (cordial e objetivo)</option>
+                    {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-ink-soft">Modelo</label>
-                <select name="model" defaultValue={agent?.model ?? "gpt-4o-mini"} className={inputCls}>
-                  {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">
+                  Criatividade das respostas <span className="font-normal">({temp.toFixed(1)})</span>
+                </label>
+                <input type="range" name="temperature" min={0} max={1} step={0.1} value={temp}
+                  onChange={(e) => setTemp(Number(e.target.value))}
+                  className="w-full accent-brand" />
+                <p className="mt-0.5 text-[11px] text-ink-soft">Mais baixo = respostas previsíveis e consistentes. Mais alto = mais criativas e variadas.</p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Base de conhecimento</label>
@@ -211,7 +247,6 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                   placeholder="Informações que o agente deve conhecer: horários, planos, políticas, FAQ…"
                   className={`${inputCls} resize-none`} />
               </div>
-              <input type="hidden" name="temperature" value={c.temperature ?? 0.4} />
               <div className="space-y-2 pt-2">
                 <Toggle name="use_emojis" label="Utilizar emojis nas respostas"
                   hint="Torne as respostas mais expressivas e envolventes." defaultChecked={c.use_emojis} />
@@ -219,6 +254,39 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                   hint="Permitir que ações automatizadas (SGP) sejam executadas." defaultChecked={c.execute_actions ?? true} />
                 <Toggle name="single_message" label="Responder apenas uma mensagem"
                   hint="O agente responde com apenas 1 mensagem por turno." defaultChecked={c.single_message} />
+                <label className="flex items-start gap-3 py-2 cursor-pointer">
+                  <input type="checkbox" name="audio_replies" checked={audio} onChange={(e) => setAudio(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
+                  <div>
+                    <p className="text-sm font-medium text-ink">Responder clientes com áudios</p>
+                    <p className="text-xs text-ink-soft">Converte a resposta em áudio (voz) e envia ao cliente. Tem custo de TTS por mensagem.</p>
+                  </div>
+                </label>
+                {audio && (
+                  <div className="ml-7">
+                    <label className="mb-1 block text-xs font-medium text-ink-soft">Voz do áudio</label>
+                    <select name="voice" defaultValue={c.voice ?? "alloy"} className={inputCls}>
+                      {VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="rounded-lg border border-gray-100">
+                <button type="button" onClick={() => setAdvanced((v) => !v)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-ink-soft hover:text-ink">
+                  <span>Avançado — substituir prompt base</span>
+                  {advanced ? <ChevronLeft size={14} className="rotate-90" /> : <ChevronRight size={14} className="rotate-90" />}
+                </button>
+                {advanced && (
+                  <div className="border-t border-gray-100 p-3">
+                    <p className="mb-2 text-[11px] text-ink-soft">
+                      Deixe em branco para usar o comportamento padrão da MVF (fluxo + segurança). Preenchendo, você
+                      <strong> substitui toda a espinha dorsal</strong> do agente — controle total, mas você assume o fluxo e as regras.
+                    </p>
+                    <textarea name="base_prompt" rows={6} defaultValue={c.base_prompt ?? ""}
+                      placeholder="Prompt base completo do agente (substitui o padrão)…"
+                      className={`${inputCls} resize-none font-mono`} />
+                  </div>
+                )}
               </div>
             </div>
           </div>

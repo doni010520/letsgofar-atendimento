@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Users, BellOff, BotOff, Bot, SlidersHorizontal, X, Trash2, Check } from "lucide-react";
+import { Search, Users, BellOff, BotOff, Bot, SlidersHorizontal, X, Trash2, Check, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConversationOverview, ConversationStatus } from "@/lib/types";
 
@@ -106,11 +106,13 @@ export function ConversationList({
   selectedId,
   onSelect,
   onPauseAi,
+  onNewConversation,
 }: {
   conversations: ConversationOverview[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onPauseAi?: (id: string) => void;
+  onNewConversation?: () => void;
 }) {
   const [statusTab, setStatusTab] = useState<ConversationStatus | "all">("all");
   const [query, setQuery] = useState("");
@@ -207,14 +209,25 @@ export function ConversationList({
     <div className="flex h-full w-full shrink-0 flex-col border-r border-gray-100 bg-surface md:w-80">
       {/* ─── Header: busca + abas + filtro ─── */}
       <div className="border-b border-gray-100 p-3">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar conversa..."
-            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar conversa..."
+              className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
+            />
+          </div>
+          {onNewConversation && (
+            <button
+              onClick={onNewConversation}
+              title="Novo atendimento"
+              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-brand text-white transition hover:bg-brand-dark"
+            >
+              <PenSquare size={16} />
+            </button>
+          )}
         </div>
         <div className="mt-2 flex items-center gap-1">
           <div className="flex flex-1 gap-1 overflow-x-auto">

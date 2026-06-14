@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker, X, Image as ImageIcon } from "lucide-react";
+import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker, X, Image as ImageIcon, FileText } from "lucide-react";
 import { EmojiPicker } from "./emoji-picker";
 
 type Mention = { name: string; phone: string };
+type QuickReply = { title: string; content: string; shortcut: string | null };
 
 export function Composer({
   onSend,
@@ -13,6 +14,7 @@ export function Composer({
   onSendContact,
   onType,
   mentionCandidates,
+  quickReplies,
   disabled,
   sending,
   focusTrigger,
@@ -23,12 +25,15 @@ export function Composer({
   onSendContact?: () => void;
   onType?: () => void;
   mentionCandidates?: Mention[];
+  quickReplies?: QuickReply[];
   disabled?: boolean;
   sending?: boolean;
   focusTrigger?: unknown;
 }) {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrQuery, setQrQuery] = useState("");
 
   // Foco automático ao mudar focusTrigger (ex.: clicar Responder).
   useEffect(() => { if (focusTrigger != null) taRef.current?.focus(); }, [focusTrigger]);
@@ -128,6 +133,20 @@ export function Composer({
     setMentions([]);
     setMentionQuery(null);
   }
+
+  // Insere o conteúdo de um modelo/macro no campo de texto e foca.
+  function insertQuickReply(qr: QuickReply) {
+    setText((t) => (t.trim() ? `${t}\n${qr.content}` : qr.content));
+    setQrOpen(false);
+    setQrQuery("");
+    requestAnimationFrame(() => taRef.current?.focus());
+  }
+
+  const qrFiltered = (quickReplies ?? []).filter((q) => {
+    if (!qrQuery.trim()) return true;
+    const s = qrQuery.toLowerCase();
+    return q.title.toLowerCase().includes(s) || (q.shortcut ?? "").toLowerCase().includes(s) || q.content.toLowerCase().includes(s);
+  });
 
   function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -296,6 +315,53 @@ export function Composer({
             </>
           )}
         </div>
+
+        {(quickReplies?.length ?? 0) > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => { setQrOpen((v) => !v); setAttachMenu(false); setEmojiOpen(false); }}
+              disabled={disabled || sending}
+              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-gray-100 text-ink-soft transition hover:bg-gray-200 disabled:opacity-40"
+              title="Modelos e macros"
+            >
+              <FileText size={18} />
+            </button>
+            {qrOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setQrOpen(false)} />
+                <div className="absolute bottom-12 left-0 z-20 w-72 overflow-hidden rounded-lg border border-gray-100 bg-surface shadow-xl">
+                  <div className="border-b border-gray-100 p-2">
+                    <input
+                      autoFocus
+                      value={qrQuery}
+                      onChange={(e) => setQrQuery(e.target.value)}
+                      placeholder="Buscar modelo ou macro..."
+                      className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-brand"
+                    />
+                  </div>
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {qrFiltered.length === 0 && (
+                      <p className="px-3 py-3 text-center text-xs text-ink-soft">Nada encontrado.</p>
+                    )}
+                    {qrFiltered.map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => insertQuickReply(q)}
+                        className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-gray-50"
+                      >
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-ink">
+                          {q.title}
+                          {q.shortcut && <span className="rounded bg-gray-100 px-1 text-[10px] text-ink-soft">/{q.shortcut}</span>}
+                        </span>
+                        <span className="truncate text-[11px] text-ink-soft">{q.content}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <textarea
           ref={taRef}

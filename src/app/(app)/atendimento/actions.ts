@@ -365,6 +365,29 @@ export async function sendMessage(
   return { ok: true };
 }
 
+/** Adiciona uma nota interna na conversa (visível só para a equipe, não vai ao cliente). */
+export async function addInternalNote(conversationId: string, text: string) {
+  if (isPreview()) return { ok: true };
+  const note = text.trim();
+  if (!note) return { ok: false };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const supabase = await createClient();
+  await supabase.from("messages").insert({
+    organization_id: session.organization.id,
+    conversation_id: conversationId,
+    direction: "out",
+    sender_type: "system",
+    sender_id: session.userId,
+    content_type: "text",
+    body: session.profile?.name ? `${session.profile.name}: ${note}` : note,
+    is_internal: true,
+    status: "sent",
+  });
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
 export async function assignToMe(conversationId: string) {
   if (isPreview()) return;
   const session = await getSession();

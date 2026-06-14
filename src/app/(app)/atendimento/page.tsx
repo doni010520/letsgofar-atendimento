@@ -1,17 +1,20 @@
 import { InboxLoader } from "@/components/inbox/inbox-loader";
 import { getConversations, getMessages } from "@/lib/data/conversations";
-import { getTags, getAgents, getDepartments } from "@/lib/data/management";
+import { getTags, getAgents, getDepartments, getQuickReplies } from "@/lib/data/management";
+import { getChannels } from "@/lib/data/channels";
 import { getSession } from "@/lib/auth";
 import { PREVIEW_MODE } from "@/lib/mock";
 
 export const revalidate = 0;
 
 export default async function AtendimentoPage() {
-  const [conversations, tags, agents, departments] = await Promise.all([
+  const [conversations, tags, agents, departments, quickReplies, channels] = await Promise.all([
     getConversations(),
     getTags("conversation"),
     getAgents(),
     getDepartments(),
+    getQuickReplies(),
+    getChannels(),
   ]);
   const first = conversations[0]?.id ?? null;
   const initialMessages = first ? await getMessages(first) : [];
@@ -31,6 +34,8 @@ export default async function AtendimentoPage() {
       tags={tags}
       agents={agents}
       departments={departments}
+      channels={channels}
+      quickReplies={quickReplies.map((q) => ({ title: q.title, content: q.content, shortcut: q.shortcut }))}
       live={!PREVIEW_MODE}
     />
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ConversationOverview, Message, Tag, Profile, Department } from "@/lib/types";
+import type { ConversationOverview, Message, Tag, Profile, Department, Channel } from "@/lib/types";
 
 // Lazy import evita SSR do Inbox (que usa toLocaleTimeString etc.)
 // mas sem next/dynamic que pode ter problemas de serialização de props.
@@ -15,6 +15,8 @@ export function InboxLoader(props: {
   tags: Tag[];
   agents: Profile[];
   departments: Department[];
+  channels?: Channel[];
+  quickReplies?: { title: string; content: string; shortcut: string | null }[];
   live: boolean;
 }) {
   const [ready, setReady] = useState(false);

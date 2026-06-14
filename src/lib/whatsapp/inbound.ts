@@ -75,6 +75,23 @@ async function resolveMentions(db: DB, channel: Channel, groupJid: string, body:
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
+/**
+ * Verifica se o horário atual (ajustado pelo tzOffset) está dentro de alguma faixa
+ * do schedule da automação. Retorna true se schedule for null/undefined (sem restrição).
+ */
+function isWithinSchedule(schedule: unknown, tzOffset: number): boolean {
+  if (!schedule || typeof schedule !== "object") return true;
+  const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+  const now = new Date(Date.now() + tzOffset * 3600000);
+  const dayKey = DAY_KEYS[now.getUTCDay()];
+  const hhmm = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
+  const ranges = (schedule as Record<string, unknown>)[dayKey];
+  if (!Array.isArray(ranges) || ranges.length === 0) return false;
+  return ranges.some(
+    (r) => Array.isArray(r) && r.length === 2 && hhmm >= (r[0] as string) && hhmm <= (r[1] as string),
+  );
+}
+
 /** Hash curto e estável para cache-busting da foto re-hospedada. */
 function hashStr(s: string): string {
   let h = 0;
@@ -157,18 +174,34 @@ export async function persistInbound(messages: InboundMessage[]) {
       if (Object.keys(patch).length) await db.from("contacts").update(patch).eq("id", contact.id);
     }
 
+    // Configurações da org: lidas uma vez e reaproveitadas para schedule,
+    // business_hours e close_command mais adiante.
+    const { data: orgRow } = await db
+      .from("organizations")
+      .select("settings")
+      .eq("id", org)
+      .maybeSingle();
+    const orgSettings = (orgRow?.settings ?? {}) as Record<string, unknown>;
+    const tzOffset = (orgSettings.timezone_offset as number) ?? -3;
+
     // Automação ativa do canal (chatbot). Grupos não entram no bot.
     const { data: automation } = isGroup
       ? { data: null }
       : await db
           .from("automations")
-          .select("id, flow, active, channel_id")
+          .select("id, flow, active, channel_id, integration_id, schedule")
           .eq("organization_id", org)
           .eq("active", true)
           .or(`channel_id.eq.${channel.id},channel_id.is.null`)
           .order("channel_id", { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle();
+
+    // Verifica se a automação está dentro do horário configurado.
+    // Se tiver schedule e a hora atual estiver fora, trata como sem automação.
+    const automationActive = automation
+      ? isWithinSchedule((automation as { schedule?: unknown }).schedule, tzOffset)
+      : false;
 
     // Conversa em aberto (reaproveita ou cria)
     let conversationId: string;
@@ -193,7 +226,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       convAiEnabled = (existing as { ai_enabled?: boolean }).ai_enabled !== false;
     } else {
       isNew = true;
-      convStatus = fromMe ? "open" : automation ? "bot" : "queued";
+      convStatus = fromMe ? "open" : automationActive ? "bot" : "queued";
       const { data: conv } = await db
         .from("conversations")
         .insert({
@@ -320,9 +353,7 @@ export async function persistInbound(messages: InboundMessage[]) {
           .eq("organization_id", org)
           .eq("active", true);
         if (hours && hours.length > 0) {
-          const { data: orgRow } = await db.from("organizations").select("settings").eq("id", org).maybeSingle();
-          const tz = ((orgRow?.settings as Record<string, unknown>)?.timezone_offset as number) ?? -3;
-          const now = new Date(Date.now() + tz * 3600000);
+          const now = new Date(Date.now() + tzOffset * 3600000);
           const dow = now.getUTCDay();
           const hhmm = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
           const todayHours = hours.filter((h: { day_of_week: number }) => h.day_of_week === dow);
@@ -356,8 +387,6 @@ export async function persistInbound(messages: InboundMessage[]) {
 
     // ====== Comando para encerrar (cliente envia palavra-chave) ======
     if (!fromMe && !isGroup && body && (convStatus === "open" || convStatus === "queued")) {
-      const { data: orgRow2 } = await db.from("organizations").select("settings").eq("id", org).maybeSingle();
-      const orgSettings = (orgRow2?.settings ?? {}) as Record<string, unknown>;
       const closeCmd = String(orgSettings.close_command ?? "").trim();
       if (closeCmd) {
         const keywords = closeCmd.split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
@@ -377,13 +406,14 @@ export async function persistInbound(messages: InboundMessage[]) {
       }
     }
 
-    // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número).
-    if (automation && !isGroup && !fromMe && convAiEnabled && (convStatus === "bot" || isNew)) {
+    // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número) e
+    // apenas quando a automação está dentro do horário configurado.
+    if (automationActive && !isGroup && !fromMe && convAiEnabled && (convStatus === "bot" || isNew)) {
       const r = await runChatbot(
         db,
         channel as Channel,
         { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: convBotNode },
-        automation as { id: string; flow: { nodes: never[]; edges: never[] } },
+        automation as { id: string; flow: { nodes: never[]; edges: never[] }; integration_id?: string | null },
         body ?? "",
       ).catch((e) => {
         console.warn("chatbot", (e as Error)?.message);

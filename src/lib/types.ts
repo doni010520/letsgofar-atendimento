@@ -150,13 +150,20 @@ export interface QuickReply {
   created_at: string;
 }
 
+/** Horário de execução: chaves sun/mon/.../sat, valor = array de faixas [HH:MM, HH:MM]. */
+export type AutomationSchedule = Partial<Record<"sun"|"mon"|"tue"|"wed"|"thu"|"fri"|"sat", [string, string][]>>;
+
 export interface Automation {
   id: string;
   organization_id: string;
   channel_id: string | null;
+  /** SGP vinculado. Se null, usa o primeiro SGP da organização. */
+  integration_id: string | null;
   name: string;
   trigger: string | null;
   flow: { nodes: unknown[]; edges: unknown[] };
+  /** Restrição de horário. null = sem restrição (roda 24/7). */
+  schedule: AutomationSchedule | null;
   active: boolean;
   updated_at: string;
   created_at: string;
@@ -210,6 +217,7 @@ export interface Campaign {
   automation_id: string | null;
   channel_id: string | null;
   name: string;
+  message: string | null;
   status: CampaignStatus;
   audience: unknown[];
   contact_filter: Record<string, unknown>;

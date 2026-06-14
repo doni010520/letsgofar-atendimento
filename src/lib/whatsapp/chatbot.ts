@@ -46,7 +46,7 @@ export async function runChatbot(
   db: DB,
   channel: Channel,
   conv: ConvState,
-  automation: { id: string; flow: Flow },
+  automation: { id: string; flow: Flow; integration_id?: string | null },
   userText: string,
 ): Promise<"bot" | "queued" | null> {
   const flow: Flow = {
@@ -73,6 +73,31 @@ export async function runChatbot(
     });
   };
 
+  /** Envia a resposta da IA em áudio (TTS): sobe no storage e manda como mídia de voz. */
+  const sendAudio = async (audio: { buffer: Buffer; mime: string }, transcript: string) => {
+    try {
+      const path = `${conv.organization_id}/bot/${conv.id}-${Math.random().toString(36).slice(2)}.ogg`;
+      const up = await db.storage.from("media").upload(path, audio.buffer, { contentType: audio.mime, upsert: true });
+      if (up.error) throw up.error;
+      const url = db.storage.from("media").getPublicUrl(path).data.publicUrl;
+      const res = await provider.sendMedia({ to, url, kind: "audio" }).catch(() => ({ externalId: undefined }));
+      await db.from("messages").insert({
+        organization_id: conv.organization_id,
+        conversation_id: conv.id,
+        direction: "out",
+        sender_type: "bot",
+        content_type: "audio",
+        body: transcript,
+        media_url: url,
+        external_id: res.externalId ?? null,
+        status: "sent",
+      });
+    } catch {
+      // Falha no áudio → cai para texto para não perder a resposta.
+      await send(transcript);
+    }
+  };
+
   /**
    * Processa um nó de IA: roda um turno do agente OpenAI (com tools do SGP).
    * Retorna "bot"/"queued"/null para encerrar a execução, ou "next" para
@@ -94,6 +119,7 @@ export async function runChatbot(
     const result = await runAiTurn({
       db,
       organizationId: conv.organization_id,
+      integrationId: automation.integration_id,
       conversationId: conv.id,
       contactPhone: conv.contact_phone,
       contactName: conv.contact_name,
@@ -101,6 +127,7 @@ export async function runChatbot(
       nodeInstruction: n.data?.content,
       userText,
       sendToCustomer: send,
+      sendAudioToCustomer: sendAudio,
     });
     if (result.decision === "transfer") {
       await routeTransfer(db, conv.organization_id, conv.id, result.transfer);

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
 import { saveSettings } from "@/app/(app)/ajustes/configuracoes/actions";
-import type { OrgSettings, Department } from "@/lib/types";
+import type { OrgSettings, Department, Channel } from "@/lib/types";
 
 const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
 const labelCls = "text-xs font-medium text-ink-soft";
@@ -30,7 +30,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-export function SettingsForm({ settings, departments }: { settings: OrgSettings; departments: Department[] }) {
+export function SettingsForm({ settings, departments, channels = [] }: { settings: OrgSettings; departments: Department[]; channels?: Channel[] }) {
   const [tab, setTab] = useState<"general" | "attendance" | "chatv2" | "permissions">("general");
   const s = settings;
 
@@ -68,6 +68,20 @@ export function SettingsForm({ settings, departments }: { settings: OrgSettings;
               <label className={labelCls}>Timezone (offset UTC)</label>
               <input type="number" name="timezone_offset" defaultValue={s.timezone_offset ?? -3} step={1} className={`w-32 ${inputCls}`} />
               <p className="mt-0.5 text-[10px] text-ink-soft">Padrão: -3 (Brasília)</p>
+            </div>
+            <div>
+              <label className={labelCls}>Canal “Siga-me” (notificações)</label>
+              <select name="follow_me_channel_id" defaultValue={s.follow_me_channel_id ?? ""} className={inputCls}>
+                <option value="">Nenhum</option>
+                {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          </Section>
+          <Section title="Segurança" hint="Restrinja o acesso por endereço de IP.">
+            <div>
+              <label className={labelCls}>Lista de IPs permitidos</label>
+              <textarea name="ip_whitelist" defaultValue={(s.ip_whitelist ?? []).join(", ")}
+                placeholder="Um IP por linha ou separados por vírgula. Vazio = sem restrição." rows={2} className={inputCls} />
             </div>
           </Section>
         </div>
@@ -132,6 +146,19 @@ export function SettingsForm({ settings, departments }: { settings: OrgSettings;
                 <option value="always">Sempre enviar (sem opção de desmarcar)</option>
                 <option value="admin_only">Somente administradores podem desmarcar</option>
               </select>
+            </div>
+            <Toggle name="csat_select_survey" label="Permitir escolher qual pesquisa enviar ao encerrar" defaultChecked={s.csat_select_survey} />
+          </Section>
+
+          <Section title="Privacidade das mensagens">
+            <div>
+              <label className={labelCls}>Ocultar mensagens de</label>
+              <select name="hide_msgs_mode" defaultValue={s.hide_msgs_mode ?? "none"} className={inputCls}>
+                <option value="none">Não ocultar</option>
+                <option value="queue">Atendimentos em espera</option>
+                <option value="queue_automation">Em espera e na automação</option>
+              </select>
+              <p className="mt-0.5 text-[10px] text-ink-soft">Esconde o conteúdo das mensagens nos cards conforme o estado do atendimento.</p>
             </div>
           </Section>
 
@@ -226,7 +253,84 @@ export function SettingsForm({ settings, departments }: { settings: OrgSettings;
           <Section title="Interface e visual">
             <Toggle name="v2_sidebar_collapsed" label="Sidebar colapsada ao abrir o chat" defaultChecked={s.v2_sidebar_collapsed} />
             <Toggle name="v2_show_channel_on_card" label="Mostrar canal no card do atendimento" defaultChecked={s.v2_show_channel_on_card} />
+            <Toggle name="v2_show_titles" label="Mostrar títulos/assunto nos cards" defaultChecked={s.v2_show_titles} />
+            <Toggle name="v2_use_address" label="Usar endereço do cliente nos cards" defaultChecked={s.v2_use_address} />
+            <Toggle name="v2_show_only_internet" label="Mostrar apenas atendimentos de internet" defaultChecked={s.v2_show_only_internet} />
+            <Toggle name="v2_show_cancelled" label="Mostrar atendimentos de contratos cancelados" defaultChecked={s.v2_show_cancelled} />
+            <Toggle name="v2_notify_high" label="Notificar atendimentos de alta prioridade" defaultChecked={s.v2_notify_high} />
+          </Section>
+
+          <Section title="Mensagem automática de fila" hint="Reenvia ao cliente enquanto ele aguarda na fila.">
+            <Toggle name="v2_queue_msg_enabled" label="Enviar mensagem de fila" defaultChecked={s.v2_queue_msg_enabled} />
+            <div>
+              <label className={labelCls}>Texto da mensagem</label>
+              <textarea name="v2_queue_msg_text" defaultValue={s.v2_queue_msg_text ?? ""} rows={2}
+                placeholder="Ex.: Você está na fila, em breve um atendente irá te responder." className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Reenviar a cada (minutos)</label>
+              <input type="number" name="v2_queue_msg_interval_min" defaultValue={s.v2_queue_msg_interval_min ?? ""} className={`w-32 ${inputCls}`} />
+            </div>
+          </Section>
+
+          <Section title="Promessa de pagamento">
+            <Toggle name="v2_promise_global" label="Habilitar promessa de pagamento global" defaultChecked={s.v2_promise_global} />
+            <div>
+              <label className={labelCls}>Dias de validade da promessa</label>
+              <input type="number" name="v2_promise_days" defaultValue={s.v2_promise_days ?? ""} className={`w-32 ${inputCls}`} />
+            </div>
+          </Section>
+
+          <Section title="Boletos / faturas">
+            <Toggle name="v2_search_all_boletos" label="Buscar todos os boletos do cliente" defaultChecked={s.v2_search_all_boletos} />
+            <Toggle name="v2_show_nonstandard_boletos" label="Mostrar boletos fora do padrão" defaultChecked={s.v2_show_nonstandard_boletos} />
+            <Toggle name="v2_only_overdue_plus_next" label="Apenas vencidos + próximo a vencer" defaultChecked={s.v2_only_overdue_plus_next} />
+            <Toggle name="v2_use_billing_link" label="Usar link de cobrança" defaultChecked={s.v2_use_billing_link} />
+            <div>
+              <label className={labelCls}>Janela de boletos (dias)</label>
+              <input type="number" name="v2_boleto_days" defaultValue={s.v2_boleto_days ?? ""} className={`w-32 ${inputCls}`} />
+            </div>
+          </Section>
+
+          <Section title="Cores por tempo de espera" hint="Destaca cards do cliente/atendente conforme o tempo sem resposta.">
             <Toggle name="v2_color_no_interaction" label="Colorir card por tempo sem interação" defaultChecked={s.v2_color_no_interaction} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Cliente — normal (segundos)</label>
+                <input type="number" name="v2_color_client_normal_sec" defaultValue={s.v2_color_client_normal_sec ?? ""} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Cor normal</label>
+                <input type="color" name="v2_color_client_normal" defaultValue={s.v2_color_client_normal ?? "#22c55e"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+              </div>
+              <div>
+                <label className={labelCls}>Cliente — médio (segundos)</label>
+                <input type="number" name="v2_color_client_medium_sec" defaultValue={s.v2_color_client_medium_sec ?? ""} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Cor média</label>
+                <input type="color" name="v2_color_client_medium" defaultValue={s.v2_color_client_medium ?? "#f59e0b"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+              </div>
+              <div>
+                <label className={labelCls}>Cliente — alto (segundos)</label>
+                <input type="number" name="v2_color_client_high_sec" defaultValue={s.v2_color_client_high_sec ?? ""} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Cor alta</label>
+                <input type="color" name="v2_color_client_high" defaultValue={s.v2_color_client_high ?? "#ef4444"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+              </div>
+            </div>
+            <Toggle name="v2_color_agent_enabled" label="Colorir também por tempo do atendente" defaultChecked={s.v2_color_agent_enabled} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Atendente (segundos)</label>
+                <input type="number" name="v2_color_agent_sec" defaultValue={s.v2_color_agent_sec ?? ""} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Cor do atendente</label>
+                <input type="color" name="v2_color_agent_color" defaultValue={s.v2_color_agent_color ?? "#3b82f6"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+              </div>
+            </div>
           </Section>
         </div>
       )}

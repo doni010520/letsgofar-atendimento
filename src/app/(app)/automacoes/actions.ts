@@ -9,8 +9,17 @@ export async function createAutomation(fd: FormData) {
   await orgInsert("automations", {
     name: input.name,
     channel_id: input.channel_id ?? null,
+    integration_id: input.integration_id ?? null,
     trigger: input.trigger ?? null,
   });
+  revalidatePath("/automacoes");
+}
+
+export async function updateAutomationConfig(
+  id: string,
+  data: { integration_id?: string | null; schedule?: unknown },
+) {
+  await orgUpdate("automations", id, { ...data, updated_at: new Date().toISOString() });
   revalidatePath("/automacoes");
 }
 export async function toggleAutomation(id: string, active: boolean) {

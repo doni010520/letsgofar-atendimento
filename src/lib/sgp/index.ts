@@ -56,3 +56,25 @@ export async function sgpForOrg(db: AnyDb, organizationId: string): Promise<SgpC
     throw e;
   }
 }
+
+/**
+ * Carrega um SgpClient a partir de um ID de integração específico.
+ * Usar quando a automação tem integration_id definido — garante que
+ * cada automação consulta o SGP correto (ex.: IGUAI vs NOVA CANAA).
+ */
+export async function sgpForIntegration(db: AnyDb, integrationId: string): Promise<SgpClient | null> {
+  const { data } = await db
+    .from("integrations")
+    .select("config")
+    .eq("id", integrationId)
+    .eq("type", "sgp")
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  try {
+    return sgpFromConfig((data as { config: unknown }).config);
+  } catch (e) {
+    if (e instanceof SgpError) return null;
+    throw e;
+  }
+}

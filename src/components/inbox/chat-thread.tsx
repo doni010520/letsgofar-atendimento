@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -24,15 +24,18 @@ export function ChatThread({
   onAssign,
   onClose,
   onTransfer,
+  onAddNote,
   onToggleMute,
   onToggleAi,
   initialReplyTo,
   onType,
+  quickReplies,
   pending,
 }: {
   conversation: ConversationOverview;
   messages: Message[];
   groupParticipants?: { name: string; phone: string }[];
+  quickReplies?: { title: string; content: string; shortcut: string | null }[];
   onSend: (text: string, replyId?: string, mentions?: { name: string; phone: string }[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
@@ -48,6 +51,7 @@ export function ChatThread({
   onAssign: () => void;
   onClose: () => void;
   onTransfer: () => void;
+  onAddNote?: () => void;
   onToggleMute: () => void;
   onToggleAi: () => void;
   initialReplyTo?: Message | null;
@@ -129,6 +133,11 @@ export function ChatThread({
               <button onClick={onTransfer} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
                 <ArrowRightLeft size={12} /> Transferir
               </button>
+              {onAddNote && (
+                <button onClick={onAddNote} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
+                  <StickyNote size={12} /> Nota
+                </button>
+              )}
               <button onClick={onClose} className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-danger hover:bg-red-100">
                 <CheckCircle2 size={12} /> Encerrar
               </button>
@@ -210,6 +219,7 @@ export function ChatThread({
         onSendLocation={onSendLocation}
         onSendContact={onSendContact}
         onType={onType}
+        quickReplies={quickReplies}
         mentionCandidates={
           conversation.is_group && groupParticipants?.length
             ? groupParticipants
