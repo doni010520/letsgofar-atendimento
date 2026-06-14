@@ -13,7 +13,6 @@ import {
   Tag,
   History,
   Building2,
-  Wallet,
   KeyRound,
   Server,
   Download,
@@ -55,7 +54,6 @@ export const NAV: NavGroup[] = [
     title: "Empresa",
     items: [
       { href: "/empresa", label: "Dados da empresa", icon: Building2 },
-      { href: "/financeiro", label: "Financeiro", icon: Wallet },
       { href: "/atendentes", label: "Atendentes", icon: Users },
       { href: "/departamentos", label: "Departamentos", icon: Layers },
       { href: "/clientes", label: "Clientes", icon: Contact },

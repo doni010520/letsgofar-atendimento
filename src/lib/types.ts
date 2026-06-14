@@ -241,19 +241,6 @@ export interface Plan {
   created_at: string;
 }
 
-export type InvoiceStatus = "open" | "paid" | "overdue" | "cancelled";
-
-export interface Invoice {
-  id: string;
-  organization_id: string;
-  description: string;
-  amount: number;
-  due_date: string | null;
-  status: InvoiceStatus;
-  paid_at: string | null;
-  created_at: string;
-}
-
 export interface Channel {
   id: string;
   organization_id: string;
