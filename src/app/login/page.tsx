@@ -10,6 +10,23 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Estado do desafio 2FA (quando a conta tem TOTP verificado).
+  const [mfa, setMfa] = useState<{ factorId: string } | null>(null);
+  const [code, setCode] = useState("");
+
+  async function proceedOrChallenge() {
+    const supabase = createClient();
+    // Verifica se a conta exige 2FA (AAL2) e ainda não cumpriu.
+    try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === "aal2" && aal.nextLevel !== aal.currentLevel) {
+        const { data: f } = await supabase.auth.mfa.listFactors();
+        const totp = f?.totp?.find((x) => x.status === "verified");
+        if (totp) { setMfa({ factorId: totp.id }); setPending(false); return; }
+      }
+    } catch { /* sem MFA configurado → segue */ }
+    router.push("/dashboard");
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -25,9 +42,47 @@ export default function LoginPage() {
       email: String(form.get("email")),
       password: String(form.get("password")),
     });
-    setPending(false);
-    if (error) setError("E-mail ou senha inválidos.");
-    else router.push("/dashboard");
+    if (error) { setPending(false); setError("E-mail ou senha inválidos."); return; }
+    await proceedOrChallenge();
+  }
+
+  async function verifyMfa(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!mfa || code.trim().length < 6) return;
+    setError(null);
+    setPending(true);
+    const supabase = createClient();
+    try {
+      const ch = await supabase.auth.mfa.challenge({ factorId: mfa.factorId });
+      if (ch.error) throw ch.error;
+      const v = await supabase.auth.mfa.verify({ factorId: mfa.factorId, challengeId: ch.data.id, code: code.trim() });
+      if (v.error) throw v.error;
+      router.push("/dashboard");
+    } catch {
+      setPending(false);
+      setError("Código inválido. Tente novamente.");
+    }
+  }
+
+  if (mfa) {
+    return (
+      <AuthShell title="Verificação em duas etapas" subtitle="Digite o código do seu app autenticador">
+        <form onSubmit={verifyMfa} className="space-y-4">
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            inputMode="numeric"
+            autoFocus
+            placeholder="000000"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-center font-mono text-lg tracking-[0.3em] outline-none focus:border-brand"
+          />
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <Button type="submit" className="w-full" disabled={pending || code.length < 6}>
+            {pending ? "Verificando..." : "Confirmar"}
+          </Button>
+        </form>
+      </AuthShell>
+    );
   }
 
   return (

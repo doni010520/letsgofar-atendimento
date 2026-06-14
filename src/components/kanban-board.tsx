@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, Search, Hash, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { moveConversationStatus } from "@/app/(app)/atendimento-v2/actions";
 import type {
   ConversationOverview,
   ConversationStatus,
@@ -151,7 +152,7 @@ export function KanbanBoard({
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "board" && <Board conversations={filtered} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} />}
+        {tab === "board" && <Board conversations={filtered} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} onMove={async (id, status) => { await moveConversationStatus(id, status).catch(() => {}); router.refresh(); }} />}
         {tab === "closed" && <ClosedList items={closedToday} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} />}
         {tab === "analytics" && <Analytics conversations={filtered} closedToday={closedToday} />}
       </div>
@@ -169,7 +170,7 @@ function timeBorderColor(lastMsgAt: string | null): string | null {
   return null;
 }
 
-function Card({ c, onOpen, recurrenceCount }: { c: ConversationOverview; onOpen: () => void; recurrenceCount?: number }) {
+function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: ConversationOverview; onOpen: () => void; recurrenceCount?: number; draggable?: boolean; onDragStart?: (e: React.DragEvent) => void }) {
   const initials = (c.contact_name ?? c.contact_phone)
     .split(" ")
     .slice(0, 2)
@@ -186,7 +187,12 @@ function Card({ c, onOpen, recurrenceCount }: { c: ConversationOverview; onOpen:
   return (
     <button
       onClick={onOpen}
-      className="w-full overflow-hidden rounded-lg bg-surface text-left shadow-sm transition hover:shadow-md"
+      draggable={draggable}
+      onDragStart={onDragStart}
+      className={cn(
+        "w-full overflow-hidden rounded-lg bg-surface text-left shadow-sm transition hover:shadow-md",
+        draggable && "cursor-grab active:cursor-grabbing",
+      )}
       style={borderColor ? { borderLeft: `3px solid ${borderColor}` } : undefined}
     >
       {c.department_color && <div className="h-1 w-full" style={{ backgroundColor: c.department_color }} />}
@@ -244,13 +250,29 @@ function Card({ c, onOpen, recurrenceCount }: { c: ConversationOverview; onOpen:
   );
 }
 
-function Board({ conversations, onOpen, recurrenceCounts }: { conversations: ConversationOverview[]; onOpen: () => void; recurrenceCounts: Record<string, number> }) {
+function Board({ conversations, onOpen, recurrenceCounts, onMove }: { conversations: ConversationOverview[]; onOpen: () => void; recurrenceCounts: Record<string, number>; onMove: (id: string, status: "open" | "queued" | "bot") => void }) {
+  const [dragOver, setDragOver] = useState<string | null>(null);
   return (
     <div className="grid h-full grid-cols-1 gap-4 overflow-hidden p-6 md:grid-cols-3">
       {COLUMNS.map((col) => {
         const items = conversations.filter((c) => c.status === col.status);
         return (
-          <div key={col.status} className="flex min-h-0 flex-col rounded-card bg-gray-50/70">
+          <div
+            key={col.status}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(col.status); }}
+            onDragLeave={() => setDragOver((s) => (s === col.status ? null : s))}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(null);
+              const id = e.dataTransfer.getData("text/conversation-id");
+              const from = e.dataTransfer.getData("text/from-status");
+              if (id && from !== col.status) onMove(id, col.status as "open" | "queued" | "bot");
+            }}
+            className={cn(
+              "flex min-h-0 flex-col rounded-card bg-gray-50/70 transition",
+              dragOver === col.status && "ring-2 ring-brand ring-offset-1",
+            )}
+          >
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className={cn("h-2 w-2 rounded-full", col.dot)} />
@@ -259,9 +281,20 @@ function Board({ conversations, onOpen, recurrenceCounts }: { conversations: Con
               <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-ink-soft">{items.length}</span>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto p-3">
-              {items.length === 0 && <p className="pt-6 text-center text-xs text-ink-soft">Nenhum atendimento.</p>}
+              {items.length === 0 && <p className="pt-6 text-center text-xs text-ink-soft">Arraste atendimentos para cá.</p>}
               {items.map((c) => (
-                <Card key={c.id} c={c} onOpen={onOpen} recurrenceCount={recurrenceCounts?.[c.contact_id]} />
+                <Card
+                  key={c.id}
+                  c={c}
+                  onOpen={onOpen}
+                  recurrenceCount={recurrenceCounts?.[c.contact_id]}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/conversation-id", c.id);
+                    e.dataTransfer.setData("text/from-status", c.status);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                />
               ))}
             </div>
           </div>

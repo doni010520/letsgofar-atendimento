@@ -1,13 +1,23 @@
 import { Scroll } from "@/components/scroll";
-import { PageHeader, Card, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
+import { FinanceClient } from "@/components/finance-client";
+import { createClient } from "@/lib/supabase/server";
+import { PREVIEW_MODE } from "@/lib/mock";
+import type { Invoice } from "@/lib/types";
 
-export default function FinanceiroPage() {
+async function getInvoices(): Promise<Invoice[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data } = await sb.from("invoices").select("*").order("due_date", { ascending: false, nullsFirst: false });
+  return (data as Invoice[]) ?? [];
+}
+
+export default async function FinanceiroPage() {
+  const invoices = await getInvoices();
   return (
     <Scroll>
-      <PageHeader title="Financeiro" subtitle="Faturas, assinatura e pagamentos." />
-      <Card className="py-12">
-        <EmptyState title="Módulo em breve" hint="O gerenciamento financeiro (faturas, planos, cobranças) estará disponível em uma próxima versão." />
-      </Card>
+      <PageHeader title="Financeiro" subtitle="Acompanhe e gerencie suas faturas." />
+      <FinanceClient invoices={invoices} />
     </Scroll>
   );
 }

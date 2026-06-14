@@ -3,21 +3,33 @@ import { PageHeader, Card, Button } from "@/components/ui";
 import { getSession } from "@/lib/auth";
 import { PREVIEW_MODE } from "@/lib/mock";
 import { updateOwnProfile } from "./actions";
+import { TwoFactorSetup } from "@/components/two-factor-setup";
+import { PasswordChangeForm } from "@/components/password-change-form";
 
 const ROLE_LABEL: Record<string, string> = { admin: "Administrador", supervisor: "Supervisor", agent: "Atendente" };
 
 export default async function PerfilPage() {
   const session = PREVIEW_MODE ? null : await getSession();
   const p = session?.profile;
+  // name guardado junto; separa em Nome / Sobrenome só para exibição no form.
+  const parts = (p?.name ?? "").trim().split(/\s+/);
+  const firstName = parts.shift() ?? "";
+  const lastName = parts.join(" ");
 
   return (
     <Scroll>
       <PageHeader title="Meu perfil" subtitle="Seus dados pessoais e preferências." />
       <Card className="max-w-xl">
         <form action={updateOwnProfile} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-soft">Nome</label>
-            <input name="name" defaultValue={p?.name ?? ""} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-soft">Nome</label>
+              <input name="name" defaultValue={firstName} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-soft">Sobrenome</label>
+              <input name="last_name" defaultValue={lastName} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -53,23 +65,8 @@ export default async function PerfilPage() {
         </form>
       </Card>
 
-      {/* 2FA */}
-      <Card className="mt-4 max-w-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-ink">Autenticação em dois fatores (2FA)</h3>
-            <p className="text-xs text-ink-soft">Adicione uma camada extra de segurança à sua conta.</p>
-          </div>
-          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${p?.totp_enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-ink-soft"}`}>
-            {p?.totp_enabled ? "2FA ON" : "Desativado"}
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-ink-soft">
-          {p?.totp_enabled
-            ? "A autenticação em dois fatores está ativa. Use seu aplicativo de autenticação para gerar códigos."
-            : "A configuração de 2FA via aplicativo autenticador (TOTP) estará disponível em breve."}
-        </p>
-      </Card>
+      {!PREVIEW_MODE && <PasswordChangeForm />}
+      {!PREVIEW_MODE && <TwoFactorSetup enabled={p?.totp_enabled} />}
     </Scroll>
   );
 }

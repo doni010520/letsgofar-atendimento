@@ -1,10 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Star } from "lucide-react";
+import { Star, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReportsCharts } from "./reports-charts";
 import type { ReportData, AgentReport, ClientReport, CsatReport } from "@/lib/data/reports";
+
+/** Gera e baixa um CSV (com BOM p/ acentuação no Excel) a partir de linhas. */
+function downloadCsv(filename: string, rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    const s = String(v ?? "");
+    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = rows.map((r) => r.map(esc).join(";")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const TABS = [
   "Dashboard",
@@ -29,21 +45,58 @@ export function ReportsTabs({
 }) {
   const [tab, setTab] = useState<Tab>("Dashboard");
 
+  function exportCurrent() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (tab === "Dashboard" || tab === "Atendimentos") {
+      const rows: (string | number)[][] = [["Status", "Quantidade", "%"]];
+      for (const r of data.byStatus) {
+        rows.push([r.name, r.value, data.totals.all ? ((r.value / data.totals.all) * 100).toFixed(1) + "%" : "0%"]);
+      }
+      rows.push([], ["Por dia", "Atendimentos"]);
+      for (const d of data.byDay) rows.push([d.date, d.total]);
+      downloadCsv(`relatorio-atendimentos-${stamp}.csv`, rows);
+    } else if (tab === "Atendentes") {
+      const rows: (string | number)[][] = [["Atendente", "Total", "Em andamento", "Encerrados"]];
+      for (const a of agents) rows.push([a.name, a.total, a.open, a.closed]);
+      downloadCsv(`relatorio-atendentes-${stamp}.csv`, rows);
+    } else if (tab === "Clientes") {
+      const rows: (string | number)[][] = [["Cliente", "Telefone", "Atendimentos", "Último"]];
+      for (const c of clients) rows.push([c.name, c.phone, c.total, c.last ? new Date(c.last).toLocaleDateString("pt-BR") : ""]);
+      downloadCsv(`relatorio-clientes-${stamp}.csv`, rows);
+    } else {
+      const rows: (string | number)[][] = [["Pesquisa", "Média", "Avaliações", "Nota", "Qtd"]];
+      for (const s of csat) {
+        rows.push([s.survey, s.avg, s.count, "", ""]);
+        for (const d of s.distribution) rows.push(["", "", "", `${d.note}★`, d.count]);
+      }
+      downloadCsv(`relatorio-satisfacao-${stamp}.csv`, rows);
+    }
+  }
+
   return (
     <div>
-      <div className="mb-6 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-0.5 text-sm">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "rounded-md px-3 py-1.5 font-medium transition",
-              tab === t ? "bg-surface text-ink shadow-sm" : "text-ink-soft",
-            )}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="flex flex-1 flex-wrap gap-1 rounded-lg bg-gray-100 p-0.5 text-sm">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "rounded-md px-3 py-1.5 font-medium transition",
+                tab === t ? "bg-surface text-ink shadow-sm" : "text-ink-soft",
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={exportCurrent}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink"
+          title="Exportar a aba atual em CSV"
+        >
+          <Download size={14} /> Exportar CSV
+        </button>
       </div>
 
       {tab === "Dashboard" && <ReportsCharts data={data} />}
