@@ -272,14 +272,18 @@ export function Composer({
               <a href="/mensagens/templates" className="text-brand underline">Mensagens → Templates</a>.
             </p>
           ) : !tplPick ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {templates!.map((t) => (
                 <button
                   key={`${t.name}-${t.language}`}
                   onClick={() => { setTplPick(t); setTplParams(Array(t.varCount).fill("")); }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-ink transition hover:border-brand hover:text-brand"
+                  className="flex w-60 flex-col items-start gap-0.5 rounded-lg border border-border px-2.5 py-2 text-left transition hover:border-brand"
+                  title={t.name}
                 >
-                  <LayoutTemplate size={13} /> {t.name}
+                  <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+                    <LayoutTemplate size={11} /> {t.name}
+                  </span>
+                  <span className="line-clamp-2 text-xs text-ink">{t.bodyText || "(modelo sem corpo de texto)"}</span>
                 </button>
               ))}
             </div>

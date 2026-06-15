@@ -441,8 +441,22 @@ export async function sendTemplateMessage(
   const components = params.length
     ? [{ type: "body", parameters: params.map((p) => ({ type: "text", text: p })) }]
     : undefined;
-  // Prévia legível do template (substitui {{n}} pelos parâmetros).
-  const preview = `[modelo: ${name}]`;
+
+  // Renderiza o CONTEÚDO real do template (corpo com {{n}} substituídos) para
+  // mostrar na bolha — em vez de um código tipo "[modelo: x]".
+  const { data: tpl } = await supabase
+    .from("wa_templates")
+    .select("components")
+    .eq("name", name)
+    .eq("language", language)
+    .maybeSingle();
+  let rendered = "";
+  const comps = Array.isArray(tpl?.components) ? (tpl!.components as Record<string, unknown>[]) : [];
+  const bodyComp = comps.find((c) => String(c.type).toUpperCase() === "BODY");
+  if (bodyComp?.text) {
+    rendered = String(bodyComp.text).replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => params[Number(n) - 1] ?? `{{${n}}}`);
+  }
+  const body = rendered || `Modelo enviado: ${name}`;
 
   const { data: msg } = await supabase
     .from("messages")
@@ -453,7 +467,7 @@ export async function sendTemplateMessage(
       sender_type: "agent",
       sender_id: session.userId,
       content_type: "template",
-      body: preview,
+      body,
       status: "pending",
     })
     .select("id")
@@ -463,9 +477,20 @@ export async function sendTemplateMessage(
     const res = await provider.sendTemplate({ to: recipientOf(conv), name, language, components });
     await supabase.from("messages").update({ status: "sent", external_id: res.externalId ?? null }).eq("id", msg!.id);
   } catch (e) {
-    console.error("sendTemplate", e);
+    const raw = (e as Error)?.message ?? "";
+    console.error("sendTemplate", raw);
     await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
-    return { ok: false, error: "Falha ao enviar o modelo." };
+    // Extrai a mensagem de erro legível da Meta (JSON em error.message).
+    let friendly = "Falha ao enviar o modelo.";
+    const m = raw.match(/"message"\s*:\s*"([^"]+)"/);
+    if (m) friendly = m[1];
+    if (/131030|not in allowed list|allowed recipient/i.test(raw))
+      friendly = "Conta de teste da Meta: este número não está na lista de destinatários permitidos. Adicione-o em WhatsApp → Configuração da API.";
+    else if (/132000|132001|template name|does not exist|not found/i.test(raw))
+      friendly = "Modelo não encontrado/aprovado para este número. Verifique o idioma e o status na Meta.";
+    else if (/132012|param/i.test(raw))
+      friendly = "Parâmetros do modelo incorretos (variáveis faltando ou a mais).";
+    return { ok: false, error: friendly };
   }
   await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
   revalidatePath("/atendimento");
