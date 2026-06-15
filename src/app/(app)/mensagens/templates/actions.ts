@@ -34,6 +34,10 @@ export async function syncMetaTemplates(): Promise<{ ok: boolean; count?: number
     return { ok: false, error: `Falha ao consultar a Meta: ${(e as Error)?.message?.slice(0, 140)}` };
   }
 
+  // Ignora os modelos de AMOSTRA/biblioteca da Meta (não servem para envio real).
+  const SAMPLE = /^(hello_world$|jaspers_market_|sample_)/i;
+  list = list.filter((t) => !SAMPLE.test(t.name));
+
   // Upsert por (name, language): atualiza existentes, insere novos.
   const { data: existing } = await sb.from("wa_templates").select("id, name, language");
   const byKey = new Map((existing ?? []).map((t) => [`${t.name}|${t.language}`, t.id]));
