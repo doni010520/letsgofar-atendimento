@@ -179,6 +179,38 @@ export function basePromptPreview(agentName?: string): string {
   return defaultMvfPrompt(agentName);
 }
 
+/** Lê um agente de IA específico por id (usado pelo nó de IA do fluxo que aponta p/ um agente). */
+export async function getAiAgentById(db: DB, agentId: string): Promise<AiAgentConfig | null> {
+  const { data } = await db
+    .from("ai_agents")
+    .select("name, prompt, model, config, active")
+    .eq("id", agentId)
+    .maybeSingle();
+  if (!data) return null;
+  const cfg = (data.config ?? {}) as {
+    temperature?: number; knowledge?: string; base_prompt?: string; tone?: string; greeting?: string;
+    use_emojis?: boolean; single_message?: boolean; audio_replies?: boolean; voice?: string;
+    execute_actions?: boolean; restrict_to_allowlist?: boolean;
+  };
+  const model = (data.model as string) || "";
+  return {
+    customInstructions: (data.prompt as string) || "",
+    basePromptOverride: cfg.base_prompt?.trim() || undefined,
+    model: /^(gpt|o\d|chatgpt)/i.test(model) ? model : "gpt-4o-mini",
+    temperature: typeof cfg.temperature === "number" ? cfg.temperature : 0.4,
+    knowledge: cfg.knowledge,
+    agentName: (data.name as string)?.trim() || undefined,
+    tone: cfg.tone?.trim() || undefined,
+    greeting: cfg.greeting?.trim() || undefined,
+    useEmojis: cfg.use_emojis,
+    singleMessage: cfg.single_message,
+    audioReplies: cfg.audio_replies === true,
+    voice: cfg.voice?.trim() || "alloy",
+    executeActions: cfg.execute_actions !== false,
+    restrictToAllowlist: cfg.restrict_to_allowlist !== false,
+  };
+}
+
 /**
  * Verifica se um número está liberado para atendimento por IA (allowlist).
  * Compara só dígitos. Tolera variação do 9º dígito em celular BR (12 vs 13).
@@ -647,13 +679,11 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     // Sem tool calls → resposta final ao cliente.
     const finalText = choice.content?.trim();
     if (finalText) {
-      // Áudio (TTS) quando habilitado e há canal de áudio; senão texto.
+      // Sempre envia o texto; se áudio (TTS) habilitado, envia TAMBÉM o áudio.
+      await ctx.sendToCustomer(finalText);
       if (ctx.agent.audioReplies && ctx.sendAudioToCustomer) {
         const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "alloy");
-        if (audio) await ctx.sendAudioToCustomer(audio, finalText);
-        else await ctx.sendToCustomer(finalText);
-      } else {
-        await ctx.sendToCustomer(finalText);
+        if (audio) await ctx.sendAudioToCustomer(audio, finalText).catch(() => {});
       }
     }
     break;
