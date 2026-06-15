@@ -10,9 +10,9 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-6">
+    <div className="flex items-start justify-between gap-4 py-5">
       <div>
-        <h1 className="text-3xl font-semibold text-ink">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-ink-soft">{subtitle}</p>}
       </div>
       {action}
@@ -22,7 +22,7 @@ export function PageHeader({
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn("rounded-card border border-gray-100 bg-surface p-5 shadow-sm", className)}>
+    <div className={cn("rounded-card border border-border bg-surface p-5 shadow-card", className)}>
       {children}
     </div>
   );
@@ -40,12 +40,12 @@ export function StatCard({
   accent?: string;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-card border border-gray-100 bg-surface p-5 shadow-sm transition hover:shadow-md">
+    <div className="flex items-center gap-4 rounded-card border border-border bg-surface p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-pop">
       <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", accent)}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold leading-tight text-ink">{value}</p>
+        <p className="tnum text-2xl font-bold leading-tight text-ink">{value}</p>
         <p className="truncate text-xs text-ink-soft">{label}</p>
       </div>
     </div>

@@ -22,7 +22,7 @@ export function PasswordChangeForm() {
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
+  const inputCls = "w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand";
 
   return (
     <Card className="mt-4 max-w-xl">

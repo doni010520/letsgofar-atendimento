@@ -87,15 +87,15 @@ export function ContactPanel({
   const title = conversation.contact_name ?? (isGroup ? "Grupo" : conversation.contact_phone);
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-gray-100 bg-surface">
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-surface">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-ink">{isGroup ? "Dados do grupo" : "Dados do contato"}</h2>
         <button onClick={onClose} className="text-ink-soft hover:text-ink"><X size={18} /></button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* Cabeçalho com avatar */}
-        <div className="flex flex-col items-center gap-2 border-b border-gray-100 p-5 text-center">
+        <div className="flex flex-col items-center gap-2 border-b border-border p-5 text-center">
           {conversation.contact_avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={conversation.contact_avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
@@ -211,7 +211,7 @@ export function ContactPanel({
 
             {/* Ações SGP (se contrato preenchido) */}
             {fields.contrato && (
-              <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="mt-3 border-t border-border pt-3">
                 <p className="mb-2 text-[11px] font-semibold uppercase text-ink-soft">Ações SGP</p>
                 <div className="grid grid-cols-2 gap-1.5">
                   {([
@@ -235,7 +235,7 @@ export function ContactPanel({
 
             {/* Histórico de atendimentos anteriores */}
             {history.length > 0 && (
-              <div className="mt-4 border-t border-gray-100 pt-4">
+              <div className="mt-4 border-t border-border pt-4">
                 <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-ink-soft">
                   <History size={12} /> Atendimentos anteriores
                 </p>
@@ -268,7 +268,7 @@ export function ContactPanel({
 }
 
 const inputCls =
-  "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand";
+  "w-full rounded-lg border border-border px-2.5 py-1.5 text-sm outline-none focus:border-brand";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

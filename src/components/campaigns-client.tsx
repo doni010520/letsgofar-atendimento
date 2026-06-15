@@ -95,18 +95,18 @@ export function CampaignsClient({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar campanha..."
-              className="w-48 rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-sm outline-none focus:border-brand"
+              className="w-48 rounded-lg border border-border py-1.5 pl-8 pr-3 text-sm outline-none focus:border-brand"
             />
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-brand">
+            className="rounded-lg border border-border px-2 py-1.5 text-sm outline-none focus:border-brand">
             <option value="all">Todos os status</option>
             {STATUS_FILTERS.filter((s) => s !== "all").map((s) => (
               <option key={s} value={s}>{STATUS[s].label}</option>
             ))}
           </select>
           <select value={autoFilter} onChange={(e) => setAutoFilter(e.target.value)}
-            className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-brand">
+            className="rounded-lg border border-border px-2 py-1.5 text-sm outline-none focus:border-brand">
             <option value="all">Todas as automações</option>
             {automations.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
@@ -120,7 +120,7 @@ export function CampaignsClient({
       <div className="mt-4 overflow-hidden rounded-card bg-surface shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 text-left text-xs text-ink-soft">
+            <tr className="border-b border-border text-left text-xs text-ink-soft">
               <th className="px-4 py-3 font-medium">Nome da Campanha</th>
               <th className="px-4 py-3 font-medium">Fluxo de Automação</th>
               <th className="px-4 py-3 font-medium">Clientes</th>
@@ -138,7 +138,7 @@ export function CampaignsClient({
               const s = STATUS[c.status] ?? STATUS.draft;
               const canLaunch = c.status === "draft" || c.status === "scheduled";
               return (
-                <tr key={c.id} className="border-b border-gray-50 last:border-0">
+                <tr key={c.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-3 font-medium text-ink">{c.name}</td>
                   <td className="px-4 py-3 text-ink-soft">{autoName(c.automation_id) ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-soft">{c.total_contacts || "—"}</td>
@@ -181,18 +181,18 @@ export function CampaignsClient({
             <form action={submit} className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Nome da campanha</label>
-                <input name="name" required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <input name="name" required className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Canal</label>
-                <select name="channel_id" required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                <select name="channel_id" required className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                   <option value="">Selecione um canal</option>
                   {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Fluxo de automação (opcional)</label>
-                <select name="automation_id" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                <select name="automation_id" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                   <option value="">Sem fluxo (só dispara a mensagem)</option>
                   {automations.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
@@ -201,11 +201,11 @@ export function CampaignsClient({
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Mensagem de disparo</label>
                 <textarea name="message" rows={3} placeholder="Deixe em branco para usar a 1ª mensagem do fluxo."
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Agendar para (opcional)</label>
-                <input type="datetime-local" name="scheduled_at" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <input type="datetime-local" name="scheduled_at" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>

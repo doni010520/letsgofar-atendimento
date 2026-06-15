@@ -54,7 +54,7 @@ export function Sidebar() {
                   {group.title}
                 </span>
               ) : (
-                <span className="mx-auto my-1 h-px w-6 bg-gray-200" aria-hidden />
+                <span className="mx-auto my-1 h-px w-6 bg-border" aria-hidden />
               )}
               {group.items.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -67,7 +67,7 @@ export function Sidebar() {
                     className={cn(
                       "flex items-center rounded-xl transition",
                       expanded ? "gap-3 px-3 py-2" : "h-11 w-11 justify-center",
-                      active ? "bg-brand-light text-brand" : "text-ink-soft hover:bg-gray-100 hover:text-ink",
+                      active ? "bg-brand-light text-brand" : "text-ink-soft hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink",
                     )}
                   >
                     <Icon size={20} className="shrink-0" />
@@ -80,12 +80,12 @@ export function Sidebar() {
         </nav>
 
         {/* Rodapé: fixar/soltar + sair */}
-        <div className="mt-2 flex flex-col gap-1 border-t border-gray-100 pt-2">
+        <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
           <button
             onClick={togglePin}
             title={pinned ? "Soltar (recolher ao tirar o mouse)" : "Fixar aberta"}
             className={cn(
-              "flex items-center rounded-xl text-ink-soft transition hover:bg-gray-100 hover:text-ink",
+              "flex items-center rounded-xl text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink",
               expanded ? "gap-3 px-3 py-2" : "h-11 w-11 justify-center",
             )}
           >

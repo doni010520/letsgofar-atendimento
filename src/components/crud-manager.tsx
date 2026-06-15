@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Pencil, Trash2 } from "lucide-react";
 import { Button, Card } from "@/components/ui";
+import { toast } from "@/components/toast";
 
 export type CrudField = {
   name: string;
@@ -54,6 +55,7 @@ export function CrudManager({
       else await createAction(fd);
       setEditing(null);
       setCreating(false);
+      toast("Salvo com sucesso!");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -127,15 +129,15 @@ export function CrudManager({
                   <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
                   {f.type === "textarea" ? (
                     <textarea name={f.name} defaultValue={editing?.[f.name] ?? ""} placeholder={f.placeholder} required={f.required}
-                      rows={3} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                      rows={3} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
                   ) : f.type === "select" ? (
                     <select name={f.name} defaultValue={editing?.[f.name] ?? ""} required={f.required}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                       <option value="">—</option>
                       {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   ) : f.type === "multiselect" ? (
-                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
                       {(f.options ?? []).length === 0 && (
                         <p className="px-1 py-1 text-xs text-ink-soft">Nenhuma opção disponível.</p>
                       )}
@@ -157,13 +159,13 @@ export function CrudManager({
                     </label>
                   ) : f.type === "number" ? (
                     <input type="number" name={f.name} defaultValue={editing?.[f.name] ?? ""} placeholder={f.placeholder} required={f.required}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
                   ) : f.type === "color" ? (
                     <input type="color" name={f.name} defaultValue={editing?.[f.name] ?? "#00a8ff"}
-                      className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+                      className="h-10 w-20 cursor-pointer rounded-lg border border-border" />
                   ) : (
                     <input name={f.name} defaultValue={editing?.[f.name] ?? ""} placeholder={f.placeholder} required={f.required}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
                   )}
                 </div>
               ))}

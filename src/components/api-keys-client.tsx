@@ -77,11 +77,11 @@ export function ApiKeysClient({ keys, channels }: { keys: ApiKey[]; channels: Ch
             <form action={submit} className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Nome da chave</label>
-                <input name="name" required placeholder="Ex.: Integração n8n" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <input name="name" required placeholder="Ex.: Integração n8n" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Canal (opcional — limita a chave a um canal)</label>
-                <select name="channel_id" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                <select name="channel_id" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                   <option value="">Todos os canais</option>
                   {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>

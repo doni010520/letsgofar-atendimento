@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Search, Hash, Star } from "lucide-react";
+import { Search, Hash, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { moveConversationStatus } from "@/app/(app)/atendimento-v2/actions";
 import type {
@@ -21,7 +21,7 @@ const COLUMNS: { status: ConversationStatus; title: string; dot: string; head: s
 ];
 
 const selectCls =
-  "rounded-lg border border-gray-200 bg-surface px-2.5 py-1.5 text-xs text-ink outline-none focus:border-brand";
+  "rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none focus:border-brand";
 
 function isToday(iso: string | null): boolean {
   if (!iso) return false;
@@ -89,7 +89,7 @@ export function KanbanBoard({
   return (
     <div className="flex h-full flex-col">
       {/* Abas + filtros */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-surface px-6 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-6 py-2.5">
         <div className="flex rounded-lg bg-gray-100 p-0.5 text-xs">
           {(
             [
@@ -184,39 +184,40 @@ function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: Conve
     ? recurrenceCount >= 10 ? "Alta recorrência" : recurrenceCount >= 5 ? "Média recorrência" : "Baixa recorrência"
     : null;
   const recColor = recurrenceCount != null && recurrenceCount >= 10 ? "text-red-600 bg-red-50" : recurrenceCount != null && recurrenceCount >= 5 ? "text-amber-600 bg-amber-50" : "text-green-600 bg-green-50";
+  // Acento à esquerda: cor do departamento (como no Chatmix); senão, SLA por tempo.
+  const accent = c.department_color || borderColor;
   return (
     <button
       onClick={onOpen}
       draggable={draggable}
       onDragStart={onDragStart}
       className={cn(
-        "w-full overflow-hidden rounded-lg bg-surface text-left shadow-sm transition hover:shadow-md",
+        "w-full overflow-hidden rounded-lg border border-border bg-surface text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
-      style={borderColor ? { borderLeft: `3px solid ${borderColor}` } : undefined}
+      style={accent ? { borderLeft: `3px solid ${accent}` } : undefined}
     >
-      {c.department_color && <div className="h-1 w-full" style={{ backgroundColor: c.department_color }} />}
       <div className="p-3">
         <div className="flex items-center gap-2">
           {c.contact_avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={c.contact_avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
           ) : (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-[10px] font-semibold text-ink-soft">
               {initials || "?"}
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-ink">{c.contact_name ?? c.contact_phone}</p>
+            <p className="truncate text-sm font-semibold text-ink">{c.contact_name ?? c.contact_phone}</p>
             <p className="truncate text-[11px] text-ink-soft">{c.channel_name}</p>
           </div>
-          <span className="shrink-0 text-[10px] text-ink-soft">{time}</span>
+          <span className="tnum shrink-0 text-[10px] text-ink-soft">{time}</span>
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-1">
           {c.status === "bot" && (
-            <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
-              <Bot size={11} /> AGENTE DE IA
+            <span className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
+              🔥 AGENTE DE IA
             </span>
           )}
           {c.assigned_name && (
@@ -225,17 +226,17 @@ function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: Conve
             </span>
           )}
           {c.department_name && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-ink-soft">{c.department_name}</span>
+            <span className="rounded bg-canvas px-1.5 py-0.5 text-[10px] text-ink-soft">{c.department_name}</span>
           )}
           {c.protocol && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
+            <span className="tnum inline-flex items-center gap-0.5 rounded bg-canvas px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
               <Hash size={9} />
               {c.protocol}
             </span>
           )}
           {recLabel && (
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${recColor}`}>
-              {recLabel}
+            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${recColor}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" /> {recLabel}
             </span>
           )}
         </div>
@@ -273,7 +274,7 @@ function Board({ conversations, onOpen, recurrenceCounts, onMove }: { conversati
               dragOver === col.status && "ring-2 ring-brand ring-offset-1",
             )}
           >
-            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className={cn("h-2 w-2 rounded-full", col.dot)} />
                 <h3 className={cn("text-sm font-semibold", col.head)}>{col.title}</h3>

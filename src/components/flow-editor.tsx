@@ -13,6 +13,7 @@ import {
   Keyboard, Image as ImageIcon, Database, Tag as TagIcon, Plus,
 } from "lucide-react";
 import { updateAutomationFlow } from "@/app/(app)/automacoes/actions";
+import { toast } from "@/components/toast";
 
 type IdName = { id: string; name: string };
 
@@ -85,7 +86,7 @@ function FlowCard({ id, data, selected }: NodeProps) {
   const isCond = d.kind === "condition";
   return (
     <div
-      className="rounded-xl border-2 bg-white shadow-sm"
+      className="rounded-xl border-2 bg-surface shadow-card"
       style={{ borderColor: meta.color, width: 200, outline: selected ? `2px solid ${meta.color}55` : undefined }}
     >
       {d.kind !== "start" && <Handle type="target" position={Position.Left} style={{ background: meta.color }} />}
@@ -95,9 +96,9 @@ function FlowCard({ id, data, selected }: NodeProps) {
       <div className="px-2.5 py-2 text-[11px] text-ink-soft">{summary(d)}</div>
 
       {isMenu ? (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-border">
           {(d.options ?? []).map((o, i) => (
-            <div key={o.id} className="relative border-b border-gray-50 px-2.5 py-1.5 text-[11px] text-ink last:border-0">
+            <div key={o.id} className="relative border-b border-border px-2.5 py-1.5 text-[11px] text-ink last:border-0">
               {i + 1}. {o.label || "opção"}
               <Handle type="source" id={o.id} position={Position.Right} style={{ background: meta.color, top: "50%" }} />
             </div>
@@ -105,11 +106,11 @@ function FlowCard({ id, data, selected }: NodeProps) {
           {(d.options?.length ?? 0) === 0 && <p className="px-2.5 py-1.5 text-[10px] text-ink-soft">sem opções</p>}
         </div>
       ) : isCond ? (
-        <div className="relative border-t border-gray-100">
+        <div className="relative border-t border-border">
           <div className="relative px-2.5 py-1.5 text-[11px] text-green-700">Sim
             <Handle type="source" id="true" position={Position.Right} style={{ background: "#22c55e", top: "50%" }} />
           </div>
-          <div className="relative border-t border-gray-50 px-2.5 py-1.5 text-[11px] text-red-600">Não
+          <div className="relative border-t border-border px-2.5 py-1.5 text-[11px] text-red-600">Não
             <Handle type="source" id="false" position={Position.Right} style={{ background: "#ef4444", top: "50%" }} />
           </div>
         </div>
@@ -153,7 +154,11 @@ export function FlowEditor({
   const selected = nodes.find((n) => n.id === selId) ?? null;
   const sd = selected ? (selected.data as NodeData) : null;
 
-  const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge({ ...c, animated: true }, eds)), [setEdges]);
+  const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge({
+    ...c,
+    animated: true,
+    style: c.sourceHandle === "true" ? { stroke: "#22c55e" } : c.sourceHandle === "false" ? { stroke: "#ef4444" } : undefined,
+  }, eds)), [setEdges]);
 
   function addNode(kind: string) {
     const id = uid(kind);
@@ -196,6 +201,7 @@ export function FlowEditor({
     try {
       await updateAutomationFlow(automationId, JSON.stringify({ nodes, edges }));
       setSaved(true);
+      toast("Fluxo salvo!");
       router.refresh();
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -203,20 +209,20 @@ export function FlowEditor({
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand";
+  const inputCls = "w-full rounded-lg border border-border px-2.5 py-1.5 text-sm outline-none focus:border-brand";
   const labelCls = "mb-1 block text-xs font-medium text-ink-soft";
 
   return (
     <div className="flex h-full">
       {/* Paleta */}
-      <div className="w-48 shrink-0 overflow-y-auto border-r border-gray-100 bg-surface p-3">
+      <div className="w-48 shrink-0 overflow-y-auto border-r border-border bg-surface p-3">
         <p className="mb-2 text-xs font-semibold text-ink-soft">Adicionar nó</p>
         <div className="space-y-1.5">
           {PALETTE.map((kind) => {
             const Icon = NODE_KINDS[kind].icon;
             return (
               <button key={kind} onClick={() => addNode(kind)}
-                className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-2 text-left text-xs font-medium text-ink hover:border-brand hover:bg-brand-light">
+                className="flex w-full items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-left text-xs font-medium text-ink hover:border-brand hover:bg-brand-light">
                 <Icon size={14} style={{ color: NODE_KINDS[kind].color }} /> {NODE_KINDS[kind].label}
               </button>
             );

@@ -15,7 +15,7 @@ function Overlay({ children, onCancel }: { children: React.ReactNode; onCancel: 
 }
 
 const inputCls =
-  "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
+  "w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand";
 
 // ---------------------------------------------------------------------------
 // Encerrar atendimento — classificação + motivo + pesquisa opcional
@@ -188,7 +188,7 @@ export function TransferModal({
       </div>
 
       {mode === "person" ? (
-        <div className="mb-4 max-h-52 overflow-y-auto rounded-lg border border-gray-100">
+        <div className="mb-4 max-h-52 overflow-y-auto rounded-lg border border-border">
           {selectable.length === 0 && (
             <p className="p-3 text-xs text-ink-soft">Nenhum outro atendente disponível.</p>
           )}

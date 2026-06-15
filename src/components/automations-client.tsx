@@ -71,14 +71,14 @@ function ScheduleEditor({
                     type="time"
                     value={r[0]}
                     onChange={(e) => setRange(key, i, 0, e.target.value)}
-                    className="rounded border border-gray-200 px-1.5 py-0.5 text-xs outline-none focus:border-brand"
+                    className="rounded border border-border px-1.5 py-0.5 text-xs outline-none focus:border-brand"
                   />
                   <span className="text-ink-soft">–</span>
                   <input
                     type="time"
                     value={r[1]}
                     onChange={(e) => setRange(key, i, 1, e.target.value)}
-                    className="rounded border border-gray-200 px-1.5 py-0.5 text-xs outline-none focus:border-brand"
+                    className="rounded border border-border px-1.5 py-0.5 text-xs outline-none focus:border-brand"
                   />
                 </span>
               ))}
@@ -134,7 +134,7 @@ function ConfigModal({
               <select
                 value={integrationId}
                 onChange={(e) => setIntegrationId(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
               >
                 <option value="">Padrão da organização</option>
                 {integrations.filter((i) => i.type === "sgp").map((i) => (
@@ -269,12 +269,12 @@ export function AutomationsClient({
                   name="name"
                   required
                   placeholder="Ex.: Horário comercial"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Canal</label>
-                <select name="channel_id" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                <select name="channel_id" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                   <option value="">Todos os canais</option>
                   {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -282,7 +282,7 @@ export function AutomationsClient({
               {sgpIntegrations.length > 0 && (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-soft">Integração SGP</label>
-                  <select name="integration_id" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                  <select name="integration_id" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                     <option value="">Padrão da organização</option>
                     {sgpIntegrations.map((i) => (
                       <option key={i.id} value={i.id}>
@@ -297,7 +297,7 @@ export function AutomationsClient({
                 <input
                   name="trigger"
                   placeholder="Ex.: menu, oi, suporte"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-1">

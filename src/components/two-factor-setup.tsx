@@ -115,13 +115,13 @@ export function TwoFactorSetup({ enabled }: { enabled?: boolean }) {
         <div className="mt-4 space-y-3">
           <p className="text-xs text-ink-soft">1. Escaneie o QR Code no Google Authenticator, Authy ou similar:</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={enrolling.qr} alt="QR Code 2FA" className="h-44 w-44 rounded-lg border border-gray-200 bg-white p-1" />
+          <img src={enrolling.qr} alt="QR Code 2FA" className="h-44 w-44 rounded-lg border border-border bg-white p-1" />
           <p className="text-xs text-ink-soft">Ou insira o código manual: <code className="rounded bg-gray-100 px-1 font-mono text-[11px]">{enrolling.secret}</code></p>
           <p className="text-xs text-ink-soft">2. Digite o código de 6 dígitos gerado:</p>
           <div className="flex gap-2">
             <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               inputMode="numeric" placeholder="000000"
-              className="w-32 rounded-lg border border-gray-200 px-3 py-2 text-center font-mono text-sm tracking-widest outline-none focus:border-brand" />
+              className="w-32 rounded-lg border border-border px-3 py-2 text-center font-mono text-sm tracking-widest outline-none focus:border-brand" />
             <Button onClick={confirmEnroll} disabled={busy || code.length < 6}>{busy ? "Verificando…" : "Confirmar"}</Button>
             <Button variant="ghost" onClick={() => { setEnrolling(null); setCode(""); }}>Cancelar</Button>
           </div>

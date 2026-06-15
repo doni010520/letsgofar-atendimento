@@ -155,7 +155,7 @@ export function QrConnectModal({
                 <p className="mb-3 text-xs text-ink-soft">
                   WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b> e escaneie:
                 </p>
-                <div className="mx-auto flex h-56 w-56 items-center justify-center rounded-lg border border-gray-200 bg-white">
+                <div className="mx-auto flex h-56 w-56 items-center justify-center rounded-lg border border-border bg-white">
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={img} alt="QR Code" className="h-52 w-52" />
@@ -176,7 +176,7 @@ export function QrConnectModal({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="DDI + DDD + número (ex: 5573999998888)"
-                  className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="mb-3 w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
                 {pairCode ? (
                   <div className="rounded-lg border border-brand/30 bg-brand-light py-4">

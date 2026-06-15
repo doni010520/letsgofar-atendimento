@@ -31,10 +31,10 @@ export default async function HorarioPage() {
                   <span className="w-32 text-sm font-medium text-ink">{label}</span>
                 </label>
                 <input type="time" name={`day_${i}_start`} defaultValue={h?.start_time ?? "08:00"}
-                  className="rounded-lg border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand" />
+                  className="rounded-lg border border-border px-2 py-1 text-sm outline-none focus:border-brand" />
                 <span className="text-xs text-ink-soft">às</span>
                 <input type="time" name={`day_${i}_end`} defaultValue={h?.end_time ?? "18:00"}
-                  className="rounded-lg border border-gray-200 px-2 py-1 text-sm outline-none focus:border-brand" />
+                  className="rounded-lg border border-border px-2 py-1 text-sm outline-none focus:border-brand" />
               </div>
             );
           })}

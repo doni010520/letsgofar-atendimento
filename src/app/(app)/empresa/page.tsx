@@ -9,7 +9,7 @@ export default async function EmpresaPage() {
   const org = session?.organization;
   const company = ((org?.settings as Record<string, unknown> | undefined)?.company ?? {}) as Record<string, string>;
 
-  const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
+  const inputCls = "w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand";
   const Field = ({ name, label, placeholder, span }: { name: string; label: string; placeholder?: string; span?: boolean }) => (
     <div className={span ? "sm:col-span-2" : ""}>
       <label className="mb-1 block text-xs font-medium text-ink-soft">{label}</label>

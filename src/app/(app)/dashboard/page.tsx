@@ -30,30 +30,16 @@ export default async function DashboardPage() {
 
         {/* Indicadores */}
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard
-            label="Conversas totais"
-            value={report.totals.all}
-            icon={<MessageSquare size={20} />}
-            accent="bg-brand-light text-brand"
-          />
-          <StatCard
-            label="Em espera"
-            value={report.totals.queued}
-            icon={<Clock size={20} />}
-            accent="bg-amber-100 text-amber-600"
-          />
-          <StatCard
-            label="Em andamento"
-            value={report.totals.open}
-            icon={<Headphones size={20} />}
-            accent="bg-blue-100 text-blue-600"
-          />
-          <StatCard
-            label="Canais conectados"
-            value={`${connected}/${channels.length}`}
-            icon={<Radio size={20} />}
-            accent="bg-green-100 text-green-600"
-          />
+          {[
+            { label: "Conversas totais", value: report.totals.all, icon: <MessageSquare size={20} />, accent: "bg-brand-light text-brand" },
+            { label: "Em espera", value: report.totals.queued, icon: <Clock size={20} />, accent: "bg-amber-100 text-amber-600" },
+            { label: "Em andamento", value: report.totals.open, icon: <Headphones size={20} />, accent: "bg-blue-100 text-blue-600" },
+            { label: "Canais conectados", value: `${connected}/${channels.length}`, icon: <Radio size={20} />, accent: "bg-green-100 text-green-600" },
+          ].map((s, i) => (
+            <div key={s.label} className="animate-in" style={{ animationDelay: `${i * 70}ms` }}>
+              <StatCard label={s.label} value={s.value} icon={s.icon} accent={s.accent} />
+            </div>
+          ))}
         </section>
 
         {/* CTA API Oficial Meta */}
@@ -78,7 +64,7 @@ export default async function DashboardPage() {
             <h2 className="text-lg font-semibold text-ink">Seus canais</h2>
             <Link
               href="/canais"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand"
             >
               <Plus size={15} /> Conectar canal
             </Link>

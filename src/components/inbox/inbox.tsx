@@ -743,7 +743,7 @@ export function Inbox({
                 <select
                   value={ncChannel}
                   onChange={(e) => setNcChannel(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 >
                   {(channels ?? []).map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -757,7 +757,7 @@ export function Inbox({
                   onChange={(e) => setNcPhone(e.target.value)}
                   placeholder="5573999998888"
                   inputMode="numeric"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </div>
               <div>
@@ -766,7 +766,7 @@ export function Inbox({
                   value={ncName}
                   onChange={(e) => setNcName(e.target.value)}
                   placeholder="Nome do contato"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </div>
               {(channels ?? []).find((c) => c.id === ncChannel)?.type === "meta_cloud" && (
@@ -805,7 +805,7 @@ export function Inbox({
               }}
               rows={3}
               placeholder="Anotação sobre o atendimento..."
-              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+              className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setNoting(false)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-ink hover:bg-gray-200">
@@ -835,7 +835,7 @@ export function Inbox({
                 if (e.key === "Escape") setEditing(null);
               }}
               rows={3}
-              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+              className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setEditing(null)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-ink hover:bg-gray-200">

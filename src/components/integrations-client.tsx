@@ -55,31 +55,31 @@ export function IntegrationsClient({ integrations }: { integrations: Integration
             <form action={submit} className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Tipo</label>
-                <select name="type" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+                <select name="type" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                   <option value="sgp">SGP (provedor)</option>
                   <option value="outro">Outro</option>
                 </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">URL</label>
-                <input name="url" required placeholder="https://seudominio.sgp.net.br" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <input name="url" required placeholder="https://seudominio.sgp.net.br" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Aplicação (app)</label>
-                <input name="app" placeholder="nome da aplicação de integração" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <input name="app" placeholder="nome da aplicação de integração" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Token</label>
-                <input name="token" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                <input name="token" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-soft">Usuário <span className="text-ink-soft/60">(opcional)</span></label>
-                  <input name="username" autoComplete="off" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                  <input name="username" autoComplete="off" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-soft">Senha <span className="text-ink-soft/60">(opcional)</span></label>
-                  <input name="password" type="password" autoComplete="new-password" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+                  <input name="password" type="password" autoComplete="new-password" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-1">

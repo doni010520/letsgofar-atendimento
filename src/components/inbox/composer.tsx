@@ -195,7 +195,7 @@ export function Composer({
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={cancelPreview}>
           <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                 <ImageIcon size={16} className="text-brand" />
                 {isImage ? "Enviar imagem" : isVideo ? "Enviar vídeo" : "Enviar arquivo"}
@@ -222,7 +222,7 @@ export function Composer({
             </div>
 
             {/* Caption + enviar */}
-            <div className="flex items-center gap-2 border-t border-gray-100 px-4 py-3">
+            <div className="flex items-center gap-2 border-t border-border px-4 py-3">
               <input
                 ref={captionRef}
                 value={pendingCaption}
@@ -232,7 +232,7 @@ export function Composer({
                   if (e.key === "Escape") cancelPreview();
                 }}
                 placeholder="Adicionar legenda..."
-                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
               />
               <button
                 onClick={confirmSend}
@@ -248,13 +248,13 @@ export function Composer({
       )}
 
       {/* ========== Composer ========== */}
-      <div className="relative flex items-end gap-2 border-t border-gray-100 bg-surface p-3">
+      <div className="relative flex items-end gap-2 border-t border-border bg-surface p-3">
         <input ref={fileRef} type="file" className="hidden" onChange={pickFile} />
         <input ref={stickerRef} type="file" accept="image/*" className="hidden" onChange={pickStickerFile} />
 
         {/* Dropdown de menções */}
         {filtered.length > 0 && (
-          <div className="absolute bottom-16 left-3 z-30 w-64 overflow-hidden rounded-lg border border-gray-100 bg-surface py-1 shadow-xl">
+          <div className="absolute bottom-16 left-3 z-30 w-64 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-xl">
             <p className="px-3 py-1 text-[10px] font-semibold uppercase text-ink-soft">Mencionar</p>
             {filtered.map((c) => (
               <button
@@ -294,7 +294,7 @@ export function Composer({
           {attachMenu && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setAttachMenu(false)} />
-              <div className="absolute bottom-12 left-0 z-20 w-44 overflow-hidden rounded-lg border border-gray-100 bg-surface py-1 text-sm shadow-xl">
+              <div className="absolute bottom-12 left-0 z-20 w-44 overflow-hidden rounded-lg border border-border bg-surface py-1 text-sm shadow-xl">
                 <button onClick={() => { setAttachMenu(false); fileRef.current?.click(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
                   <FileUp size={15} /> Arquivo / mídia
                 </button>
@@ -329,14 +329,14 @@ export function Composer({
             {qrOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setQrOpen(false)} />
-                <div className="absolute bottom-12 left-0 z-20 w-72 overflow-hidden rounded-lg border border-gray-100 bg-surface shadow-xl">
-                  <div className="border-b border-gray-100 p-2">
+                <div className="absolute bottom-12 left-0 z-20 w-72 overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+                  <div className="border-b border-border p-2">
                     <input
                       autoFocus
                       value={qrQuery}
                       onChange={(e) => setQrQuery(e.target.value)}
                       placeholder="Buscar modelo ou macro..."
-                      className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-brand"
+                      className="w-full rounded-md border border-border px-2 py-1.5 text-xs outline-none focus:border-brand"
                     />
                   </div>
                   <div className="max-h-64 overflow-y-auto py-1">
@@ -418,7 +418,7 @@ export function Composer({
             ta.style.height = "auto";
             ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
           }}
-          className="min-h-[42px] max-h-[200px] flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand disabled:bg-gray-50"
+          className="min-h-[42px] max-h-[200px] flex-1 resize-none rounded-xl border border-border px-3 py-2 text-sm outline-none focus:border-brand disabled:bg-gray-50"
         />
 
         {text.trim() ? (

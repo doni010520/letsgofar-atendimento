@@ -25,7 +25,7 @@ export default async function ClientesPage() {
     <Scroll>
       <PageHeader title="Clientes" subtitle="Gerencie os contatos da sua empresa." />
       <div className="mb-4 flex justify-end">
-        <Link href="/api/export-contacts" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand">
+        <Link href="/api/export-contacts" className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand">
           <Download size={14} /> Exportar CSV
         </Link>
       </div>
@@ -34,10 +34,10 @@ export default async function ClientesPage() {
           <p className="text-sm text-ink-soft">Nenhum contato encontrado.</p>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-card border border-gray-100">
+        <div className="overflow-x-auto rounded-card border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium text-ink-soft">
+              <tr className="border-b border-border bg-gray-50 text-left text-xs font-medium text-ink-soft">
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">Telefone</th>
                 <th className="px-4 py-3">E-mail</th>
@@ -47,7 +47,7 @@ export default async function ClientesPage() {
             </thead>
             <tbody>
               {contacts.map((c) => (
-                <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                <tr key={c.id} className="border-b border-border hover:bg-gray-50/50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {c.avatar_url ? (

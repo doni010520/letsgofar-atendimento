@@ -34,7 +34,7 @@ export default async function AutomationEditorPage({ params }: { params: Promise
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b border-gray-100 bg-surface px-6 py-3">
+      <div className="flex items-center gap-3 border-b border-border bg-surface px-6 py-3">
         <Link href="/automacoes" className="inline-flex items-center gap-1 text-sm text-brand hover:underline">
           <ArrowLeft size={15} /> Automações
         </Link>

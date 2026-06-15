@@ -60,7 +60,7 @@ function MultiSelect({
       <label className="mb-1 block text-sm font-medium text-ink">{label}</label>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm text-ink-soft hover:border-gray-300"
+        className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 text-sm text-ink-soft hover:border-gray-300"
       >
         <span className="truncate">
           {selected.length === 0
@@ -70,7 +70,7 @@ function MultiSelect({
         <SlidersHorizontal size={14} className="shrink-0" />
       </button>
       {open && (
-        <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-white shadow-lg">
           {options.length === 0 && (
             <p className="px-3 py-2 text-xs text-ink-soft">Nenhuma opção.</p>
           )}
@@ -206,9 +206,9 @@ export function ConversationList({
   }
 
   return (
-    <div className="flex h-full w-full shrink-0 flex-col border-r border-gray-100 bg-surface md:w-80">
+    <div className="flex h-full w-full shrink-0 flex-col border-r border-border bg-surface md:w-80">
       {/* ─── Header: busca + abas + filtro ─── */}
-      <div className="border-b border-gray-100 p-3">
+      <div className="border-b border-border p-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
@@ -216,7 +216,7 @@ export function ConversationList({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar conversa..."
-              className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
+              className="w-full rounded-lg border border-border py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
             />
           </div>
           {onNewConversation && (
@@ -311,7 +311,7 @@ export function ConversationList({
                 (e.key === "Enter" || e.key === " ") && onSelect(c.id)
               }
               className={cn(
-                "group flex w-full cursor-pointer items-center gap-3 border-b border-gray-50 px-3 py-3 text-left transition hover:bg-gray-50",
+                "group flex w-full cursor-pointer items-center gap-3 border-b border-border px-3 py-3 text-left transition hover:bg-gray-50",
                 selectedId === c.id && "bg-brand-light hover:bg-brand-light",
               )}
             >
@@ -487,7 +487,7 @@ export function ConversationList({
               <div className="flex gap-2">
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-gray-50"
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-gray-50"
                 >
                   <Trash2 size={12} /> Limpar filtros
                 </button>

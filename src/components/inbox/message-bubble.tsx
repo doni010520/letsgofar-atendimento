@@ -130,7 +130,7 @@ export function MessageBubble({
   if (message.is_deleted) {
     return (
       <div className={cn("flex", out ? "justify-end" : "justify-start")}>
-        <div className="max-w-[70%] rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm italic text-ink-soft">
+        <div className="max-w-[70%] rounded-2xl border border-border bg-gray-50 px-3 py-2 text-sm italic text-ink-soft">
           🚫 Mensagem apagada
         </div>
       </div>
@@ -188,7 +188,7 @@ export function MessageBubble({
           </div>
         </div>
         {reactions.length > 0 && (
-          <div className={cn("absolute -bottom-2 flex gap-0.5 rounded-full border border-gray-100 bg-surface px-1 text-xs shadow-sm", out ? "right-2" : "left-2")}>
+          <div className={cn("absolute -bottom-2 flex gap-0.5 rounded-full border border-border bg-surface px-1 text-xs shadow-sm", out ? "right-2" : "left-2")}>
             {reactions.map((r, i) => (
               <span key={i} title={r.by}>{r.emoji}</span>
             ))}
@@ -247,7 +247,7 @@ function Actions({
       {emoji && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setEmoji(false)} />
-          <div className="absolute bottom-7 z-20 flex gap-1 rounded-full border border-gray-100 bg-surface px-2 py-1 shadow-lg">
+          <div className="absolute bottom-7 z-20 flex gap-1 rounded-full border border-border bg-surface px-2 py-1 shadow-lg">
             {QUICK_EMOJIS.map((e) => (
               <button key={e} onClick={() => { onReact?.(message, e); setEmoji(false); }} className="text-lg hover:scale-125 transition">{e}</button>
             ))}
@@ -257,7 +257,7 @@ function Actions({
       {menu && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
-          <div className="absolute bottom-7 z-20 w-36 overflow-hidden rounded-lg border border-gray-100 bg-surface py-1 text-sm shadow-xl">
+          <div className="absolute bottom-7 z-20 w-36 overflow-hidden rounded-lg border border-border bg-surface py-1 text-sm shadow-xl">
             <button onClick={() => { onReply?.(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
               <Reply size={14} /> Responder
             </button>

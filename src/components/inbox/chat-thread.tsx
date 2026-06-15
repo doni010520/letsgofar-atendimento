@@ -76,7 +76,7 @@ export function ChatThread({
 
   return (
     <div className="flex h-full flex-1 flex-col bg-canvas">
-      <header className="shrink-0 border-b border-gray-100 bg-surface">
+      <header className="shrink-0 border-b border-border bg-surface">
         {/* Linha 1: avatar + nome + protocolo */}
         <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 md:px-4">
           {onBack && (
@@ -198,7 +198,7 @@ export function ChatThread({
       </div>
 
       {replyTo && (
-        <div className="flex items-center gap-2 border-t border-gray-100 bg-brand-light/40 px-4 py-2 text-xs">
+        <div className="flex items-center gap-2 border-t border-border bg-brand-light/40 px-4 py-2 text-xs">
           <Reply size={14} className="text-brand" />
           <div className="min-w-0 flex-1">
             <p className="font-medium text-brand">Respondendo</p>

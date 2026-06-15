@@ -92,7 +92,7 @@ export function ReportsTabs({
         </div>
         <button
           onClick={exportCurrent}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink"
           title="Exportar a aba atual em CSV"
         >
           <Download size={14} /> Exportar CSV
@@ -116,10 +116,10 @@ export function ReportsTabs({
               </div>
             ))}
           </div>
-          <div className="overflow-x-auto rounded-card border border-gray-100">
+          <div className="overflow-x-auto rounded-card border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium text-ink-soft">
+                <tr className="border-b border-border bg-gray-50 text-left text-xs font-medium text-ink-soft">
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Quantidade</th>
                   <th className="px-4 py-3 text-right">%</th>
@@ -127,7 +127,7 @@ export function ReportsTabs({
               </thead>
               <tbody>
                 {data.byStatus.map((r) => (
-                  <tr key={r.name} className="border-b border-gray-50">
+                  <tr key={r.name} className="border-b border-border">
                     <td className="px-4 py-3 text-ink">{r.name}</td>
                     <td className="px-4 py-3 text-right font-medium">{r.value}</td>
                     <td className="px-4 py-3 text-right text-ink-soft">
@@ -142,10 +142,10 @@ export function ReportsTabs({
       )}
 
       {tab === "Atendentes" && (
-        <div className="overflow-x-auto rounded-card border border-gray-100">
+        <div className="overflow-x-auto rounded-card border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium text-ink-soft">
+              <tr className="border-b border-border bg-gray-50 text-left text-xs font-medium text-ink-soft">
                 <th className="px-4 py-3">Atendente</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3 text-right">Em andamento</th>
@@ -160,7 +160,7 @@ export function ReportsTabs({
               {agents.map((a) => {
                 const totalAll = agents.reduce((s, x) => s + x.total, 0);
                 return (
-                  <tr key={a.name} className="border-b border-gray-50">
+                  <tr key={a.name} className="border-b border-border">
                     <td className="px-4 py-3 font-medium text-ink">{a.name}</td>
                     <td className="px-4 py-3 text-right">{a.total}</td>
                     <td className="px-4 py-3 text-right text-green-600">{a.open}</td>
@@ -177,10 +177,10 @@ export function ReportsTabs({
       )}
 
       {tab === "Clientes" && (
-        <div className="overflow-x-auto rounded-card border border-gray-100">
+        <div className="overflow-x-auto rounded-card border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium text-ink-soft">
+              <tr className="border-b border-border bg-gray-50 text-left text-xs font-medium text-ink-soft">
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Telefone</th>
                 <th className="px-4 py-3 text-right">Atendimentos</th>
@@ -192,7 +192,7 @@ export function ReportsTabs({
                 <tr><td colSpan={4} className="px-4 py-8 text-center text-ink-soft">Nenhum dado.</td></tr>
               )}
               {clients.map((c, i) => (
-                <tr key={i} className="border-b border-gray-50">
+                <tr key={i} className="border-b border-border">
                   <td className="px-4 py-3 font-medium text-ink">{c.name}</td>
                   <td className="px-4 py-3 text-ink-soft">{c.phone}</td>
                   <td className="px-4 py-3 text-right">{c.total}</td>

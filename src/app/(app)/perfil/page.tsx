@@ -24,31 +24,31 @@ export default async function PerfilPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-soft">Nome</label>
-              <input name="name" defaultValue={firstName} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+              <input name="name" defaultValue={firstName} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-soft">Sobrenome</label>
-              <input name="last_name" defaultValue={lastName} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+              <input name="last_name" defaultValue={lastName} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-soft">E-mail</label>
-              <input value={p?.email ?? ""} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-ink-soft" />
+              <input value={p?.email ?? ""} disabled className="w-full rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-ink-soft" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-soft">Nível de acesso</label>
-              <input value={ROLE_LABEL[p?.role ?? "agent"] ?? ""} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-ink-soft" />
+              <input value={ROLE_LABEL[p?.role ?? "agent"] ?? ""} disabled className="w-full rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-ink-soft" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-soft">WhatsApp</label>
-              <input name="whatsapp" defaultValue={p?.whatsapp ?? ""} placeholder="DDD + número" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+              <input name="whatsapp" defaultValue={p?.whatsapp ?? ""} placeholder="DDD + número" className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-soft">Status</label>
-              <select name="status" defaultValue={p?.status ?? "offline"} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+              <select name="status" defaultValue={p?.status ?? "offline"} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
                 <option value="online">Online</option>
                 <option value="away">Ausente</option>
                 <option value="offline">Offline</option>

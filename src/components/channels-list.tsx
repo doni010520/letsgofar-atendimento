@@ -61,7 +61,7 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar canal por nome ou telefone..."
-            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
+            className="w-full rounded-lg border border-border py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
           />
         </div>
       )}
@@ -95,7 +95,7 @@ export function ChannelsList({ channels }: { channels: Channel[] }) {
               {menu === c.id && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMenu(null)} />
-                  <div className="absolute right-3 top-11 z-20 w-44 overflow-hidden rounded-lg border border-gray-100 bg-surface py-1 shadow-xl">
+                  <div className="absolute right-3 top-11 z-20 w-44 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-xl">
                     {clickable && (
                       <button onClick={() => { setMenu(null); setConnect({ id: c.id, phone: c.phone ?? undefined }); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-gray-50">
                         <Plug size={14} /> Conectar

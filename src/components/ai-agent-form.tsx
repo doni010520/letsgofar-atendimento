@@ -46,7 +46,7 @@ const VOICES = [
   { id: "fable", label: "Fable (expressiva)" },
 ];
 
-const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
+const inputCls = "w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand";
 
 function Toggle({ name, label, hint, defaultChecked }: { name: string; label: string; hint?: string; defaultChecked?: boolean }) {
   return (
@@ -86,10 +86,10 @@ export function AiAgentList({ agents, channels }: { agents: AiAgentRow[]; channe
           <p className="mt-1 text-xs text-ink-soft">Crie seu primeiro agente para atendimento automático.</p>
         </div>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-card border border-gray-100">
+        <div className="mt-4 overflow-x-auto rounded-card border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium text-ink-soft">
+              <tr className="border-b border-border bg-gray-50 text-left text-xs font-medium text-ink-soft">
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">Descrição</th>
                 <th className="px-4 py-3 text-center">Status</th>
@@ -98,7 +98,7 @@ export function AiAgentList({ agents, channels }: { agents: AiAgentRow[]; channe
             </thead>
             <tbody>
               {agents.map((a) => (
-                <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                <tr key={a.id} className="border-b border-border hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-ink">{a.name}</td>
                   <td className="px-4 py-3 text-ink-soft">{a.config.greeting || a.prompt?.slice(0, 60) || "—"}</td>
                   <td className="px-4 py-3 text-center">
@@ -270,14 +270,14 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                   </div>
                 )}
               </div>
-              <div className="rounded-lg border border-gray-100">
+              <div className="rounded-lg border border-border">
                 <button type="button" onClick={() => setAdvanced((v) => !v)}
                   className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-ink-soft hover:text-ink">
                   <span>Avançado — substituir prompt base</span>
                   {advanced ? <ChevronLeft size={14} className="rotate-90" /> : <ChevronRight size={14} className="rotate-90" />}
                 </button>
                 {advanced && (
-                  <div className="border-t border-gray-100 p-3">
+                  <div className="border-t border-border p-3">
                     <p className="mb-2 text-[11px] text-ink-soft">
                       Deixe em branco para usar o comportamento padrão da MVF (fluxo + segurança). Preenchendo, você
                       <strong> substitui toda a espinha dorsal</strong> do agente — controle total, mas você assume o fluxo e as regras.
@@ -316,7 +316,7 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                   <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition peer-checked:translate-x-5" />
                 </label>
               </div>
-              <div className="rounded-lg border border-gray-100 p-4 text-sm text-ink-soft">
+              <div className="rounded-lg border border-border p-4 text-sm text-ink-soft">
                 <p className="font-medium text-ink mb-2">Resumo</p>
                 <p>O agente será {agent ? "atualizado" : "criado"} com as configurações definidas nos passos anteriores.</p>
                 <p className="mt-2">Clique em <strong>Salvar</strong> para confirmar.</p>

@@ -41,8 +41,8 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; 
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div className="absolute bottom-12 left-0 z-20 w-72 rounded-xl border border-gray-100 bg-surface shadow-xl">
-        <div className="flex border-b border-gray-100 px-1">
+      <div className="absolute bottom-12 left-0 z-20 w-72 rounded-xl border border-border bg-surface shadow-xl">
+        <div className="flex border-b border-border px-1">
           {CATEGORIES.map((c, i) => (
             <button
               key={c.key}

@@ -34,8 +34,26 @@ export function InboxLoader(props: {
 
   if (!ready || !InboxComponent) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-ink-soft">
-        Carregando atendimento…
+      <div className="flex h-full animate-pulse">
+        {/* Coluna de conversas */}
+        <div className="hidden w-80 shrink-0 flex-col gap-3 border-r border-border bg-surface p-3 md:flex">
+          <div className="h-9 rounded-lg bg-canvas" />
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="h-10 w-10 shrink-0 rounded-full bg-canvas" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 w-2/3 rounded bg-canvas" />
+                <div className="h-2.5 w-1/2 rounded bg-canvas" />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Área do chat */}
+        <div className="flex flex-1 flex-col">
+          <div className="h-16 border-b border-border bg-surface" />
+          <div className="flex-1 bg-canvas" />
+          <div className="h-16 border-t border-border bg-surface" />
+        </div>
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
+import { Toaster } from "@/components/toast";
 import { getSession } from "@/lib/auth";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
         <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

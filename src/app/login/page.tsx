@@ -74,7 +74,7 @@ export default function LoginPage() {
             inputMode="numeric"
             autoFocus
             placeholder="000000"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-center font-mono text-lg tracking-[0.3em] outline-none focus:border-brand"
+            className="w-full rounded-lg border border-border px-3 py-2 text-center font-mono text-lg tracking-[0.3em] outline-none focus:border-brand"
           />
           {error && <p className="text-xs text-danger">{error}</p>}
           <Button type="submit" className="w-full" disabled={pending || code.length < 6}>
@@ -148,7 +148,7 @@ export function AuthField({
         type={type}
         required
         placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand"
+        className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
       />
     </div>
   );

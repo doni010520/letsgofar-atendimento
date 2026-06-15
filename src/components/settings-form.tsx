@@ -5,7 +5,7 @@ import { Button } from "@/components/ui";
 import { saveSettings } from "@/app/(app)/ajustes/configuracoes/actions";
 import type { OrgSettings, Department, Channel } from "@/lib/types";
 
-const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand";
+const inputCls = "w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand";
 const labelCls = "text-xs font-medium text-ink-soft";
 
 function Toggle({ name, label, hint, defaultChecked }: { name: string; label: string; hint?: string; defaultChecked?: boolean }) {
@@ -22,7 +22,7 @@ function Toggle({ name, label, hint, defaultChecked }: { name: string; label: st
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="border-b border-gray-100 pb-6 last:border-b-0">
+    <div className="border-b border-border pb-6 last:border-b-0">
       <h3 className="mb-1 text-base font-semibold text-ink">{title}</h3>
       {hint && <p className="mb-4 text-xs text-ink-soft">{hint}</p>}
       <div className="space-y-3">{children}</div>
@@ -301,7 +301,7 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
               </div>
               <div>
                 <label className={labelCls}>Cor normal</label>
-                <input type="color" name="v2_color_client_normal" defaultValue={s.v2_color_client_normal ?? "#22c55e"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+                <input type="color" name="v2_color_client_normal" defaultValue={s.v2_color_client_normal ?? "#22c55e"} className="h-10 w-20 cursor-pointer rounded-lg border border-border" />
               </div>
               <div>
                 <label className={labelCls}>Cliente — médio (segundos)</label>
@@ -309,7 +309,7 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
               </div>
               <div>
                 <label className={labelCls}>Cor média</label>
-                <input type="color" name="v2_color_client_medium" defaultValue={s.v2_color_client_medium ?? "#f59e0b"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+                <input type="color" name="v2_color_client_medium" defaultValue={s.v2_color_client_medium ?? "#f59e0b"} className="h-10 w-20 cursor-pointer rounded-lg border border-border" />
               </div>
               <div>
                 <label className={labelCls}>Cliente — alto (segundos)</label>
@@ -317,7 +317,7 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
               </div>
               <div>
                 <label className={labelCls}>Cor alta</label>
-                <input type="color" name="v2_color_client_high" defaultValue={s.v2_color_client_high ?? "#ef4444"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+                <input type="color" name="v2_color_client_high" defaultValue={s.v2_color_client_high ?? "#ef4444"} className="h-10 w-20 cursor-pointer rounded-lg border border-border" />
               </div>
             </div>
             <Toggle name="v2_color_agent_enabled" label="Colorir também por tempo do atendente" defaultChecked={s.v2_color_agent_enabled} />
@@ -328,7 +328,7 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
               </div>
               <div>
                 <label className={labelCls}>Cor do atendente</label>
-                <input type="color" name="v2_color_agent_color" defaultValue={s.v2_color_agent_color ?? "#3b82f6"} className="h-10 w-20 cursor-pointer rounded-lg border border-gray-200" />
+                <input type="color" name="v2_color_agent_color" defaultValue={s.v2_color_agent_color ?? "#3b82f6"} className="h-10 w-20 cursor-pointer rounded-lg border border-border" />
               </div>
             </div>
           </Section>

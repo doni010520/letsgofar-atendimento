@@ -44,11 +44,11 @@ export function AuditClient({ logs }: { logs: AuditLogRow[] }) {
             value={query}
             onChange={(e) => { setQuery(e.target.value); setLimit(PAGE_SIZE); }}
             placeholder="Buscar ação..."
-            className="w-56 rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-sm outline-none focus:border-brand"
+            className="w-56 rounded-lg border border-border py-1.5 pl-8 pr-3 text-sm outline-none focus:border-brand"
           />
         </div>
         <select value={entity} onChange={(e) => { setEntity(e.target.value); setLimit(PAGE_SIZE); }}
-          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-brand">
+          className="rounded-lg border border-border px-2 py-1.5 text-sm outline-none focus:border-brand">
           <option value="all">Todas as entidades</option>
           {entities.map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
@@ -58,7 +58,7 @@ export function AuditClient({ logs }: { logs: AuditLogRow[] }) {
       <div className="overflow-hidden rounded-card bg-surface shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 text-left text-xs text-ink-soft">
+            <tr className="border-b border-border text-left text-xs text-ink-soft">
               <th className="px-4 py-3 font-medium">Ação</th>
               <th className="px-4 py-3 font-medium">Entidade</th>
               <th className="px-4 py-3 font-medium">Data</th>
@@ -74,14 +74,14 @@ export function AuditClient({ logs }: { logs: AuditLogRow[] }) {
                 <Fragment key={l.id}>
                   <tr
                     onClick={() => hasMeta && setExpanded(expanded === l.id ? null : l.id)}
-                    className={`border-b border-gray-50 last:border-0 ${hasMeta ? "cursor-pointer hover:bg-gray-50" : ""}`}
+                    className={`border-b border-border last:border-0 ${hasMeta ? "cursor-pointer hover:bg-gray-50" : ""}`}
                   >
                     <td className="px-4 py-3 font-medium text-ink">{l.action}</td>
                     <td className="px-4 py-3 text-ink-soft">{l.entity ?? "—"}</td>
                     <td className="px-4 py-3 text-ink-soft">{new Date(l.created_at).toLocaleString("pt-BR")}</td>
                   </tr>
                   {expanded === l.id && hasMeta && (
-                    <tr className="border-b border-gray-50 bg-gray-50/50">
+                    <tr className="border-b border-border bg-gray-50/50">
                       <td colSpan={3} className="px-4 py-3">
                         <pre className="overflow-x-auto whitespace-pre-wrap text-[11px] text-ink-soft">
                           {JSON.stringify(l.metadata, null, 2)}
@@ -100,7 +100,7 @@ export function AuditClient({ logs }: { logs: AuditLogRow[] }) {
         <div className="mt-4 flex justify-center">
           <button
             onClick={() => setLimit((n) => n + PAGE_SIZE)}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-ink-soft hover:bg-gray-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-soft hover:bg-gray-50"
           >
             Carregar mais
           </button>

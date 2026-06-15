@@ -56,12 +56,12 @@ export function AiAllowlist({ numbers }: { numbers: AiAllowedNumber[] }) {
         <div className="min-w-[180px] flex-1">
           <label className="mb-1 block text-xs font-medium text-ink-soft">Número (com DDD)</label>
           <input name="phone" required placeholder="73 99999-9999"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
         </div>
         <div className="min-w-[160px] flex-1">
           <label className="mb-1 block text-xs font-medium text-ink-soft">Identificação (opcional)</label>
           <input name="label" placeholder="Ex.: Meu WhatsApp, Cliente teste"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
         </div>
         <Button type="submit" disabled={pending}><Plus size={16} /> {pending ? "..." : "Liberar"}</Button>
       </form>
@@ -74,7 +74,7 @@ export function AiAllowlist({ numbers }: { numbers: AiAllowedNumber[] }) {
           </p>
         )}
         {numbers.map((n) => (
-          <div key={n.id} className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2">
+          <div key={n.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-light text-brand"><Phone size={15} /></div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-ink">{fmtPhone(n.phone)}</p>

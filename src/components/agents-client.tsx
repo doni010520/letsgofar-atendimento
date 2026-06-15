@@ -116,7 +116,7 @@ function Inp({ name, label, defaultValue, type = "text", required, placeholder }
     <div>
       <label className="mb-1 block text-xs font-medium text-ink-soft">{label}</label>
       <input name={name} type={type} defaultValue={defaultValue ?? ""} required={required} placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand" />
+        className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand" />
     </div>
   );
 }
@@ -124,7 +124,7 @@ function Sel({ name, label, defaultValue, options }: { name: string; label: stri
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-ink-soft">{label}</label>
-      <select name={name} defaultValue={defaultValue} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand">
+      <select name={name} defaultValue={defaultValue} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand">
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
