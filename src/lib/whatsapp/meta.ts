@@ -12,6 +12,7 @@ const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v
 interface MetaCreds {
   phone_number_id?: string;
   access_token?: string;
+  waba_id?: string;
 }
 
 export class MetaProvider implements ChannelProvider {
@@ -68,6 +69,46 @@ export class MetaProvider implements ChannelProvider {
     });
     return { externalId: r?.messages?.[0]?.id };
   }
+
+  /**
+   * Envia uma mensagem de MODELO (template) — único tipo permitido fora da
+   * janela de 24h em canais Meta oficiais. `components` no formato da Graph API.
+   */
+  async sendTemplate({ to, name, language, components }: {
+    to: string;
+    name: string;
+    language: string;
+    components?: unknown[];
+  }) {
+    const r = await this.graph(`${this.phoneNumberId}/messages`, {
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name,
+        language: { code: language || "pt_BR" },
+        ...(components && components.length ? { components } : {}),
+      },
+    });
+    return { externalId: r?.messages?.[0]?.id };
+  }
+}
+
+/** Lista os modelos (templates) de uma WABA na Meta. */
+export async function listMetaTemplates(wabaId: string, token: string) {
+  const res = await fetch(
+    `${GRAPH}/${wabaId}/message_templates?fields=name,status,language,category,components&limit=200`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(`listMetaTemplates: ${JSON.stringify(json)}`);
+  return (json?.data ?? []) as Array<{
+    name: string;
+    status: string;
+    language: string;
+    category?: string;
+    components?: unknown[];
+  }>;
 }
 
 // ===================== Coexistência / Onboarding (Embedded Signup) =====================

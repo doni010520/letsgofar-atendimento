@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker, X, Image as ImageIcon, FileText } from "lucide-react";
+import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker, X, Image as ImageIcon, FileText, LayoutTemplate } from "lucide-react";
 import { EmojiPicker } from "./emoji-picker";
 
 type Mention = { name: string; phone: string };
 type QuickReply = { title: string; content: string; shortcut: string | null };
+type Template = { name: string; language: string; bodyText: string; varCount: number };
 
 export function Composer({
   onSend,
@@ -15,6 +16,10 @@ export function Composer({
   onType,
   mentionCandidates,
   quickReplies,
+  windowOpen = true,
+  isMeta = false,
+  templates,
+  onSendTemplate,
   disabled,
   sending,
   focusTrigger,
@@ -26,6 +31,10 @@ export function Composer({
   onType?: () => void;
   mentionCandidates?: Mention[];
   quickReplies?: QuickReply[];
+  windowOpen?: boolean;
+  isMeta?: boolean;
+  templates?: Template[];
+  onSendTemplate?: (name: string, language: string, params: string[]) => void;
   disabled?: boolean;
   sending?: boolean;
   focusTrigger?: unknown;
@@ -34,6 +43,9 @@ export function Composer({
   const [recording, setRecording] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrQuery, setQrQuery] = useState("");
+  // Modo template (Meta fora da janela de 24h).
+  const [tplPick, setTplPick] = useState<Template | null>(null);
+  const [tplParams, setTplParams] = useState<string[]>([]);
 
   // Foco automático ao mudar focusTrigger (ex.: clicar Responder).
   useEffect(() => { if (focusTrigger != null) taRef.current?.focus(); }, [focusTrigger]);
@@ -247,7 +259,58 @@ export function Composer({
         </div>
       )}
 
-      {/* ========== Composer ========== */}
+      {/* ========== Barra restrita: Meta fora da janela de 24h ========== */}
+      {isMeta && !windowOpen ? (
+        <div className="border-t border-border bg-surface p-3">
+          <div className="mb-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+            <span>⚠️</span>
+            <span>Janela de 24h encerrada (canal <b>API Oficial</b>). Só é possível enviar um <b>modelo aprovado</b> para reabrir a conversa.</span>
+          </div>
+          {(templates?.length ?? 0) === 0 ? (
+            <p className="text-xs text-ink-soft">
+              Nenhum modelo aprovado disponível. Cadastre ou sincronize em{" "}
+              <a href="/mensagens/templates" className="text-brand underline">Mensagens → Templates</a>.
+            </p>
+          ) : !tplPick ? (
+            <div className="flex flex-wrap gap-1.5">
+              {templates!.map((t) => (
+                <button
+                  key={`${t.name}-${t.language}`}
+                  onClick={() => { setTplPick(t); setTplParams(Array(t.varCount).fill("")); }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-ink transition hover:border-brand hover:text-brand"
+                >
+                  <LayoutTemplate size={13} /> {t.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-ink">{tplPick.name} <span className="text-ink-soft">({tplPick.language})</span></span>
+                <button onClick={() => setTplPick(null)} className="text-ink-soft hover:text-ink"><X size={14} /></button>
+              </div>
+              {tplPick.bodyText && <p className="rounded bg-canvas px-2 py-1.5 text-[11px] text-ink-soft">{tplPick.bodyText}</p>}
+              {Array.from({ length: tplPick.varCount }).map((_, i) => (
+                <input
+                  key={i}
+                  value={tplParams[i] ?? ""}
+                  onChange={(e) => setTplParams((p) => { const n = [...p]; n[i] = e.target.value; return n; })}
+                  placeholder={`Variável {{${i + 1}}}`}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+              ))}
+              <button
+                onClick={() => { onSendTemplate?.(tplPick.name, tplPick.language, tplParams); setTplPick(null); setTplParams([]); }}
+                disabled={sending || tplParams.some((p) => !p.trim())}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-40"
+              >
+                <Send size={15} /> Enviar modelo
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+      /* ========== Composer ========== */
       <div className="relative flex items-end gap-2 border-t border-border bg-surface p-3">
         <input ref={fileRef} type="file" className="hidden" onChange={pickFile} />
         <input ref={stickerRef} type="file" accept="image/*" className="hidden" onChange={pickStickerFile} />
@@ -443,6 +506,7 @@ export function Composer({
           </button>
         )}
       </div>
+      )}
     </>
   );
 }

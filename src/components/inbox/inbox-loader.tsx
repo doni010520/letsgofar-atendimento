@@ -17,6 +17,7 @@ export function InboxLoader(props: {
   departments: Department[];
   channels?: Channel[];
   quickReplies?: { title: string; content: string; shortcut: string | null }[];
+  templates?: { name: string; language: string; bodyText: string; varCount: number }[];
   live: boolean;
 }) {
   const [ready, setReady] = useState(false);

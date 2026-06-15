@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Scroll } from "@/components/scroll";
-import { PageHeader, StatusBadge } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { CrudManager, type CrudField } from "@/components/crud-manager";
+import { SyncTemplatesButton } from "@/components/sync-templates-button";
 import { createClient } from "@/lib/supabase/server";
 import { PREVIEW_MODE } from "@/lib/mock";
 import { createTemplate, updateTemplate, deleteTemplate } from "./actions";
@@ -37,6 +38,7 @@ export default async function TemplatesPage() {
       <PageHeader
         title="Templates (API Oficial Meta)"
         subtitle="Templates HSM aprovados pela Meta para envio fora da janela de 24h."
+        action={<SyncTemplatesButton />}
       />
       <CrudManager
         items={templates.map((t) => ({

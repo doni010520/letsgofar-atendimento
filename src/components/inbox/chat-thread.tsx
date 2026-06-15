@@ -30,12 +30,16 @@ export function ChatThread({
   initialReplyTo,
   onType,
   quickReplies,
+  templates,
+  onSendTemplate,
   pending,
 }: {
   conversation: ConversationOverview;
   messages: Message[];
   groupParticipants?: { name: string; phone: string }[];
   quickReplies?: { title: string; content: string; shortcut: string | null }[];
+  templates?: { name: string; language: string; bodyText: string; varCount: number }[];
+  onSendTemplate?: (name: string, language: string, params: string[]) => void;
   onSend: (text: string, replyId?: string, mentions?: { name: string; phone: string }[]) => void;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
@@ -74,6 +78,16 @@ export function ChatThread({
   const aiHandling = !aiPaused && conversation.status === "bot";
   const title = conversation.contact_name ?? (isGroup ? "Grupo" : conversation.contact_phone);
 
+  // Janela de 24h da Meta: aberta se a última mensagem recebida do cliente foi < 24h.
+  // Canais UAZAPI não têm essa restrição (janela sempre "aberta").
+  const lastInboundAt = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].direction === "in") return messages[i].created_at;
+    }
+    return null;
+  })();
+  const windowOpen = !isMeta || (!!lastInboundAt && Date.now() - new Date(lastInboundAt).getTime() < 24 * 3600 * 1000);
+
   return (
     <div className="flex h-full flex-1 flex-col bg-canvas">
       <header className="shrink-0 border-b border-border bg-surface">
@@ -96,6 +110,12 @@ export function ChatThread({
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-ink">
                 <span className="truncate">{title}</span>
+                <span
+                  title={isMeta ? "Canal WhatsApp API Oficial (Meta)" : "Canal WhatsApp não-oficial (UAZAPI)"}
+                  className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold ${isMeta ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}
+                >
+                  {isMeta ? "API Oficial" : "Beta"}
+                </span>
                 {isGroup && <span className="shrink-0 rounded bg-brand-light px-1 py-0.5 text-[9px] font-medium text-brand">Grupo</span>}
                 {aiHandling && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"><Bot size={9} /> IA</span>}
                 {aiPaused && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium text-ink-soft"><BotOff size={9} /> IA pausada</span>}
@@ -220,6 +240,10 @@ export function ChatThread({
         onSendContact={onSendContact}
         onType={onType}
         quickReplies={quickReplies}
+        windowOpen={windowOpen}
+        isMeta={isMeta}
+        templates={templates}
+        onSendTemplate={onSendTemplate}
         mentionCandidates={
           conversation.is_group && groupParticipants?.length
             ? groupParticipants

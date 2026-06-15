@@ -49,6 +49,8 @@ export interface ChannelProvider {
   sendLocation?(to: string, loc: { name?: string; address?: string; latitude: number; longitude: number }): Promise<{ externalId?: string }>;
   /** Envia um contato (vCard). */
   sendContact?(to: string, contact: { fullName: string; phoneNumber: string }): Promise<{ externalId?: string }>;
+  /** Envia uma mensagem de modelo (template) — Meta oficial, fora da janela de 24h. */
+  sendTemplate?(params: { to: string; name: string; language: string; components?: unknown[] }): Promise<{ externalId?: string }>;
   /** Lista participantes de um grupo (LID + telefone real). Para resolver autor → 1:1. */
   getGroupParticipants?(groupJid: string): Promise<{ lid: string; phone: string }[]>;
   /** Informações do grupo: nome, descrição, participantes. */

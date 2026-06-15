@@ -255,7 +255,7 @@ export async function sendMessage(
   text: string,
   replyToExternal?: string,
   mentions?: { name: string; phone: string }[],
-) {
+): Promise<{ ok: boolean; error?: string }> {
   let body = text.trim();
   if (!body) return { ok: false };
   if (isPreview()) return { ok: true }; // modo preview: client mantém otimista
@@ -306,6 +306,7 @@ export async function sendMessage(
     .single();
 
   // Envia pelo provedor do canal.
+  let deliveryError: string | null = null;
   try {
     const { data: channel } = await supabase
       .from("channels")
@@ -334,6 +335,11 @@ export async function sendMessage(
       .eq("id", msg!.id);
   } catch (e) {
     console.error("send error", e);
+    const raw = (e as Error)?.message ?? "";
+    // Janela de 24h da Meta (erro 131047/131026) → mensagem amigável.
+    deliveryError = /131047|131026|re-?engag|24 ?h|outside|template/i.test(raw)
+      ? "Fora da janela de 24h: neste canal oficial, só é possível enviar um modelo (template) aprovado."
+      : "Não foi possível entregar a mensagem.";
     await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
   }
 
@@ -362,7 +368,7 @@ export async function sendMessage(
   }
 
   revalidatePath("/atendimento");
-  return { ok: true };
+  return { ok: !deliveryError, error: deliveryError ?? undefined };
 }
 
 /** Adiciona uma nota interna na conversa (visível só para a equipe, não vai ao cliente). */
@@ -384,6 +390,84 @@ export async function addInternalNote(conversationId: string, text: string) {
     is_internal: true,
     status: "sent",
   });
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Modelos (templates) aprovados disponíveis para envio (Meta, fora da janela). */
+export async function getApprovedTemplates(): Promise<
+  { name: string; language: string; bodyText: string; varCount: number }[]
+> {
+  if (isPreview()) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("wa_templates")
+    .select("name, language, category, components, status")
+    .order("name");
+  type Row = { name: string; language: string; status?: string; components?: unknown };
+  return ((data as Row[]) ?? [])
+    .filter((t) => !t.status || /approved|ativo/i.test(t.status))
+    .map((t) => {
+      const comps = Array.isArray(t.components) ? (t.components as Record<string, unknown>[]) : [];
+      const body = comps.find((c) => String(c.type).toUpperCase() === "BODY");
+      const bodyText = body ? String(body.text ?? "") : "";
+      const varCount = (bodyText.match(/\{\{\s*\d+\s*\}\}/g) ?? []).length;
+      return { name: t.name, language: t.language || "pt_BR", bodyText, varCount };
+    });
+}
+
+/** Envia uma mensagem de MODELO (template) — permitido fora da janela de 24h (Meta). */
+export async function sendTemplateMessage(
+  conversationId: string,
+  name: string,
+  language: string,
+  params: string[] = [],
+): Promise<{ ok: boolean; error?: string }> {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const supabase = await createClient();
+
+  const { data: conv } = await supabase
+    .from("conversation_overview")
+    .select("contact_phone, channel_id, is_group, contact_jid, status")
+    .eq("id", conversationId)
+    .single();
+  if (!conv) throw new Error("Conversa não encontrada.");
+  const { data: channel } = await supabase.from("channels").select("*").eq("id", conv.channel_id).single();
+  const provider = getProvider(channel as Channel);
+  if (!provider.sendTemplate) return { ok: false, error: "Este canal não suporta modelos." };
+
+  const components = params.length
+    ? [{ type: "body", parameters: params.map((p) => ({ type: "text", text: p })) }]
+    : undefined;
+  // Prévia legível do template (substitui {{n}} pelos parâmetros).
+  const preview = `[modelo: ${name}]`;
+
+  const { data: msg } = await supabase
+    .from("messages")
+    .insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "agent",
+      sender_id: session.userId,
+      content_type: "template",
+      body: preview,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  try {
+    const res = await provider.sendTemplate({ to: recipientOf(conv), name, language, components });
+    await supabase.from("messages").update({ status: "sent", external_id: res.externalId ?? null }).eq("id", msg!.id);
+  } catch (e) {
+    console.error("sendTemplate", e);
+    await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
+    return { ok: false, error: "Falha ao enviar o modelo." };
+  }
+  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
   revalidatePath("/atendimento");
   return { ok: true };
 }

@@ -55,9 +55,13 @@ import {
   openDirectConversation,
   resolveDirectContact,
   getGroupInfo,
+  sendTemplateMessage,
 } from "@/app/(app)/atendimento/actions";
 import { CloseModal, TransferModal } from "./attendance-modals";
+import { toast } from "@/components/toast";
 import type { ConversationOverview, Message, Tag, Profile, Department, Channel } from "@/lib/types";
+
+type TemplateOpt = { name: string; language: string; bodyText: string; varCount: number };
 
 export function Inbox({
   initialConversations,
@@ -69,6 +73,7 @@ export function Inbox({
   departments,
   channels,
   quickReplies,
+  templates,
   live,
 }: {
   initialConversations: ConversationOverview[];
@@ -80,6 +85,7 @@ export function Inbox({
   departments: Department[];
   channels?: Channel[];
   quickReplies?: { title: string; content: string; shortcut: string | null }[];
+  templates?: TemplateOpt[];
   live: boolean;
 }) {
   const router = useRouter();
@@ -472,11 +478,24 @@ export function Inbox({
     });
 
     startTransition(async () => {
-      await sendMessage(selectedId, finalText, finalReplyId, mentions);
+      const r = await sendMessage(selectedId, finalText, finalReplyId, mentions);
+      if (r && r.ok === false) toast(r.error ?? "Mensagem não entregue.", "error");
       if (live) {
         const msgs = await fetchMessages(selectedId);
         setMessagesByConv((prev) => ({ ...prev, [selectedId]: msgs }));
       }
+    });
+  }
+
+  function handleSendTemplate(name: string, language: string, params: string[]) {
+    if (!selectedId || selectedId === DRAFT_ID) return;
+    const convId = selectedId;
+    startTransition(async () => {
+      const r = await sendTemplateMessage(convId, name, language, params);
+      if (r?.ok) toast("Modelo enviado.");
+      else toast(r?.error ?? "Falha ao enviar o modelo.", "error");
+      const msgs = await fetchMessages(convId);
+      setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
     });
   }
 
@@ -692,6 +711,8 @@ export function Inbox({
           onToggleAi={handleToggleAi}
           initialReplyTo={!selected.is_group && privateReplyMsg ? privateReplyMsg : undefined}
           quickReplies={quickReplies}
+          templates={templates}
+          onSendTemplate={handleSendTemplate}
           pending={isPending}
         />
       ) : (
