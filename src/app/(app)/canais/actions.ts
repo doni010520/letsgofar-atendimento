@@ -29,6 +29,8 @@ export async function createChannel(formData: FormData) {
   if (type === "meta_cloud") {
     credentials.phone_number_id = String(formData.get("phone_number_id") || "");
     credentials.access_token = String(formData.get("access_token") || "");
+    const waba = String(formData.get("waba_id") || "").trim();
+    if (waba) credentials.waba_id = waba;
   }
 
   const supabase = await createClient();

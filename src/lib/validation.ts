@@ -104,7 +104,8 @@ export const ChannelCreateSchema = z.object({
   name: zName,
   phone: z.string().transform(digits).optional(),
   phone_number_id: z.string().max(50).optional(),
-  access_token: z.string().max(500).optional(),
+  waba_id: z.string().max(50).optional(),
+  access_token: z.string().max(1000).optional(),
 });
 
 export const IntegrationSchema = z.object({

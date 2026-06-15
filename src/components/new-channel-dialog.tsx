@@ -83,6 +83,7 @@ export function NewChannelDialog() {
               {type === "meta_cloud" && (
                 <>
                   <Field name="phone_number_id" label="Phone Number ID" placeholder="Ex: 120596359925687" required />
+                  <Field name="waba_id" label="WhatsApp Business Account ID (WABA)" placeholder="Ex: 166623730459..." />
                   <Field name="access_token" label="Token permanente" placeholder="Token do System User (EAAV...)" required />
                   <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
                     Obtenha o Phone Number ID e o token permanente no{" "}
