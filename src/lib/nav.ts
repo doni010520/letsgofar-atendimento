@@ -66,7 +66,7 @@ export const NAV: NavGroup[] = [
       { href: "/integracoes", label: "Integrações", icon: Plug },
       { href: "/api", label: "Chaves de API", icon: KeyRound },
       { href: "/auditoria", label: "Auditoria", icon: History },
-      { href: "/status", label: "Status servidores", icon: Server },
+      { href: "/status", label: "Saúde da operação", icon: Server },
       { href: "/api/export-contacts", label: "Exportar contatos", icon: Download },
     ],
   },
