@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { Scroll } from "@/components/scroll";
 import { PageHeader } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
@@ -24,20 +25,19 @@ function ageLabel(date: Date): string {
   return `há ${Math.floor(h / 24)} dias`;
 }
 
-export default async function StatusPage() {
-  const groups: Group[] = [];
-
-  if (PREVIEW_MODE) {
-    return (
-      <Scroll>
-        <PageHeader title="Saúde da Operação" subtitle="Modo preview — sem dados reais." />
-      </Scroll>
-    );
-  }
+export default async function SuperadminPage() {
+  if (PREVIEW_MODE) notFound();
 
   const sb = await createClient();
   const session = await getSession();
+  if (!session?.userId) notFound();
+
+  // Gate: só superadmin (marcado em profiles.super_admin) enxerga esta rota.
+  const { data: me } = await sb.from("profiles").select("super_admin").eq("id", session.userId).maybeSingle();
+  if (!me?.super_admin) notFound();
+
   const orgId = session?.organization?.id ?? "";
+  const groups: Group[] = [];
 
   // ── Infraestrutura ──
   let sbOk = false;
@@ -127,7 +127,6 @@ export default async function StatusPage() {
     ],
   });
 
-  // Resumo geral
   const all = groups.flatMap((g) => g.items);
   const downs = all.filter((i) => i.status === "down").length;
   const warns = all.filter((i) => i.status === "warn").length;
@@ -135,7 +134,7 @@ export default async function StatusPage() {
 
   return (
     <Scroll>
-      <PageHeader title="Saúde da Operação" subtitle="Monitore as peças-chave do sistema em um só lugar." />
+      <PageHeader title="Painel do Superadmin" subtitle="Saúde das peças-chave do sistema (acesso restrito)." />
 
       <div className={`mb-5 flex items-center gap-3 rounded-card border p-4 ${
         overall === "ok" ? "border-green-200 bg-green-50" : overall === "warn" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"
