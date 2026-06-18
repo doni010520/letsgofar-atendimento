@@ -277,7 +277,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       }
     }
 
-    await db.from("messages").insert({
+    const { data: insertedMsg } = await db.from("messages").insert({
       organization_id: org,
       conversation_id: conversationId,
       direction: fromMe ? "out" : "in",
@@ -293,7 +293,8 @@ export async function persistInbound(messages: InboundMessage[]) {
       reply_excerpt: replyExcerpt,
       reply_author: replyAuthor,
       status: fromMe ? "sent" : "delivered",
-    });
+    }).select("created_at").single();
+    const inboundTs = insertedMsg?.created_at ?? null;
 
     await db
       .from("conversations")
@@ -409,10 +410,36 @@ export async function persistInbound(messages: InboundMessage[]) {
     // Chatbot: roda só em mensagens recebidas (não nos ecos do próprio número) e
     // apenas quando a automação está dentro do horário configurado.
     if (automationActive && !isGroup && !fromMe && convAiEnabled && (convStatus === "bot" || isNew)) {
+      // Buffer de mensagens (debounce): se o contato envia várias mensagens em
+      // sequência ("Oi", "Boa tarde"...), espera alguns segundos e processa só a
+      // ÚLTIMA. Assim o bot responde uma única vez, com todo o contexto da rajada
+      // (a IA lê o histórico completo do banco, então enxerga todas as mensagens).
+      const DEBOUNCE_MS = Number(process.env.BOT_DEBOUNCE_MS ?? 8000);
+      let botNode = convBotNode;
+      if (DEBOUNCE_MS > 0 && inboundTs) {
+        await new Promise((res) => setTimeout(res, DEBOUNCE_MS));
+        const { data: newer } = await db
+          .from("messages")
+          .select("id")
+          .eq("conversation_id", conversationId)
+          .eq("direction", "in")
+          .gt("created_at", inboundTs)
+          .limit(1)
+          .maybeSingle();
+        if (newer) continue; // chegou mensagem mais nova: ela processa a rajada
+        // Re-checa o estado atual: se um humano assumiu durante a espera, não responde.
+        const { data: fresh } = await db
+          .from("conversations")
+          .select("status, bot_node_id")
+          .eq("id", conversationId)
+          .maybeSingle();
+        if (fresh && fresh.status !== "bot" && !isNew) continue;
+        botNode = fresh?.bot_node_id ?? convBotNode;
+      }
       const r = await runChatbot(
         db,
         channel as Channel,
-        { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: convBotNode },
+        { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: botNode },
         automation as { id: string; flow: { nodes: never[]; edges: never[] }; integration_id?: string | null },
         body ?? "",
       ).catch((e) => {
