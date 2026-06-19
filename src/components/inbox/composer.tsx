@@ -5,11 +5,14 @@ import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile,
 import { EmojiPicker } from "./emoji-picker";
 
 type Mention = { name: string; phone: string };
+type AgentMention = { id: string; name: string };
 type QuickReply = { title: string; content: string; shortcut: string | null };
 type Template = { name: string; language: string; bodyText: string; varCount: number };
 
 export function Composer({
   onSend,
+  onSendInternal,
+  agentCandidates,
   onSendFile,
   onSendLocation,
   onSendContact,
@@ -25,6 +28,8 @@ export function Composer({
   focusTrigger,
 }: {
   onSend: (text: string, mentions?: Mention[]) => void;
+  onSendInternal?: (text: string, mentions: AgentMention[]) => void;
+  agentCandidates?: AgentMention[];
   onSendFile: (file: File, asSticker?: boolean) => void;
   onSendLocation?: () => void;
   onSendContact?: () => void;
@@ -39,6 +44,10 @@ export function Composer({
   sending?: boolean;
   focusTrigger?: unknown;
 }) {
+  // Modo do composer: responder o cliente ("reply") ou mensagem interna da equipe.
+  const [mode, setMode] = useState<"reply" | "internal">("reply");
+  const internalMode = mode === "internal";
+  const allowInternal = !!onSendInternal;
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
@@ -54,6 +63,7 @@ export function Composer({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentions, setMentions] = useState<Mention[]>([]);
+  const [agentMentions, setAgentMentions] = useState<AgentMention[]>([]);
 
   // Preview de mídia antes de enviar (modal estilo WhatsApp Web).
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -67,7 +77,11 @@ export function Composer({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  const candidates = mentionCandidates ?? [];
+  // Candidatos de menção, normalizados para { name, key }. No modo interno são os
+  // atendentes (key = id); no modo cliente são contatos do grupo (key = telefone).
+  const candidates: { name: string; key: string }[] = internalMode
+    ? (agentCandidates ?? []).map((a) => ({ name: a.name, key: a.id }))
+    : (mentionCandidates ?? []).map((c) => ({ name: c.name, key: c.phone }));
   const filtered =
     mentionQuery != null && candidates.length
       ? candidates.filter((c) => c.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
@@ -118,7 +132,7 @@ export function Composer({
     setMentionQuery(candidates.length && m ? m[1] : null);
   }
 
-  function pickMention(c: Mention) {
+  function pickMention(c: { name: string; key: string }) {
     const ta = taRef.current;
     const caret = ta?.selectionStart ?? text.length;
     const before = text.slice(0, caret);
@@ -127,7 +141,11 @@ export function Composer({
     const start = m ? caret - m[1].length - 1 : caret;
     const newText = text.slice(0, start) + `@${c.name} ` + after;
     setText(newText);
-    setMentions((prev) => (prev.some((x) => x.phone === c.phone) ? prev : [...prev, c]));
+    if (internalMode) {
+      setAgentMentions((prev) => (prev.some((x) => x.id === c.key) ? prev : [...prev, { id: c.key, name: c.name }]));
+    } else {
+      setMentions((prev) => (prev.some((x) => x.phone === c.key) ? prev : [...prev, { name: c.name, phone: c.key }]));
+    }
     setMentionQuery(null);
     requestAnimationFrame(() => {
       const pos = start + c.name.length + 2;
@@ -139,10 +157,16 @@ export function Composer({
   function submit() {
     const t = text.trim();
     if (!t) return;
-    const used = mentions.filter((m) => t.includes(`@${m.name}`));
-    onSend(t, used.length ? used : undefined);
+    if (internalMode) {
+      const used = agentMentions.filter((m) => t.includes(`@${m.name}`));
+      onSendInternal?.(t, used);
+    } else {
+      const used = mentions.filter((m) => t.includes(`@${m.name}`));
+      onSend(t, used.length ? used : undefined);
+    }
     setText("");
     setMentions([]);
+    setAgentMentions([]);
     setMentionQuery(null);
   }
 
@@ -259,8 +283,30 @@ export function Composer({
         </div>
       )}
 
+      {/* ========== Abas: Responder cliente | Mensagem interna ========== */}
+      {allowInternal && (
+        <div className="flex items-center gap-1 border-t border-border bg-surface px-3 pt-2">
+          <button
+            onClick={() => { setMode("reply"); setMentionQuery(null); }}
+            className={`rounded-t-lg px-3 py-1.5 text-xs font-medium transition ${
+              !internalMode ? "bg-brand-light text-brand" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            Responder cliente
+          </button>
+          <button
+            onClick={() => { setMode("internal"); setMentionQuery(null); }}
+            className={`flex items-center gap-1 rounded-t-lg px-3 py-1.5 text-xs font-medium transition ${
+              internalMode ? "bg-amber-100 text-amber-800" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            🔒 Mensagem interna
+          </button>
+        </div>
+      )}
+
       {/* ========== Barra restrita: Meta fora da janela de 24h ========== */}
-      {isMeta && !windowOpen ? (
+      {isMeta && !windowOpen && !internalMode ? (
         <div className="border-t border-border bg-surface p-3">
           <div className="mb-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
             <span>⚠️</span>
@@ -315,7 +361,7 @@ export function Composer({
         </div>
       ) : (
       /* ========== Composer ========== */
-      <div className="relative flex items-end gap-2 border-t border-border bg-surface p-3">
+      <div className={`relative flex items-end gap-2 p-3 ${internalMode ? "bg-amber-50" : "bg-surface"} ${allowInternal ? "" : "border-t border-border"}`}>
         <input ref={fileRef} type="file" className="hidden" onChange={pickFile} />
         <input ref={stickerRef} type="file" accept="image/*" className="hidden" onChange={pickStickerFile} />
 
@@ -325,7 +371,7 @@ export function Composer({
             <p className="px-3 py-1 text-[10px] font-semibold uppercase text-ink-soft">Mencionar</p>
             {filtered.map((c) => (
               <button
-                key={c.phone}
+                key={c.key}
                 onClick={() => pickMention(c)}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-gray-50"
               >
@@ -352,9 +398,9 @@ export function Composer({
         <div className="relative">
           <button
             onClick={() => setAttachMenu((v) => !v)}
-            disabled={disabled || sending}
+            disabled={disabled || sending || internalMode}
             className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-gray-100 text-ink-soft transition hover:bg-gray-200 disabled:opacity-40"
-            title="Anexar"
+            title={internalMode ? "Anexos indisponíveis na mensagem interna" : "Anexar"}
           >
             <Paperclip size={18} />
           </button>
@@ -477,7 +523,13 @@ export function Composer({
             if (e.key === "Escape") setMentionQuery(null);
           }}
           rows={1}
-          placeholder={recording ? "Gravando áudio..." : "Digite uma mensagem..."}
+          placeholder={
+            recording
+              ? "Gravando áudio..."
+              : internalMode
+                ? "Mensagem interna (o cliente não vê) — use @ para marcar um atendente"
+                : "Digite uma mensagem..."
+          }
           disabled={disabled || recording}
           style={{ height: "auto" }}
           onInput={(e) => {
@@ -488,12 +540,14 @@ export function Composer({
           className="min-h-[42px] max-h-[200px] flex-1 resize-none rounded-xl border border-border px-3 py-2 text-sm outline-none focus:border-brand disabled:bg-gray-50"
         />
 
-        {text.trim() ? (
+        {text.trim() || internalMode ? (
           <button
             onClick={submit}
-            disabled={disabled || sending}
-            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-brand text-white transition hover:bg-brand-dark disabled:opacity-40"
-            title="Enviar"
+            disabled={disabled || sending || !text.trim()}
+            className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl text-white transition disabled:opacity-40 ${
+              internalMode ? "bg-amber-500 hover:bg-amber-600" : "bg-brand hover:bg-brand-dark"
+            }`}
+            title={internalMode ? "Enviar mensagem interna" : "Enviar"}
           >
             {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>

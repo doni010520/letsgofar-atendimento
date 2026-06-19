@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, Settings, MessageCircle, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
+import { Settings, MessageCircle, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
+import { MentionsBell } from "@/components/mentions-bell";
 
 export function Topbar({
   userName,
   orgName,
   email,
+  userId,
 }: {
   userName: string;
   orgName: string;
   email?: string;
+  userId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const initials = userName
@@ -46,12 +49,7 @@ export function Topbar({
         >
           <Settings size={18} />
         </Link>
-        <button
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink"
-          title="Notificações"
-        >
-          <Bell size={18} />
-        </button>
+        <MentionsBell userId={userId ?? null} />
         <button
           onClick={() => document.documentElement.classList.toggle("dark")}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink"

@@ -5,7 +5,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/whatsapp";
 import { getMessages, getConversations } from "@/lib/data/conversations";
-import type { Channel, ContentType } from "@/lib/types";
+import type { Channel, ContentType, InternalMention } from "@/lib/types";
 
 const isPreview = () => !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -391,6 +391,120 @@ export async function addInternalNote(conversationId: string, text: string) {
     status: "sent",
   });
   revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Lista os atendentes da organização (para o autocomplete de @menção interna). */
+export async function getOrgAgents(): Promise<{ id: string; name: string; avatar_url: string | null }[]> {
+  if (isPreview()) return [];
+  const session = await getSession();
+  if (!session?.organization) return [];
+  const db = createServiceClient();
+  const { data } = await db
+    .from("profiles")
+    .select("id, name, avatar_url")
+    .eq("organization_id", session.organization.id)
+    .order("name");
+  return ((data ?? []) as { id: string; name: string | null; avatar_url: string | null }[]).map((p) => ({
+    id: p.id,
+    name: p.name ?? "Atendente",
+    avatar_url: p.avatar_url ?? null,
+  }));
+}
+
+/**
+ * Envia uma mensagem INTERNA (entre atendentes) numa conversa. O cliente nunca
+ * recebe. Suporta @menção de atendentes, que geram notificação (sino).
+ */
+export async function sendInternalMessage(
+  conversationId: string,
+  text: string,
+  mentions?: { id: string; name: string }[],
+) {
+  if (isPreview()) return { ok: true };
+  const body = text.trim();
+  if (!body) return { ok: false };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const db = createServiceClient();
+  const authorName = session.profile?.name ?? "Atendente";
+  // Só conta menções que realmente aparecem no texto final.
+  const used = (mentions ?? []).filter((m) => body.includes(`@${m.name}`));
+
+  const { data: msg } = await db
+    .from("messages")
+    .insert({
+      organization_id: session.organization.id,
+      conversation_id: conversationId,
+      direction: "out",
+      sender_type: "agent",
+      sender_id: session.userId,
+      content_type: "text",
+      body,
+      author_name: authorName,
+      is_internal: true,
+      mentions: used,
+      status: "sent",
+    })
+    .select("id")
+    .single();
+
+  // Notifica os atendentes mencionados (menos o próprio autor).
+  const targets = used.filter((m) => m.id && m.id !== session.userId);
+  if (msg && targets.length) {
+    const { data: conv } = await db
+      .from("conversation_overview")
+      .select("contact_name")
+      .eq("id", conversationId)
+      .maybeSingle();
+    await db.from("internal_mentions").insert(
+      targets.map((t) => ({
+        organization_id: session.organization!.id,
+        conversation_id: conversationId,
+        message_id: msg.id,
+        mentioned_user_id: t.id,
+        created_by: session.userId,
+        author_name: authorName,
+        excerpt: body.slice(0, 140),
+        contact_name: (conv?.contact_name as string) ?? null,
+      })),
+    );
+  }
+
+  await db.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Menções internas não lidas do atendente logado (para o sino/badge). */
+export async function getUnreadMentions(): Promise<InternalMention[]> {
+  if (isPreview()) return [];
+  const session = await getSession();
+  if (!session?.userId) return [];
+  const db = createServiceClient();
+  const { data } = await db
+    .from("internal_mentions")
+    .select("*")
+    .eq("mentioned_user_id", session.userId)
+    .is("read_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return (data as InternalMention[]) ?? [];
+}
+
+/** Marca menções como lidas (de uma conversa, ou todas se omitido). */
+export async function markMentionsRead(conversationId?: string) {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.userId) return { ok: false };
+  const db = createServiceClient();
+  let q = db
+    .from("internal_mentions")
+    .update({ read_at: new Date().toISOString() })
+    .eq("mentioned_user_id", session.userId)
+    .is("read_at", null);
+  if (conversationId) q = q.eq("conversation_id", conversationId);
+  await q;
   return { ok: true };
 }
 

@@ -8,7 +8,11 @@ import { PREVIEW_MODE } from "@/lib/mock";
 
 export const revalidate = 0;
 
-export default async function AtendimentoPage() {
+export default async function AtendimentoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ c?: string }>;
+}) {
   const [conversations, tags, agents, departments, quickReplies, channels, templates] = await Promise.all([
     getConversations(),
     getTags("conversation"),
@@ -18,7 +22,10 @@ export default async function AtendimentoPage() {
     getChannels(),
     getApprovedTemplates(),
   ]);
-  const first = conversations[0]?.id ?? null;
+  // Deep-link ?c=<convId> (ex.: clique numa menção do sino) abre essa conversa.
+  const requested = (await searchParams)?.c;
+  const first =
+    (requested && conversations.some((c) => c.id === requested) ? requested : conversations[0]?.id) ?? null;
   const initialMessages = first ? await getMessages(first) : [];
 
   let userId: string | null = null;

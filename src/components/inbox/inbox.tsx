@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { ConversationList } from "./conversation-list";
 import { ChatThread } from "./chat-thread";
@@ -45,6 +45,8 @@ import {
   markConversationRead,
   assignToMe,
   addInternalNote,
+  sendInternalMessage,
+  markMentionsRead,
   closeConversation,
   transferConversation,
   toggleMute,
@@ -89,6 +91,7 @@ export function Inbox({
   live: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>(
@@ -147,6 +150,7 @@ export function Inbox({
       setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
     }
     if (live) markConversationRead(id).catch(() => {});
+    if (live) markMentionsRead(id).catch(() => {});
     // Se grupo, carrega participantes reais para menções.
     const conv = conversations.find((c) => c.id === id);
     if (conv?.is_group) {
@@ -159,6 +163,13 @@ export function Inbox({
       setGroupParticipants([]);
     }
   }
+
+  // Deep-link: ?c=<convId> (ex.: clicar numa menção no sino) seleciona a conversa.
+  useEffect(() => {
+    const c = searchParams.get("c");
+    if (c && c !== selectedId) selectConversation(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Polling rápido: lista de conversas a cada 2.5s + status dos canais a cada 15s.
   useEffect(() => {
@@ -487,6 +498,37 @@ export function Inbox({
     });
   }
 
+  function handleSendInternal(text: string, mentions: { id: string; name: string }[]) {
+    if (!selectedId || selectedId === DRAFT_ID) return;
+    const convId = selectedId;
+    const myName = agents.find((a) => a.id === userId)?.name ?? "Você";
+    const optimistic: Message = {
+      id: `tmp-int-${Date.now()}`,
+      organization_id: "",
+      conversation_id: convId,
+      direction: "out",
+      sender_type: "agent",
+      sender_id: userId,
+      content_type: "text",
+      body: text,
+      media_url: null,
+      status: "sent",
+      external_id: null,
+      is_internal: true,
+      author_name: myName,
+      mentions,
+      created_at: new Date().toISOString(),
+    };
+    setMessagesByConv((prev) => ({ ...prev, [convId]: [...(prev[convId] ?? []), optimistic] }));
+    startTransition(async () => {
+      await sendInternalMessage(convId, text, mentions);
+      if (live) {
+        const msgs = await fetchMessages(convId);
+        setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
+      }
+    });
+  }
+
   function handleSendTemplate(name: string, language: string, params: string[]) {
     if (!selectedId || selectedId === DRAFT_ID) return;
     const convId = selectedId;
@@ -693,6 +735,9 @@ export function Inbox({
           messages={messages}
           groupParticipants={groupParticipants}
           onSend={handleSend}
+          onSendInternal={handleSendInternal}
+          agents={agents.map((a) => ({ id: a.id, name: a.name ?? "Atendente", avatar_url: a.avatar_url }))}
+          currentUserId={userId}
           onSendFile={handleSendFile}
           onSendLocation={handleSendLocation}
           onSendContact={handleSendContact}

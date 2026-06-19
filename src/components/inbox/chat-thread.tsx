@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote, Eye, EyeOff } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -11,6 +11,9 @@ export function ChatThread({
   messages,
   groupParticipants,
   onSend,
+  onSendInternal,
+  agents,
+  currentUserId,
   onSendFile,
   onSendLocation,
   onSendContact,
@@ -41,6 +44,9 @@ export function ChatThread({
   templates?: { name: string; language: string; bodyText: string; varCount: number }[];
   onSendTemplate?: (name: string, language: string, params: string[]) => void;
   onSend: (text: string, replyId?: string, mentions?: { name: string; phone: string }[]) => void;
+  onSendInternal?: (text: string, mentions: { id: string; name: string }[]) => void;
+  agents?: { id: string; name: string; avatar_url?: string | null }[];
+  currentUserId?: string | null;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
   onSendLocation: () => void;
@@ -63,6 +69,8 @@ export function ChatThread({
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [showInternal, setShowInternal] = useState(true);
+  const internalCount = messages.filter((m) => m.is_internal).length;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -134,6 +142,17 @@ export function ChatThread({
           <button onClick={onToggleMute} title={muted ? "Reativar" : "Silenciar"} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
             {muted ? <BellOff size={12} /> : <Bell size={12} />} {muted ? "Silenciado" : "Silenciar"}
           </button>
+          {internalCount > 0 && (
+            <button
+              onClick={() => setShowInternal((v) => !v)}
+              title={showInternal ? "Ocultar mensagens internas" : "Mostrar mensagens internas"}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ${
+                showInternal ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : "bg-gray-100 text-ink hover:bg-gray-200"
+              }`}
+            >
+              {showInternal ? <Eye size={12} /> : <EyeOff size={12} />} Internas ({internalCount})
+            </button>
+          )}
           {conversation.status !== "closed" && (
             <>
               {!isGroup && (
@@ -181,10 +200,44 @@ export function ChatThread({
           }
           return messages.map((m) => {
             if (m.is_internal) {
+              if (!showInternal) return null;
+              // Mensagem do sistema (sem autor identificado) = aviso discreto centralizado.
+              const isSystem = m.sender_type === "system" || (!m.author_name && !m.sender_id);
+              if (isSystem) {
+                return (
+                  <div key={m.id} className="flex justify-center px-6 py-1">
+                    <div className="max-w-md rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-800 ring-1 ring-amber-100">
+                      {m.body}
+                    </div>
+                  </div>
+                );
+              }
+              const mine = !!currentUserId && m.sender_id === currentUserId;
+              const iAmMentioned = !!currentUserId && (m.mentions ?? []).some((x) => x.id === currentUserId);
+              const time = new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+              // Destaca os "@Nome" no corpo.
+              const parts = (m.body ?? "").split(/(@[^\s@]+(?:\s[^\s@]+)?)/g);
               return (
-                <div key={m.id} className="flex justify-center px-6 py-1">
-                  <div className="max-w-md rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-800 ring-1 ring-amber-100">
-                    <span className="font-medium">Nota interna</span> · {m.body}
+                <div key={m.id} className={`flex px-4 py-1 ${mine ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[78%] rounded-xl border-l-4 px-3 py-2 text-sm shadow-sm ${
+                      iAmMentioned ? "border-amber-500 bg-amber-100 ring-1 ring-amber-300" : "border-amber-400 bg-amber-50"
+                    }`}
+                  >
+                    <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                      <span>🔒 Interna</span>
+                      <span className="text-amber-600/70">· {m.author_name ?? "Atendente"}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words text-amber-900">
+                      {parts.map((p, i) =>
+                        p.startsWith("@") && (m.mentions ?? []).some((x) => p.slice(1).startsWith(x.name)) ? (
+                          <span key={i} className="rounded bg-amber-200 px-1 font-medium text-amber-900">{p}</span>
+                        ) : (
+                          <span key={i}>{p}</span>
+                        ),
+                      )}
+                    </p>
+                    <div className="mt-0.5 text-right text-[10px] text-amber-600/70">{time}</div>
                   </div>
                 </div>
               );
@@ -235,6 +288,8 @@ export function ChatThread({
           onSend(text, replyTo?.external_id ?? undefined, mentions);
           setReplyTo(null);
         }}
+        onSendInternal={onSendInternal ? (text, m) => { onSendInternal(text, m); setShowInternal(true); } : undefined}
+        agentCandidates={agents?.map((a) => ({ id: a.id, name: a.name }))}
         onSendFile={onSendFile}
         onSendLocation={onSendLocation}
         onSendContact={onSendContact}

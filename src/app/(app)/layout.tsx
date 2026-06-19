@@ -10,6 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let userName = "ADONIAS SOUZA";
   let orgName = "Modo preview";
   let email: string | undefined;
+  let userId: string | null = null;
 
   if (hasEnv) {
     const session = await getSession();
@@ -18,13 +19,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     userName = session.profile?.name || session.profile?.email || "Usuário";
     orgName = session.organization.name;
     email = session.profile?.email ?? undefined;
+    userId = session.userId ?? null;
   }
 
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar userName={userName} orgName={orgName} email={email} />
+        <Topbar userName={userName} orgName={orgName} email={email} userId={userId} />
         {!hasEnv && (
           <div className="mx-6 mb-2 rounded-lg bg-amber-100 px-4 py-2 text-xs text-amber-800">
             Modo preview — Supabase não configurado. Crie o projeto e preencha o{" "}

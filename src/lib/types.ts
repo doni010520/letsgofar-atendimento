@@ -357,6 +357,22 @@ export interface Message {
   edited?: boolean;
   is_internal?: boolean;
   forwarded?: boolean;
+  mentions?: { id: string; name: string }[];
+  created_at: string;
+}
+
+/** Notificação de menção interna (sino) para um atendente. */
+export interface InternalMention {
+  id: string;
+  organization_id: string;
+  conversation_id: string;
+  message_id: string;
+  mentioned_user_id: string;
+  created_by: string | null;
+  author_name: string | null;
+  excerpt: string | null;
+  contact_name: string | null;
+  read_at: string | null;
   created_at: string;
 }
 
