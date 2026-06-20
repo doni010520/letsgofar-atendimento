@@ -896,29 +896,22 @@ export function Inbox({
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setDeleteTarget(null)}>
           <div className="w-full max-w-sm rounded-card bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-1 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold text-ink">Apagar mensagem</h2>
               <button onClick={() => setDeleteTarget(null)} className="text-ink-soft hover:text-ink"><X size={18} /></button>
             </div>
-            <p className="mb-4 text-xs text-ink-soft">
-              A mensagem continua visível para a equipe (esmaecida) para histórico — só sai da conversa do cliente quando você escolhe “para todos”.
-            </p>
             <div className="flex flex-col gap-2">
-              {deleteTarget.direction === "out" && (
-                <button
-                  onClick={() => confirmDelete("everyone")}
-                  className="w-full rounded-lg bg-danger px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-600"
-                >
-                  Apagar para todos
-                  <span className="block text-[11px] font-normal text-white/80">Remove também do WhatsApp do cliente</span>
-                </button>
-              )}
+              <button
+                onClick={() => confirmDelete("everyone")}
+                className="w-full rounded-lg bg-danger px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-600"
+              >
+                Apagar para todos
+              </button>
               <button
                 onClick={() => confirmDelete("me")}
                 className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-gray-50"
               >
                 Apagar para mim
-                <span className="block text-[11px] font-normal text-ink-soft">Some só aqui na plataforma; o cliente mantém</span>
               </button>
               <button
                 onClick={() => setDeleteTarget(null)}

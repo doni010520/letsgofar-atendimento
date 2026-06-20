@@ -11,6 +11,20 @@ Canais WhatsApp: **UAZAPI** (não oficial, QR) e **Meta Cloud API** (oficial).
 
 Produção: **https://mvfchat.benitechlab.com** · versão atual em `GET /api/version`.
 
+## Funcionalidades do chat
+
+- **Envio:** texto, imagem/vídeo/documento (com legenda), figurinha, **áudio gravado**, localização e contato.
+- **Sobre mensagens:** responder/citar, reagir (emoji), editar, **apagar (para mim / para todos)** e encaminhar.
+  - Apagada fica **esmaecida** e visível para a equipe (auditoria); “para todos” revoga no cliente quando o canal suporta (UAZAPI).
+- **Menções:** de contatos em grupos (`@contato`) e de atendentes (`@atendente`).
+- **Mensagens internas entre atendentes** (aba no composer) + **notificações de menção** (sino, tempo real).
+- **Notas internas** na conversa.
+- **Respostas rápidas / macros** e **templates** (Meta, fora da janela de 24h).
+- **Ações de atendimento:** assumir, transferir (departamento), encerrar (com CSAT), silenciar.
+- **IA:** pausar/reativar o agente por conversa; **buffer de rajada** (junta mensagens seguidas); encerra ao **resolver** ou por **inatividade** (com aviso e despedida) e reinicia o fluxo.
+- **Grupos:** participantes, “responder no privado”.
+- **Tempo real:** mensagens, status (entregue/lido) e menções via Supabase Realtime; painel de contato (dados, tags, campos personalizados).
+
 ## Rodar em desenvolvimento
 
 ```bash
