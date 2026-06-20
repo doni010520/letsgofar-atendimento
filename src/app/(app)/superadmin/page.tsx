@@ -104,7 +104,10 @@ export default async function SuperadminPage() {
     try {
       const sgp = await sgpForOrg(sb as unknown as Parameters<typeof sgpForOrg>[0], orgId);
       if (sgp) {
-        await withTimeout(sgp.consultarCliente({ cpfcnpj: "00000000000" }), 7000);
+        // Ping leve: consulta SEM cpf/contrato. O SGP responde 200 na hora
+        // ("CPF/CNPJ não informados"), validando conectividade + token. Não use
+        // cpfcnpj fake aqui: o valor "00000000000" trava o servidor do SGP.
+        await withTimeout(sgp.consultarCliente({}), 8000);
         sgpStatus = "ok"; sgpDetail = "Respondendo";
       } else { sgpStatus = "warn"; sgpDetail = "Configurada, sem credenciais válidas"; }
     } catch {

@@ -25,6 +25,9 @@ export class SgpClient {
   private app: string;
   private token: string;
   private authHeader?: string;
+  /** Timeout por requisição. O SGP pode pendurar em inputs patológicos
+   *  (ex.: cpfcnpj "00000000000"); sem isso a IA travaria indefinidamente. */
+  private timeoutMs = 15000;
 
   constructor(config: SgpConfig) {
     if (!config.url) throw new SgpError("SGP: URL não configurada.");
@@ -35,6 +38,22 @@ export class SgpClient {
     this.token = config.token;
     if (config.username && config.password) {
       this.authHeader = "Basic " + Buffer.from(`${config.username}:${config.password}`).toString("base64");
+    }
+  }
+
+  /** fetch com timeout (AbortController) — falha rápido se o SGP não responder. */
+  private async fetchT(url: string, init: RequestInit): Promise<Response> {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), this.timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: ctrl.signal });
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") {
+        throw new SgpError(`SGP: tempo esgotado (${this.timeoutMs}ms) — servidor não respondeu.`);
+      }
+      throw e;
+    } finally {
+      clearTimeout(t);
     }
   }
 
@@ -68,8 +87,9 @@ export class SgpClient {
     const url = `${this.base}/${path.replace(/^\/+/, "")}`;
     let res: Response;
     try {
-      res = await fetch(url, { method: "POST", headers: this.headers("application/x-www-form-urlencoded"), body: params.toString() });
+      res = await this.fetchT(url, { method: "POST", headers: this.headers("application/x-www-form-urlencoded"), body: params.toString() });
     } catch (e) {
+      if (e instanceof SgpError) throw e;
       throw new SgpError(`SGP: falha de rede em ${path}: ${(e as Error).message}`);
     }
     return this.parse(res, path) as Promise<T>;
@@ -80,12 +100,13 @@ export class SgpClient {
     const url = `${this.base}/${path.replace(/^\/+/, "")}`;
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await this.fetchT(url, {
         method: "POST",
         headers: this.headers("application/json"),
         body: JSON.stringify({ app: this.app, token: this.token, ...body }),
       });
     } catch (e) {
+      if (e instanceof SgpError) throw e;
       throw new SgpError(`SGP: falha de rede em ${path}: ${(e as Error).message}`);
     }
     return this.parse(res, path) as Promise<T>;
