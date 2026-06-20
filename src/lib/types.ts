@@ -360,6 +360,7 @@ export interface Message {
   reply_author?: string | null;
   reactions?: { emoji: string; by: string }[];
   is_deleted?: boolean;
+  deleted_scope?: "me" | "everyone" | null;
   edited?: boolean;
   is_internal?: boolean;
   forwarded?: boolean;
