@@ -24,7 +24,9 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+# Commit do build, exposto em /api/version para identificar o que está no ar.
+ARG GIT_SHA=""
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 GIT_SHA=$GIT_SHA
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
