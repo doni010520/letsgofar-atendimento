@@ -104,6 +104,34 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
             <Toggle name="auto_close_queue" label="Fechar também os atendimentos em espera" defaultChecked={s.auto_close_queue} />
           </Section>
 
+          <Section title="Encerramento por inatividade (bot/IA)" hint="Avisa o cliente e, se continuar sem responder, despede-se e encerra. O próximo contato recomeça o atendimento do zero.">
+            <Toggle name="inactivity_enabled" label="Ativar encerramento por inatividade" defaultChecked={s.inactivity_enabled !== false} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Avisar após (minutos)</label>
+                <input type="number" name="inactivity_warn_min" defaultValue={s.inactivity_warn_min ?? 10} placeholder="10" className={inputCls} />
+                <p className="mt-1 text-[11px] text-ink-soft">Manda “ainda está aí?”. Deixe 0 para não avisar.</p>
+              </div>
+              <div>
+                <label className={labelCls}>Encerrar após (minutos)</label>
+                <input type="number" name="inactivity_close_min" defaultValue={s.inactivity_close_min ?? 15} placeholder="15" className={inputCls} />
+                <p className="mt-1 text-[11px] text-ink-soft">Despede-se e fecha. Deve ser maior que o tempo de aviso.</p>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Mensagem de aviso</label>
+              <textarea name="inactivity_warn_message" rows={2} defaultValue={s.inactivity_warn_message ?? ""}
+                placeholder="Você ainda está por aí? 😊 Se não responder, vou encerrar este atendimento em alguns minutos."
+                className={`${inputCls} resize-none`} />
+            </div>
+            <div>
+              <label className={labelCls}>Mensagem de despedida</label>
+              <textarea name="inactivity_goodbye_message" rows={2} defaultValue={s.inactivity_goodbye_message ?? ""}
+                placeholder="Encerrei este atendimento por inatividade. Obrigado por falar com a *MVF NET*! 👋"
+                className={`${inputCls} resize-none`} />
+            </div>
+          </Section>
+
           <Section title="Transferência automática" hint="Transfere se não houver interação pelo tempo definido.">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>

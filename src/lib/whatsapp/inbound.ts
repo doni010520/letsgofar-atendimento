@@ -299,7 +299,7 @@ export async function persistInbound(messages: InboundMessage[]) {
 
     await db
       .from("conversations")
-      .update({ last_message_at: new Date().toISOString() })
+      .update({ last_message_at: new Date().toISOString(), inactivity_warned_at: null })
       .eq("id", conversationId);
 
     // ====== CSAT: captura nota se aguardando satisfação ======

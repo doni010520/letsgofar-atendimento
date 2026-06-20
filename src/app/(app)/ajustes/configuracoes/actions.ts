@@ -42,6 +42,12 @@ export async function saveSettings(fd: FormData) {
     auto_transfer_company_min: num("auto_transfer_company_min"),
     auto_transfer_client_min: num("auto_transfer_client_min"),
     auto_transfer_dept_id: str("auto_transfer_dept_id"),
+    // Encerramento por inatividade (cron): avisa, depois despede + fecha + reseta.
+    inactivity_enabled: bool("inactivity_enabled"),
+    inactivity_warn_min: num("inactivity_warn_min"),
+    inactivity_close_min: num("inactivity_close_min"),
+    inactivity_warn_message: str("inactivity_warn_message"),
+    inactivity_goodbye_message: str("inactivity_goodbye_message"),
     require_classification: (str("require_classification") as OrgSettings["require_classification"]) ?? "never",
     require_close_reason: bool("require_close_reason"),
     csat_policy: (str("csat_policy") as OrgSettings["csat_policy"]) ?? "optional_on",
