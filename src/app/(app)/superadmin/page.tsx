@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Scroll } from "@/components/scroll";
 import { PageHeader } from "@/components/ui";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getChannels } from "@/lib/data/channels";
 import { sgpForOrg } from "@/lib/sgp";
@@ -127,6 +127,19 @@ export default async function SuperadminPage() {
     ],
   });
 
+  // ── Eventos recentes (app_logs) ──
+  type LogRow = { id: string; level: string; source: string; message: string; created_at: string };
+  let logs: LogRow[] = [];
+  try {
+    const svc = createServiceClient();
+    const { data } = await svc
+      .from("app_logs")
+      .select("id, level, source, message, created_at")
+      .order("created_at", { ascending: false })
+      .limit(60);
+    logs = (data as LogRow[]) ?? [];
+  } catch { /* sem logs */ }
+
   const all = groups.flatMap((g) => g.items);
   const downs = all.filter((i) => i.status === "down").length;
   const warns = all.filter((i) => i.status === "warn").length;
@@ -168,6 +181,30 @@ export default async function SuperadminPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* ── Eventos recentes (logs do app, sem precisar do Easypanel) ── */}
+      <div className="mt-5 rounded-card border border-border bg-surface p-4 shadow-card">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-ink">Eventos recentes</h3>
+          <span className="text-[11px] text-ink-soft">últimos {logs.length}</span>
+        </div>
+        {logs.length === 0 ? (
+          <p className="text-xs text-ink-soft">Nenhum evento registrado ainda.</p>
+        ) : (
+          <div className="max-h-[420px] space-y-1 overflow-y-auto font-mono text-[11px]">
+            {logs.map((l) => (
+              <div key={l.id} className="flex items-start gap-2 border-b border-border/50 py-1">
+                <span className="shrink-0 text-ink-soft">{new Date(l.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                <span className={`shrink-0 rounded px-1 font-semibold uppercase ${
+                  l.level === "error" ? "bg-red-100 text-red-700" : l.level === "warn" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-ink-soft"
+                }`}>{l.level}</span>
+                <span className="shrink-0 text-brand">{l.source}</span>
+                <span className="min-w-0 flex-1 break-words text-ink">{l.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Scroll>
   );

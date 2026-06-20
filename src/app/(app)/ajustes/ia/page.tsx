@@ -4,6 +4,7 @@ import { Scroll } from "@/components/scroll";
 import { PageHeader, Card } from "@/components/ui";
 import { AiAgentList, type AiAgentRow } from "@/components/ai-agent-form";
 import { AiAllowlist } from "@/components/ai-allowlist";
+import { defaultMvfPrompt } from "@/lib/whatsapp/ai";
 import { getChannels } from "@/lib/data/channels";
 import { getSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -52,7 +53,7 @@ export default async function AiAgentPage() {
         </div>
       </Card>
 
-      <AiAgentList agents={agents} channels={channels} />
+      <AiAgentList agents={agents} channels={channels} defaultBasePrompt={defaultMvfPrompt()} />
       {!PREVIEW_MODE && <AiAllowlist numbers={allowed} />}
     </Scroll>
   );

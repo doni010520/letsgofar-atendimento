@@ -5,6 +5,7 @@ import { storeInboundMedia } from "./media";
 import { rehostImageUrl } from "./avatar";
 import { runChatbot } from "./chatbot";
 import { getProvider } from "./index";
+import { logEvent } from "@/lib/log";
 
 // Cache de participantes por grupo (5 min) para resolver menções sem bater toda hora.
 const groupPartsCache = new Map<string, { at: number; parts: { phone: string; lid: string }[] }>();
@@ -444,6 +445,7 @@ export async function persistInbound(messages: InboundMessage[]) {
         body ?? "",
       ).catch((e) => {
         console.warn("chatbot", (e as Error)?.message);
+        void logEvent("error", "chatbot", `Falha no chatbot: ${(e as Error)?.message ?? e}`, { conversationId }, org);
         return null;
       });
       if (r === "queued") await db.from("conversations").update({ status: "queued" }).eq("id", conversationId);

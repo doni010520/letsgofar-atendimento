@@ -1,5 +1,6 @@
 import type { createServiceClient } from "@/lib/supabase/server";
 import { sgpForOrg, sgpForIntegration, type SgpClient } from "@/lib/sgp";
+import { logEvent } from "@/lib/log";
 
 type DB = ReturnType<typeof createServiceClient>;
 
@@ -87,7 +88,7 @@ function nowBR(): { saudacao: string; descricao: string } {
  * não tem `prompt` próprio configurado. Tom, mensagens verbatim, fluxo e
  * gatilhos de transferência seguem o original.
  */
-function defaultMvfPrompt(agentName?: string): string {
+export function defaultMvfPrompt(agentName?: string): string {
   const { saudacao } = nowBR();
   const nome = agentName ? ` Seu nome é *${agentName}*.` : "";
   return `Você é o atendente virtual da *MVF NET*, um provedor de internet (ISP).${nome} Você atende o PRIMEIRO contato no WhatsApp. Fale em português do Brasil, tom cordial e objetivo, mensagens curtas para WhatsApp. Use *negrito* (asteriscos) do WhatsApp para destacar e emojis com moderação (😊🕐💬🚀).
@@ -634,13 +635,16 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
         }),
       });
       if (!res.ok) {
-        console.error("openai", res.status, (await res.text()).slice(0, 300));
+        const body = (await res.text()).slice(0, 300);
+        console.error("openai", res.status, body);
+        void logEvent("error", "ai", `OpenAI retornou ${res.status}`, { conversationId: ctx.conversationId, body });
         await ctx.sendToCustomer("Tive um problema técnico. Vou te transferir para um atendente.");
         return { decision: "transfer", transfer: { motivo: "erro técnico no agente" } };
       }
       data = await res.json();
     } catch (e) {
       console.error("openai net", (e as Error)?.message);
+      void logEvent("error", "ai", `Falha de rede ao chamar OpenAI: ${(e as Error)?.message}`, { conversationId: ctx.conversationId });
       await ctx.sendToCustomer("Tive um problema técnico. Vou te transferir para um atendente.");
       return { decision: "transfer", transfer: { motivo: "erro técnico no agente" } };
     }
@@ -671,6 +675,13 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
           summary = typeof args.resumo === "string" ? args.resumo : undefined;
         }
         const result = await executeTool(tc.function.name, args, sgp);
+        const failed = !!(result && typeof result === "object" && ("error" in result || "erro" in result));
+        void logEvent(failed ? "error" : "info", "ai", `Ferramenta ${tc.function.name}${failed ? " falhou" : ""}`, {
+          conversationId: ctx.conversationId,
+          tool: tc.function.name,
+          args,
+          ...(failed ? { result } : {}),
+        });
         messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
       }
       continue; // deixa o modelo redigir a resposta ao cliente após as ferramentas
@@ -679,6 +690,10 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     // Sem tool calls → resposta final ao cliente.
     const finalText = choice.content?.trim();
     if (finalText) {
+      void logEvent("info", "ai", "IA respondeu ao cliente", {
+        conversationId: ctx.conversationId,
+        preview: finalText.slice(0, 120),
+      });
       // Sempre envia o texto; se áudio (TTS) habilitado, envia TAMBÉM o áudio.
       await ctx.sendToCustomer(finalText);
       if (ctx.agent.audioReplies && ctx.sendAudioToCustomer) {

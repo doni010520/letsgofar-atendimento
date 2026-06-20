@@ -60,7 +60,7 @@ function Toggle({ name, label, hint, defaultChecked }: { name: string; label: st
   );
 }
 
-export function AiAgentList({ agents, channels }: { agents: AiAgentRow[]; channels: Channel[] }) {
+export function AiAgentList({ agents, channels, defaultBasePrompt }: { agents: AiAgentRow[]; channels: Channel[]; defaultBasePrompt: string }) {
   const router = useRouter();
   const [editing, setEditing] = useState<AiAgentRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -122,7 +122,7 @@ export function AiAgentList({ agents, channels }: { agents: AiAgentRow[]; channe
       )}
 
       {(creating || editing) && (
-        <AgentWizard agent={editing} channels={channels} onClose={() => { setCreating(false); setEditing(null); }} />
+        <AgentWizard agent={editing} channels={channels} defaultBasePrompt={defaultBasePrompt} onClose={() => { setCreating(false); setEditing(null); }} />
       )}
     </>
   );
@@ -134,7 +134,7 @@ const STEPS = [
   { key: "finish", label: "Finalizar", icon: Settings2 },
 ] as const;
 
-function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; channels: Channel[]; onClose: () => void }) {
+function AgentWizard({ agent, channels, defaultBasePrompt, onClose }: { agent: AiAgentRow | null; channels: Channel[]; defaultBasePrompt: string; onClose: () => void }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [pending, setPending] = useState(false);
@@ -142,6 +142,8 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
   const [temp, setTemp] = useState<number>(typeof cfg0.temperature === "number" ? cfg0.temperature : 0.4);
   const [audio, setAudio] = useState<boolean>(!!cfg0.audio_replies);
   const [advanced, setAdvanced] = useState(false);
+  const [showBase, setShowBase] = useState(false);
+  const [basePrompt, setBasePrompt] = useState<string>(cfg0.base_prompt ?? "");
 
   async function submit(fd: FormData) {
     setPending(true);
@@ -211,6 +213,12 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
           {/* Step 2: Instruções */}
           <div className={step === 1 ? "" : "hidden"}>
             <div className="space-y-4">
+              <div className="rounded-lg border border-brand/20 bg-brand-light/30 p-3 text-[11px] text-ink-soft">
+                As <strong>Instruções personalizadas</strong> abaixo são <strong>somadas</strong> ao comportamento-base do agente
+                (o roteiro padrão da MVF: saudação → confirma se é cliente → CPF → consulta o SGP → transfere quando precisa).
+                Você não precisa reescrever esse roteiro — só ajuste o que quer mudar. Para <strong>ver ou substituir</strong> o
+                comportamento-base por completo, abra <em>“Avançado”</em> no fim deste passo.
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Instruções personalizadas *</label>
                 <textarea name="prompt" rows={6} defaultValue={agent?.prompt ?? ""}
@@ -277,12 +285,33 @@ function AgentWizard({ agent, channels, onClose }: { agent: AiAgentRow | null; c
                   {advanced ? <ChevronLeft size={14} className="rotate-90" /> : <ChevronRight size={14} className="rotate-90" />}
                 </button>
                 {advanced && (
-                  <div className="border-t border-border p-3">
-                    <p className="mb-2 text-[11px] text-ink-soft">
+                  <div className="space-y-2 border-t border-border p-3">
+                    <p className="text-[11px] text-ink-soft">
                       Deixe em branco para usar o comportamento padrão da MVF (fluxo + segurança). Preenchendo, você
                       <strong> substitui toda a espinha dorsal</strong> do agente — controle total, mas você assume o fluxo e as regras.
                     </p>
-                    <textarea name="base_prompt" rows={6} defaultValue={c.base_prompt ?? ""}
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setShowBase((v) => !v)}
+                        className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink">
+                        {showBase ? "Ocultar" : "Ver"} comportamento-base padrão
+                      </button>
+                      <button type="button" onClick={() => setBasePrompt(defaultBasePrompt)}
+                        className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-brand hover:bg-brand-light/40">
+                        Usar o padrão como ponto de partida
+                      </button>
+                      {basePrompt && (
+                        <button type="button" onClick={() => setBasePrompt("")}
+                          className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-red-50">
+                          Limpar (voltar ao padrão)
+                        </button>
+                      )}
+                    </div>
+                    {showBase && (
+                      <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[10px] leading-snug text-ink-soft">
+                        {defaultBasePrompt}
+                      </pre>
+                    )}
+                    <textarea name="base_prompt" rows={8} value={basePrompt} onChange={(e) => setBasePrompt(e.target.value)}
                       placeholder="Prompt base completo do agente (substitui o padrão)…"
                       className={`${inputCls} resize-none font-mono`} />
                   </div>

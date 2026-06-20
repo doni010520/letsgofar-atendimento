@@ -5,6 +5,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/whatsapp";
 import { getMessages, getConversations } from "@/lib/data/conversations";
+import { logEvent } from "@/lib/log";
 import type { Channel, ContentType, InternalMention } from "@/lib/types";
 
 const isPreview = () => !process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -335,6 +336,7 @@ export async function sendMessage(
       .eq("id", msg!.id);
   } catch (e) {
     console.error("send error", e);
+    void logEvent("error", "send", `Falha ao enviar mensagem: ${(e as Error)?.message ?? e}`, { conversationId });
     const raw = (e as Error)?.message ?? "";
     // Janela de 24h da Meta (erro 131047/131026) → mensagem amigável.
     deliveryError = /131047|131026|re-?engag|24 ?h|outside|template/i.test(raw)
