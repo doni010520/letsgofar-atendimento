@@ -12,8 +12,17 @@ const sans = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mvfchat.benitechlab.com"),
   title: "MVF Chat — Multiatendimento WhatsApp",
   description: "Sistema de multiatendimento e automações via WhatsApp.",
+  openGraph: {
+    type: "website",
+    siteName: "MVF Chat",
+    title: "MVF Chat — Multiatendimento WhatsApp",
+    description: "Sistema de multiatendimento e automações via WhatsApp.",
+    url: "https://mvfchat.benitechlab.com",
+    images: [{ url: "/logo-mvf.png", alt: "MVF Chat" }],
+  },
   manifest: "/manifest.json",
   themeColor: "#00a8ff",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "MVF Chat" },
