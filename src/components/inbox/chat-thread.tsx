@@ -258,7 +258,7 @@ export function ChatThread({
                 onReply={setReplyTo}
                 onReact={onReact}
                 onEdit={onEdit}
-                onDelete={onDelete}
+                onDelete={isMeta ? undefined : onDelete}
                 onAuthorClick={onAuthorClick}
                 onReplyPrivate={isGroup ? onReplyPrivate : undefined}
                 quotedAuthor={quotedAuthor}

@@ -3,6 +3,10 @@
 Versões do MVF Chat. A versão no ar fica em `GET /api/version` e no topo da tela.
 A imagem é publicada com tag de versão (`:vX.Y.Z`) e do commit (`:<sha>`).
 
+## v2.22.0
+- Apagar mensagem deixa de aparecer em conversas do canal **Meta (API Oficial)**,
+  já que a Meta não permite revogar mensagem enviada. UAZAPI mantém as duas opções.
+
 ## v2.21.0
 - Limpeza da sidebar: remove "Chaves de API" (sem API consumindo) e tira
   "Auditoria" e "Exportar contatos" do menu (export já é botão em Clientes).

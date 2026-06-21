@@ -289,9 +289,11 @@ function Actions({
             }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
               <Forward size={14} /> Encaminhar
             </button>
-            <button onClick={() => { onDelete?.(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-danger hover:bg-red-50">
-              <Trash2 size={14} /> Apagar
-            </button>
+            {onDelete && (
+              <button onClick={() => { onDelete(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-danger hover:bg-red-50">
+                <Trash2 size={14} /> Apagar
+              </button>
+            )}
           </div>
         </>
       )}
