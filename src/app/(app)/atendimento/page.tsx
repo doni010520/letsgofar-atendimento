@@ -4,6 +4,7 @@ import { getTags, getAgents, getDepartments, getQuickReplies } from "@/lib/data/
 import { getChannels } from "@/lib/data/channels";
 import { getApprovedTemplates } from "@/app/(app)/atendimento/actions";
 import { getSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { PREVIEW_MODE } from "@/lib/mock";
 
 export const revalidate = 0;
@@ -29,9 +30,15 @@ export default async function AtendimentoPage({
   const initialMessages = first ? await getMessages(first) : [];
 
   let userId: string | null = null;
+  let hideAi = false;
   if (!PREVIEW_MODE) {
     const session = await getSession();
     userId = session?.userId ?? null;
+    if (userId) {
+      const sb = await createClient();
+      const { data: me } = await sb.from("profiles").select("hide_ai").eq("id", userId).maybeSingle();
+      hideAi = !!(me as { hide_ai?: boolean } | null)?.hide_ai;
+    }
   }
 
   return (
@@ -40,6 +47,7 @@ export default async function AtendimentoPage({
       initialSelectedId={first}
       initialMessages={initialMessages}
       userId={userId}
+      hideAi={hideAi}
       tags={tags}
       agents={agents}
       departments={departments}

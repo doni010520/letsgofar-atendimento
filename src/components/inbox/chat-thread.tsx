@@ -17,6 +17,7 @@ export function ChatThread({
   onSendInternal,
   agents,
   currentUserId,
+  hideAi = false,
   onSendFile,
   onSendLocation,
   onSendContact,
@@ -50,6 +51,7 @@ export function ChatThread({
   onSendInternal?: (text: string, mentions: { id: string; name: string }[]) => void;
   agents?: { id: string; name: string; avatar_url?: string | null }[];
   currentUserId?: string | null;
+  hideAi?: boolean;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
   onSendLocation: () => void;
@@ -87,6 +89,8 @@ export function ChatThread({
   const muted = !!conversation.is_muted;
   const aiPaused = conversation.ai_enabled === false;
   const aiHandling = !aiPaused && conversation.status === "bot";
+  // Mostra elementos de IA só se o flag global permitir E o usuário não tiver hide_ai (ex.: revisor).
+  const showAi = SHOW_AI_UI && !hideAi;
   const title = conversation.contact_name ?? (isGroup ? "Grupo" : conversation.contact_phone);
 
   // Janela de 24h da Meta: aberta se a última mensagem recebida do cliente foi < 24h.
@@ -128,8 +132,8 @@ export function ChatThread({
                   {isMeta ? "API Oficial" : "Beta"}
                 </span>
                 {isGroup && <span className="shrink-0 rounded bg-brand-light px-1 py-0.5 text-[9px] font-medium text-brand">Grupo</span>}
-                {SHOW_AI_UI && aiHandling && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"><Bot size={9} /> IA</span>}
-                {SHOW_AI_UI && aiPaused && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium text-ink-soft"><BotOff size={9} /> IA pausada</span>}
+                {showAi && aiHandling && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"><Bot size={9} /> IA</span>}
+                {showAi && aiPaused && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium text-ink-soft"><BotOff size={9} /> IA pausada</span>}
                 {muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
               </p>
               <p className="truncate text-[11px] text-ink-soft">
@@ -158,7 +162,7 @@ export function ChatThread({
           )}
           {conversation.status !== "closed" && (
             <>
-              {SHOW_AI_UI && !isGroup && (
+              {showAi && !isGroup && (
                 aiPaused ? (
                   <button onClick={onToggleAi} title="Devolver o atendimento para a IA" className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-200">
                     <Bot size={12} /> Reativar IA

@@ -5,6 +5,9 @@ import {
 } from "lucide-react";
 import { Scroll } from "@/components/scroll";
 import { PageHeader } from "@/components/ui";
+import { getSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { PREVIEW_MODE } from "@/lib/mock";
 
 const CARDS = [
   { icon: SlidersHorizontal, title: "Configurações", desc: "Descubra a melhor maneira de usar o chat!", href: "/ajustes/configuracoes" },
@@ -21,12 +24,24 @@ const CARDS = [
   { icon: Clock, title: "Horário de Atendimento", desc: "Defina os dias e horários de funcionamento.", href: "/ajustes/horario" },
 ];
 
-export default function AjustesPage() {
+export default async function AjustesPage() {
+  // Esconde o módulo de IA para usuários marcados (ex.: revisor da Meta).
+  let hideAi = false;
+  if (!PREVIEW_MODE) {
+    const session = await getSession();
+    if (session?.userId) {
+      const sb = await createClient();
+      const { data: me } = await sb.from("profiles").select("hide_ai").eq("id", session.userId).maybeSingle();
+      hideAi = !!(me as { hide_ai?: boolean } | null)?.hide_ai;
+    }
+  }
+  const cards = hideAi ? CARDS.filter((c) => c.href !== "/ajustes/ia") : CARDS;
+
   return (
     <Scroll>
       <PageHeader title="Ajustes" subtitle="Acesse e ajuste os módulos de acordo com suas necessidades." />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {CARDS.map(({ icon: Icon, title, desc, href }) => (
+        {cards.map(({ icon: Icon, title, desc, href }) => (
           <Link
             key={title}
             href={href}

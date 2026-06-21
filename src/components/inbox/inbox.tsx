@@ -70,6 +70,7 @@ export function Inbox({
   initialSelectedId,
   initialMessages,
   userId,
+  hideAi = false,
   tags,
   agents,
   departments,
@@ -82,6 +83,7 @@ export function Inbox({
   initialSelectedId: string | null;
   initialMessages: Message[];
   userId: string | null;
+  hideAi?: boolean;
   tags: Tag[];
   agents: Profile[];
   departments: Department[];
@@ -746,6 +748,7 @@ export function Inbox({
           onSendInternal={handleSendInternal}
           agents={agents.map((a) => ({ id: a.id, name: a.name ?? "Atendente", avatar_url: a.avatar_url }))}
           currentUserId={userId}
+          hideAi={hideAi}
           onSendFile={handleSendFile}
           onSendLocation={handleSendLocation}
           onSendContact={handleSendContact}
