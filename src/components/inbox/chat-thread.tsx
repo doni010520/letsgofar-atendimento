@@ -6,6 +6,11 @@ import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
 
+// Controla a exibição dos elementos de IA no chat (selo "IA" + botão Pausar/Reativar).
+// TEMPORARIAMENTE false para a gravação do vídeo do Tech Provider (não expor a IA à Meta).
+// Volte para true depois da gravação.
+const SHOW_AI_UI = false;
+
 export function ChatThread({
   conversation,
   messages,
@@ -125,8 +130,8 @@ export function ChatThread({
                   {isMeta ? "API Oficial" : "Beta"}
                 </span>
                 {isGroup && <span className="shrink-0 rounded bg-brand-light px-1 py-0.5 text-[9px] font-medium text-brand">Grupo</span>}
-                {aiHandling && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"><Bot size={9} /> IA</span>}
-                {aiPaused && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium text-ink-soft"><BotOff size={9} /> IA pausada</span>}
+                {SHOW_AI_UI && aiHandling && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"><Bot size={9} /> IA</span>}
+                {SHOW_AI_UI && aiPaused && <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium text-ink-soft"><BotOff size={9} /> IA pausada</span>}
                 {muted && <BellOff size={12} className="shrink-0 text-ink-soft" />}
               </p>
               <p className="truncate text-[11px] text-ink-soft">
@@ -155,7 +160,7 @@ export function ChatThread({
           )}
           {conversation.status !== "closed" && (
             <>
-              {!isGroup && (
+              {SHOW_AI_UI && !isGroup && (
                 aiPaused ? (
                   <button onClick={onToggleAi} title="Devolver o atendimento para a IA" className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-200">
                     <Bot size={12} /> Reativar IA
