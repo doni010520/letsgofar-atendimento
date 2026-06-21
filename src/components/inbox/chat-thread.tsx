@@ -7,9 +7,7 @@ import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
 
 // Controla a exibição dos elementos de IA no chat (selo "IA" + botão Pausar/Reativar).
-// TEMPORARIAMENTE false para a gravação do vídeo do Tech Provider (não expor a IA à Meta).
-// Volte para true depois da gravação.
-const SHOW_AI_UI = false;
+const SHOW_AI_UI = true;
 
 export function ChatThread({
   conversation,
