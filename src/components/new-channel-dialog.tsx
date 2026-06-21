@@ -10,10 +10,12 @@ import { SHOW_UAZAPI } from "@/lib/flags";
 
 type ChannelType = "uazapi" | "meta_cloud";
 
-export function NewChannelDialog() {
+export function NewChannelDialog({ hideUazapi = false }: { hideUazapi?: boolean }) {
   const router = useRouter();
+  // Mostra UAZAPI só se o flag global permitir E o usuário não estiver com hide_uazapi.
+  const showUaz = SHOW_UAZAPI && !hideUazapi;
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<ChannelType>(SHOW_UAZAPI ? "uazapi" : "meta_cloud");
+  const [type, setType] = useState<ChannelType>(showUaz ? "uazapi" : "meta_cloud");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrChannel, setQrChannel] = useState<{ id: string; qr?: string; phone?: string } | null>(null);
@@ -56,8 +58,8 @@ export function NewChannelDialog() {
             <form action={onSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Tipo de conexão</label>
-                <div className={`grid gap-2 ${SHOW_UAZAPI ? "grid-cols-2" : "grid-cols-1"}`}>
-                  {SHOW_UAZAPI && (
+                <div className={`grid gap-2 ${showUaz ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {showUaz && (
                     <TypeOption
                       label="WhatsApp (QR Code)"
                       desc="Via UAZAPI"

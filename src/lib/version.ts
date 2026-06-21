@@ -1,2 +1,2 @@
 // Versão do app — INCREMENTAR a cada mudança/deploy para acompanhar no topo da tela.
-export const APP_VERSION = "v2.26.0";
+export const APP_VERSION = "v2.27.0";
