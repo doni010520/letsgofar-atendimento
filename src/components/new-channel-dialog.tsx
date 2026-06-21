@@ -6,13 +6,14 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui";
 import { createChannel } from "@/app/(app)/canais/actions";
 import { QrConnectModal } from "@/components/qr-connect-modal";
+import { SHOW_UAZAPI } from "@/lib/flags";
 
 type ChannelType = "uazapi" | "meta_cloud";
 
 export function NewChannelDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<ChannelType>("uazapi");
+  const [type, setType] = useState<ChannelType>(SHOW_UAZAPI ? "uazapi" : "meta_cloud");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrChannel, setQrChannel] = useState<{ id: string; qr?: string; phone?: string } | null>(null);
@@ -55,13 +56,15 @@ export function NewChannelDialog() {
             <form action={onSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Tipo de conexão</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <TypeOption
-                    label="WhatsApp (QR Code)"
-                    desc="Via UAZAPI"
-                    active={type === "uazapi"}
-                    onClick={() => setType("uazapi")}
-                  />
+                <div className={`grid gap-2 ${SHOW_UAZAPI ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {SHOW_UAZAPI && (
+                    <TypeOption
+                      label="WhatsApp (QR Code)"
+                      desc="Via UAZAPI"
+                      active={type === "uazapi"}
+                      onClick={() => setType("uazapi")}
+                    />
+                  )}
                   <TypeOption
                     label="API Oficial"
                     desc="Meta Cloud API"
