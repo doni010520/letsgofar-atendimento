@@ -11,10 +11,7 @@ import {
   Settings,
   Plug,
   Tag,
-  History,
   Building2,
-  KeyRound,
-  Download,
   Contact,
   type LucideIcon,
 } from "lucide-react";
@@ -56,16 +53,8 @@ export const NAV: NavGroup[] = [
       { href: "/atendentes", label: "Atendentes", icon: Users },
       { href: "/departamentos", label: "Departamentos", icon: Layers },
       { href: "/clientes", label: "Clientes", icon: Contact },
+      { href: "/integracoes", label: "SGP", icon: Plug },
       { href: "/ajustes", label: "Ajustes", icon: Settings },
-    ],
-  },
-  {
-    title: "Integrações",
-    items: [
-      { href: "/integracoes", label: "Integrações", icon: Plug },
-      { href: "/api", label: "Chaves de API", icon: KeyRound },
-      { href: "/auditoria", label: "Auditoria", icon: History },
-      { href: "/api/export-contacts", label: "Exportar contatos", icon: Download },
     ],
   },
 ];
