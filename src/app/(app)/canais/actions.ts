@@ -144,11 +144,11 @@ const connectLocks = new Map<string, Promise<unknown>>();
  * Se `phone` vier, pede o código de pareamento (parear por número).
  */
 export async function refreshChannelConnection(channelId: string, phone?: string) {
-  // Espera qualquer connect anterior do MESMO canal terminar (serializa).
-  const prev = connectLocks.get(channelId);
-  if (prev) await prev.catch(() => {});
-
+  // Encadeia ATOMICAMENTE no connect anterior do mesmo canal (sem await antes do set,
+  // senão dois connects concorrentes passam pela checagem e rodam juntos).
+  const prev = connectLocks.get(channelId) ?? Promise.resolve();
   const run = (async () => {
+    await prev.catch(() => {}); // espera o anterior terminar, DENTRO da cadeia
     const supabase = await createClient();
     const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
     if (!channel) throw new Error("Canal não encontrado.");
@@ -169,7 +169,7 @@ export async function refreshChannelConnection(channelId: string, phone?: string
     return { status: result.status, qrCode: result.qrCode, pairCode: result.pairCode, debug: result.debug };
   })();
 
-  connectLocks.set(channelId, run);
+  connectLocks.set(channelId, run); // SÍNCRONO: o próximo já encadeia neste
   try {
     return await run;
   } finally {
