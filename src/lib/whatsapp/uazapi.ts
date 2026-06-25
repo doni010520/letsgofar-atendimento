@@ -52,12 +52,17 @@ export class UazapiProvider implements ChannelProvider {
 
     const digits = (phone || "").replace(/\D/g, "");
     const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    const pick = (...vals: unknown[]) => vals.find((v) => typeof v === "string" && v.trim()) as string | undefined;
     const read = (o: any) => {
       const i = o?.instance ?? o ?? {};
       return {
         connected: !!(i.connected || i.status === "connected" || o?.loggedIn),
-        qr: i.qrcode ?? i.qrCode,
-        code: i.paircode ?? i.pairCode ?? i.code,
+        qr: pick(i.qrcode, i.qrCode, i.qr, o?.qrcode, o?.qrCode, o?.qr),
+        // O nome do campo do código de pareamento varia entre versões da UAZAPI.
+        code: pick(
+          i.paircode, i.pairCode, i.pairingCode, i.pairing_code, i.code,
+          o?.paircode, o?.pairCode, o?.pairingCode, o?.pairing_code, o?.code,
+        ),
       };
     };
     const body = digits ? JSON.stringify({ phone: digits }) : "{}";
@@ -85,6 +90,11 @@ export class UazapiProvider implements ChannelProvider {
       if (conn) {
         r = read(conn);
         dbg.push(`connect#${attempt}:st=${statusOf(conn)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
+        // Diagnóstico (1ª tentativa): mostra os campos retornados pra acharmos o do código.
+        if (attempt === 0) {
+          const node = (conn?.instance ?? conn) ?? {};
+          dbg.push(`keys=[${Object.keys(node).slice(0, 18).join(",")}]`);
+        }
       }
 
       // O código/QR pode vir 1-2s depois — consulta o status até aparecer.
