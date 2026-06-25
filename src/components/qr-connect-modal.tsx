@@ -58,18 +58,15 @@ export function QrConnectModal({
     setDbg(null);
     setPairCode(undefined);
     try {
-      let r = await refreshChannelConnection(channelId, digits);
-      // UAZAPI às vezes retorna vazio na 1ª chamada — tenta de novo.
-      if (!r.pairCode && r.status !== "connected") {
-        await new Promise((res) => setTimeout(res, 1800));
-        r = await refreshChannelConnection(channelId, digits);
-      }
+      // UMA tentativa por clique (o retry automático dobrava os pedidos e estourava
+      // o rate-limit do WhatsApp na geração de código).
+      const r = await refreshChannelConnection(channelId, digits);
       setStatus(r.status);
       setDbg(r.debug ?? null);
       if (r.pairCode) setPairCode(r.pairCode);
       else if (r.status !== "connected")
         setErr(
-          "Não consegui gerar o código agora. Aguarde alguns segundos e tente de novo — o WhatsApp limita a geração de códigos em sequência.",
+          "Não consegui gerar o código. O WhatsApp limita a geração de códigos por número — após várias tentativas ele bloqueia por ~30 a 60 min. Aguarde esse tempo, ou use a aba QR Code (não tem esse limite).",
         );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Erro ao gerar o código.");

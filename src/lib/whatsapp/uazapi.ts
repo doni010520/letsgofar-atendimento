@@ -100,11 +100,16 @@ export class UazapiProvider implements ChannelProvider {
       }
 
       // 3) Se ainda não veio, aguarda aparecer — SEM desconectar de novo.
+      //    NUNCA sobrescreve um code/qr já obtido com vazio (o status nem sempre
+      //    repete o paircode da resposta do connect — essa era a fonte da verdade).
       for (let i = 0; i < 8 && !r.connected && !(digits ? r.code : r.qr); i++) {
         await sleep(1500);
         const s = await this.req("/instance/status").catch(() => null);
         if (s) {
-          r = read(s);
+          const next = read(s);
+          if (next.code) r.code = next.code;
+          if (next.qr) r.qr = next.qr;
+          r.connected = next.connected;
           dbg.push(`poll#${i}:st=${statusOf(s)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
         }
       }
