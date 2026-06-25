@@ -69,49 +69,46 @@ export class UazapiProvider implements ChannelProvider {
     const statusOf = (o: any) => (o?.instance ?? o ?? {})?.status;
     const dbg: string[] = [`mode=${digits ? "code(" + digits.length + "d)" : "qr"}`];
 
-    // A UAZAPI só emite código/QR a partir de um estado LIMPO. Cada tentativa:
-    // desconecta → confirma "disconnected" → aguarda → connect. Repete até obter o código/QR.
+    // IMPORTANTE: NÃO repetir disconnect+connect. Cada disconnect cancela a tentativa
+    // anterior ("connection attempt canceled by API") e o paircode nunca é emitido.
+    // Fluxo certo: desconecta UMA vez → espera "disconnected" → conecta UMA vez → lê o código.
     let r = { connected: false, qr: undefined as string | undefined, code: undefined as string | undefined };
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
-      // Confirma que desconectou de fato antes de reconectar (quebra no 1º status limpo).
-      for (let j = 0; j < 4; j++) {
-        await sleep(500);
-        const s = await this.req("/instance/status").catch(() => null);
-        const st = statusOf(s) ?? "";
-        if (st === "disconnected" || st === "") break;
-      }
-      await sleep(800); // folga para o socket fechar
 
+    // 1) Garante estado limpo (uma única vez).
+    await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
+    for (let j = 0; j < 8; j++) {
+      const s = await this.req("/instance/status").catch(() => null);
+      r = read(s ?? {});
+      if (r.connected) break; // já está logado
+      const st = statusOf(s) ?? "";
+      if (st === "disconnected" || st === "") break;
+      await sleep(700);
+    }
+
+    // 2) Conecta UMA vez. O paircode/QR já vem na resposta do connect.
+    if (!r.connected) {
       const conn = await this.req("/instance/connect", { method: "POST", body }).catch((e) => {
-        dbg.push(`connect#${attempt}:ERR ${e?.message}`);
+        dbg.push(`connect:ERR ${e?.message}`);
         return null;
       });
       if (conn) {
         r = read(conn);
-        dbg.push(`connect#${attempt}:st=${statusOf(conn)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
-        // Diagnóstico (1ª tentativa): mostra os campos retornados pra acharmos o do código.
-        if (attempt === 0) {
-          const node = (conn?.instance ?? conn) ?? {};
-          dbg.push(`keys=[${Object.keys(node).slice(0, 18).join(",")}]`);
-        }
+        dbg.push(`connect:st=${statusOf(conn)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
       }
 
-      // O código/QR pode vir 1-2s depois — consulta o status até aparecer.
-      for (let i = 0; i < 4 && !r.connected && !(digits ? r.code : r.qr); i++) {
-        await sleep(1200);
+      // 3) Se ainda não veio, aguarda aparecer — SEM desconectar de novo.
+      for (let i = 0; i < 8 && !r.connected && !(digits ? r.code : r.qr); i++) {
+        await sleep(1500);
         const s = await this.req("/instance/status").catch(() => null);
         if (s) {
           r = read(s);
-          dbg.push(`poll#${attempt}.${i}:st=${statusOf(s)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
+          dbg.push(`poll#${i}:st=${statusOf(s)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
         }
       }
-
-      if (r.connected || (digits ? r.code : r.qr)) break;
     }
 
     return {
-      status: r.connected ? "connected" : "connecting",
+      status: r.connected ? "connected" : (digits ? r.code : r.qr) ? "connecting" : "disconnected",
       qrCode: r.qr || undefined,
       pairCode: r.code || undefined,
       externalId: this.token,

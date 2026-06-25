@@ -195,7 +195,13 @@ export function QrConnectModal({
                 {err && dbg && <p className="mt-2 break-all text-[10px] font-mono text-ink-soft/70">{dbg}</p>}
               </>
             )}
-            <p className="mt-3 text-[11px] text-ink-soft">Aguardando leitura...</p>
+            <p className="mt-3 text-[11px] text-ink-soft">
+              {mode === "qr"
+                ? "Aguardando leitura do QR Code..."
+                : pairCode
+                  ? "Aguardando você digitar o código no WhatsApp..."
+                  : "Informe o número e gere o código."}
+            </p>
           </>
         )}
       </div>
