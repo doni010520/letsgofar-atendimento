@@ -62,7 +62,7 @@ export function NewChannelDialog({ hideUazapi = false }: { hideUazapi?: boolean 
                   {showUaz && (
                     <TypeOption
                       label="WhatsApp (QR Code)"
-                      desc="Via UAZAPI"
+                      desc="Conectar pelo celular"
                       active={type === "uazapi"}
                       onClick={() => setType("uazapi")}
                     />

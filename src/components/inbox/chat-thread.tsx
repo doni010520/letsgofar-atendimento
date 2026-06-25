@@ -126,7 +126,7 @@ export function ChatThread({
               <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-ink">
                 <span className="truncate">{title}</span>
                 <span
-                  title={isMeta ? "Canal WhatsApp API Oficial (Meta)" : "Canal WhatsApp não-oficial (UAZAPI)"}
+                  title={isMeta ? "Canal WhatsApp API Oficial (Meta)" : "Canal WhatsApp (QR Code)"}
                   className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold ${isMeta ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}
                 >
                   {isMeta ? "API Oficial" : "Beta"}

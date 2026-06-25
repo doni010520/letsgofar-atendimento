@@ -74,7 +74,7 @@ export default async function DashboardPage() {
             <Link href="/canais" className="block">
               <EmptyState
                 title="Nenhum canal conectado ainda"
-                hint="Conecte um número de WhatsApp (QR Code via UAZAPI ou API Oficial da Meta) para começar a atender."
+                hint="Conecte um número de WhatsApp (QR Code ou API Oficial da Meta) para começar a atender."
               />
             </Link>
           ) : (
