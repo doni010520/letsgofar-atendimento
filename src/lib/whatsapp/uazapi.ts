@@ -94,6 +94,9 @@ export class UazapiProvider implements ChannelProvider {
       if (conn) {
         r = read(conn);
         dbg.push(`connect:st=${statusOf(conn)} code=${r.code ? "Y" : "n"} qr=${r.qr ? "Y" : "n"}`);
+        // Diagnóstico definitivo: host usado + resposta crua que o SERVIDOR recebe.
+        const rawPc = (conn?.instance ?? conn)?.paircode;
+        dbg.push(`host=${this.host} pc=${JSON.stringify(rawPc)}`);
       }
 
       // 3) Se ainda não veio, aguarda aparecer — SEM desconectar de novo.
