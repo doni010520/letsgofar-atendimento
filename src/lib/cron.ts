@@ -9,17 +9,32 @@ const DEFAULT_WARN =
 const DEFAULT_GOODBYE =
   "Encerrei este atendimento por inatividade. Obrigado por falar com a *MVF NET*! 👋 Sempre que precisar, é só mandar uma mensagem.";
 
-/** Envia uma mensagem do bot numa conversa e registra no banco. NÃO mexe em last_message_at. */
+/**
+ * Envia uma mensagem do bot numa conversa e registra no banco. NÃO mexe em last_message_at.
+ * - Canal desconectado: NÃO envia nem registra mensagem fantasma (retorna false).
+ * - Envio que falha: registra com status "failed" (não "sent"), para não enganar.
+ * Retorna true só quando a mensagem foi de fato aceita pelo provedor.
+ */
 async function sendBotMessage(
   db: ReturnType<typeof createServiceClient>,
   channelsById: Map<string, Channel>,
   conv: { id: string; organization_id: string; channel_id: string; contact_phone: string; is_group: boolean },
   text: string,
-) {
+): Promise<boolean> {
   const ch = channelsById.get(conv.channel_id);
-  if (!ch) return;
+  if (!ch) return false;
+  // Canal fora do ar → não tem como entregar; não cria mensagem "fantasma".
+  if (ch.status !== "connected") return false;
+
   const to = conv.is_group && ch.type === "uazapi" ? `${conv.contact_phone}@g.us` : conv.contact_phone;
-  const res = await getProvider(ch).sendText({ to, text }).catch(() => ({ externalId: undefined }));
+  let externalId: string | undefined;
+  let ok = true;
+  try {
+    const res = await getProvider(ch).sendText({ to, text });
+    externalId = res.externalId;
+  } catch {
+    ok = false;
+  }
   await db.from("messages").insert({
     organization_id: conv.organization_id,
     conversation_id: conv.id,
@@ -27,9 +42,10 @@ async function sendBotMessage(
     sender_type: "bot",
     content_type: "text",
     body: text,
-    external_id: res.externalId ?? null,
-    status: "sent",
+    external_id: externalId ?? null,
+    status: ok ? "sent" : "failed",
   });
+  return ok;
 }
 
 /**
