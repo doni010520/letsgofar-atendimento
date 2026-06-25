@@ -133,28 +133,48 @@ export async function finalizeMetaCoexistence(input: {
 }
 
 /**
+ * Lock por canal: garante UMA conexão por vez. Sem isso, o connect de QR (modal)
+ * e o connect de código (gerar) podem correr juntos — e o de QR "ganha", deixando
+ * a instância em modo QR sem paircode (qr=Y, code=n). Processo único (Next standalone).
+ */
+const connectLocks = new Map<string, Promise<unknown>>();
+
+/**
  * Reconecta o canal e devolve QR atualizado OU código de pareamento.
- * Se `phone` vier, pede o código de 8 dígitos (parear por número).
+ * Se `phone` vier, pede o código de pareamento (parear por número).
  */
 export async function refreshChannelConnection(channelId: string, phone?: string) {
-  const supabase = await createClient();
-  const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
-  if (!channel) throw new Error("Canal não encontrado.");
+  // Espera qualquer connect anterior do MESMO canal terminar (serializa).
+  const prev = connectLocks.get(channelId);
+  if (prev) await prev.catch(() => {});
 
-  const result = await getProvider(channel as Channel).connect(phone);
-  await supabase
-    .from("channels")
-    .update({
-      status: result.status,
-      external_id: result.externalId ?? (channel as Channel).external_id,
-      credentials:
-        (channel as Channel).type === "uazapi" && result.externalId
-          ? { ...(channel.credentials as object), token: result.externalId }
-          : channel.credentials,
-    })
-    .eq("id", channelId);
+  const run = (async () => {
+    const supabase = await createClient();
+    const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
+    if (!channel) throw new Error("Canal não encontrado.");
 
-  return { status: result.status, qrCode: result.qrCode, pairCode: result.pairCode, debug: result.debug };
+    const result = await getProvider(channel as Channel).connect(phone);
+    await supabase
+      .from("channels")
+      .update({
+        status: result.status,
+        external_id: result.externalId ?? (channel as Channel).external_id,
+        credentials:
+          (channel as Channel).type === "uazapi" && result.externalId
+            ? { ...(channel.credentials as object), token: result.externalId }
+            : channel.credentials,
+      })
+      .eq("id", channelId);
+
+    return { status: result.status, qrCode: result.qrCode, pairCode: result.pairCode, debug: result.debug };
+  })();
+
+  connectLocks.set(channelId, run);
+  try {
+    return await run;
+  } finally {
+    if (connectLocks.get(channelId) === run) connectLocks.delete(channelId);
+  }
 }
 
 /** Consulta o status atual (polling) e persiste. */
