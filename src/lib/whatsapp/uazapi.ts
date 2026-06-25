@@ -67,7 +67,7 @@ export class UazapiProvider implements ChannelProvider {
     };
     const body = digits ? JSON.stringify({ phone: digits }) : "{}";
     const statusOf = (o: any) => (o?.instance ?? o ?? {})?.status;
-    const dbg: string[] = [`mode=${digits ? "code(" + digits.length + "d)" : "qr"}`];
+    const dbg: string[] = [`mode=${digits ? "code(" + digits.length + "d)" : "qr"}`, `body=${body}`];
 
     // IMPORTANTE: NÃO repetir disconnect+connect. Cada disconnect cancela a tentativa
     // anterior ("connection attempt canceled by API") e o paircode nunca é emitido.
