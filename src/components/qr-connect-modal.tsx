@@ -164,7 +164,7 @@ export function QrConnectModal({
                   )}
                 </div>
                 <button onClick={refreshQr} disabled={busy} className="mx-auto mt-4 flex items-center gap-1 text-xs font-medium text-brand hover:underline disabled:opacity-50">
-                  <RefreshCw size={13} className={busy ? "animate-spin" : ""} /> Gerar novo código
+                  <RefreshCw size={13} className={busy ? "animate-spin" : ""} /> Gerar novo QR Code
                 </button>
               </>
             ) : (
