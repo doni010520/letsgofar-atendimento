@@ -19,6 +19,7 @@ export function ChatThread({
   currentUserId,
   hideAi = false,
   isAdmin = false,
+  hideHeader = false,
   onSendFile,
   onSendLocation,
   onSendContact,
@@ -54,6 +55,8 @@ export function ChatThread({
   currentUserId?: string | null;
   hideAi?: boolean;
   isAdmin?: boolean;
+  /** Oculta o cabeçalho interno (usado quando o container já tem o seu, ex.: modal do V2). */
+  hideHeader?: boolean;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
   onSendLocation: () => void;
@@ -107,6 +110,7 @@ export function ChatThread({
 
   return (
     <div className="flex h-full flex-1 flex-col bg-canvas">
+      {!hideHeader && (
       <header className="shrink-0 border-b border-border bg-surface">
         {/* Linha 1: avatar + nome + protocolo */}
         <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 md:px-4">
@@ -196,6 +200,7 @@ export function ChatThread({
           )}
         </div>
       </header>
+      )}
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.length === 0 && (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Hash, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { moveConversationStatus } from "@/app/(app)/atendimento-v2/actions";
+import { AttendanceChatModal } from "@/components/inbox/attendance-chat-modal";
 import type {
   ConversationOverview,
   ConversationStatus,
@@ -13,6 +14,9 @@ import type {
   Department,
   Tag,
 } from "@/lib/types";
+
+type TemplateOpt = { name: string; language: string; bodyText: string; varCount: number };
+type QuickReply = { title: string; content: string; shortcut: string | null };
 
 const COLUMNS: { status: ConversationStatus; title: string; dot: string; head: string }[] = [
   { status: "open", title: "Em andamento", dot: "bg-green-500", head: "text-green-700" },
@@ -41,6 +45,11 @@ export function KanbanBoard({
   agents,
   departments,
   tags,
+  quickReplies,
+  templates,
+  userId = null,
+  hideAi = false,
+  isAdmin = false,
 }: {
   conversations: ConversationOverview[];
   tagMap: Record<string, string[]>;
@@ -48,9 +57,15 @@ export function KanbanBoard({
   agents: Profile[];
   departments: Department[];
   tags: Tag[];
+  quickReplies?: QuickReply[];
+  templates?: TemplateOpt[];
+  userId?: string | null;
+  hideAi?: boolean;
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"board" | "closed" | "analytics">("board");
+  const [openConv, setOpenConv] = useState<ConversationOverview | null>(null);
   const [channelId, setChannelId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [deptId, setDeptId] = useState("");
@@ -152,10 +167,26 @@ export function KanbanBoard({
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "board" && <Board conversations={filtered} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} onMove={async (id, status) => { await moveConversationStatus(id, status).catch(() => {}); router.refresh(); }} />}
-        {tab === "closed" && <ClosedList items={closedToday} onOpen={() => router.push("/atendimento")} recurrenceCounts={recurrenceCounts} />}
+        {tab === "board" && <Board conversations={filtered} onOpen={setOpenConv} recurrenceCounts={recurrenceCounts} onMove={async (id, status) => { await moveConversationStatus(id, status).catch(() => {}); router.refresh(); }} />}
+        {tab === "closed" && <ClosedList items={closedToday} onOpen={setOpenConv} recurrenceCounts={recurrenceCounts} />}
         {tab === "analytics" && <Analytics conversations={filtered} closedToday={closedToday} />}
       </div>
+
+      {openConv && (
+        <AttendanceChatModal
+          conversation={openConv}
+          agents={agents}
+          departments={departments}
+          tags={tags}
+          quickReplies={quickReplies}
+          templates={templates}
+          userId={userId}
+          hideAi={hideAi}
+          isAdmin={isAdmin}
+          onClose={() => setOpenConv(null)}
+          onChanged={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }
@@ -170,7 +201,7 @@ function timeBorderColor(lastMsgAt: string | null): string | null {
   return null;
 }
 
-function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: ConversationOverview; onOpen: () => void; recurrenceCount?: number; draggable?: boolean; onDragStart?: (e: React.DragEvent) => void }) {
+function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: ConversationOverview; onOpen: (c: ConversationOverview) => void; recurrenceCount?: number; draggable?: boolean; onDragStart?: (e: React.DragEvent) => void }) {
   const initials = (c.contact_name ?? c.contact_phone)
     .split(" ")
     .slice(0, 2)
@@ -188,7 +219,7 @@ function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: Conve
   const accent = c.department_color || borderColor;
   return (
     <button
-      onClick={onOpen}
+      onClick={() => onOpen(c)}
       draggable={draggable}
       onDragStart={onDragStart}
       className={cn(
@@ -251,7 +282,7 @@ function Card({ c, onOpen, recurrenceCount, draggable, onDragStart }: { c: Conve
   );
 }
 
-function Board({ conversations, onOpen, recurrenceCounts, onMove }: { conversations: ConversationOverview[]; onOpen: () => void; recurrenceCounts: Record<string, number>; onMove: (id: string, status: "open" | "queued" | "bot") => void }) {
+function Board({ conversations, onOpen, recurrenceCounts, onMove }: { conversations: ConversationOverview[]; onOpen: (c: ConversationOverview) => void; recurrenceCounts: Record<string, number>; onMove: (id: string, status: "open" | "queued" | "bot") => void }) {
   const [dragOver, setDragOver] = useState<string | null>(null);
   return (
     <div className="grid h-full grid-cols-1 gap-4 overflow-hidden p-6 md:grid-cols-3">
@@ -305,7 +336,7 @@ function Board({ conversations, onOpen, recurrenceCounts, onMove }: { conversati
   );
 }
 
-function ClosedList({ items, onOpen, recurrenceCounts }: { items: ConversationOverview[]; onOpen: () => void; recurrenceCounts: Record<string, number> }) {
+function ClosedList({ items, onOpen, recurrenceCounts }: { items: ConversationOverview[]; onOpen: (c: ConversationOverview) => void; recurrenceCounts: Record<string, number> }) {
   return (
     <div className="h-full overflow-y-auto p-6">
       {items.length === 0 ? (
