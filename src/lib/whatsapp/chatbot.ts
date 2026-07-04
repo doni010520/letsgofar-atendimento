@@ -108,11 +108,21 @@ export async function runChatbot(
 
   const send = async (text: string) => {
     if (!text?.trim()) return;
-    const res = await provider.sendText({ to, text }).catch(() => ({ externalId: undefined }));
+    // Se o envio ao WhatsApp falhar, a resposta do bot é registrada como "failed"
+    // (mesma semântica do envio humano) — nunca como "sent" enganoso.
+    let externalId: string | undefined;
+    let ok = true;
+    try {
+      const res = await provider.sendText({ to, text });
+      externalId = res.externalId;
+    } catch (e) {
+      ok = false;
+      console.error("chatbot send error", e);
+    }
     await db.from("messages").insert({
       organization_id: conv.organization_id, conversation_id: conv.id,
       direction: "out", sender_type: "bot", content_type: "text",
-      body: text, external_id: res.externalId ?? null, status: "sent",
+      body: text, external_id: externalId ?? null, status: ok ? "sent" : "failed",
     });
   };
   /** Envia texto de nó com substituição de merge fields. */
@@ -121,11 +131,19 @@ export async function runChatbot(
   const sendMedia = async (url: string, kind: "image" | "audio" | "video" | "document", caption?: string) => {
     if (!url) return;
     const cap = caption ? applyVars(caption, ctx()) : undefined;
-    const res = await provider.sendMedia({ to, url, caption: cap, kind }).catch(() => ({ externalId: undefined }));
+    let externalId: string | undefined;
+    let ok = true;
+    try {
+      const res = await provider.sendMedia({ to, url, caption: cap, kind });
+      externalId = res.externalId;
+    } catch (e) {
+      ok = false;
+      console.error("chatbot sendMedia error", e);
+    }
     await db.from("messages").insert({
       organization_id: conv.organization_id, conversation_id: conv.id,
       direction: "out", sender_type: "bot", content_type: kind,
-      body: cap ?? null, media_url: url, external_id: res.externalId ?? null, status: "sent",
+      body: cap ?? null, media_url: url, external_id: externalId ?? null, status: ok ? "sent" : "failed",
     });
   };
 
@@ -136,11 +154,19 @@ export async function runChatbot(
       const up = await db.storage.from("media").upload(path, audio.buffer, { contentType: audio.mime, upsert: true });
       if (up.error) throw up.error;
       const url = db.storage.from("media").getPublicUrl(path).data.publicUrl;
-      const res = await provider.sendMedia({ to, url, kind: "audio" }).catch(() => ({ externalId: undefined }));
+      let externalId: string | undefined;
+      let ok = true;
+      try {
+        const res = await provider.sendMedia({ to, url, kind: "audio" });
+        externalId = res.externalId;
+      } catch (e) {
+        ok = false;
+        console.error("chatbot sendAudio error", e);
+      }
       await db.from("messages").insert({
         organization_id: conv.organization_id, conversation_id: conv.id,
         direction: "out", sender_type: "bot", content_type: "audio",
-        body: transcript, media_url: url, external_id: res.externalId ?? null, status: "sent",
+        body: transcript, media_url: url, external_id: externalId ?? null, status: ok ? "sent" : "failed",
       });
     } catch {
       await send(transcript);
