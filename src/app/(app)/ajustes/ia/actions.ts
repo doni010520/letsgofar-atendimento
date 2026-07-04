@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 /** Cria ou atualiza um agente de IA. */
 export async function saveAiAgent(fd: FormData) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
-  const session = await getSession();
-  if (!session?.organization) throw new Error("Sessão inválida.");
+  const session = await requireAdmin();
+  if (!session.organization) throw new Error("Sessão inválida.");
   const sb = await createClient();
 
   const id = String(fd.get("id") || "").trim();
@@ -50,6 +50,7 @@ export async function saveAiAgent(fd: FormData) {
 /** Deleta um agente de IA. */
 export async function deleteAiAgent(id: string) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
+  await requireAdmin();
   const sb = await createClient();
   const { error } = await sb.from("ai_agents").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -61,8 +62,8 @@ export async function deleteAiAgent(id: string) {
 /** Adiciona (ou reativa) um número à allowlist da IA. */
 export async function addAllowedNumber(fd: FormData) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
-  const session = await getSession();
-  if (!session?.organization) throw new Error("Sessão inválida.");
+  const session = await requireAdmin();
+  if (!session.organization) throw new Error("Sessão inválida.");
   const phone = String(fd.get("phone") || "").replace(/\D+/g, "");
   if (phone.length < 8) throw new Error("Informe um número válido (com DDD).");
   const label = String(fd.get("label") || "").trim() || null;
@@ -80,6 +81,7 @@ export async function addAllowedNumber(fd: FormData) {
 /** Ativa/desativa um número da allowlist. */
 export async function toggleAllowedNumber(id: string, active: boolean) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
+  await requireAdmin();
   const sb = await createClient();
   const { error } = await sb.from("ai_allowed_numbers").update({ active }).eq("id", id);
   if (error) throw new Error(error.message);
@@ -89,6 +91,7 @@ export async function toggleAllowedNumber(id: string, active: boolean) {
 /** Remove um número da allowlist. */
 export async function removeAllowedNumber(id: string) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Configure o Supabase.");
+  await requireAdmin();
   const sb = await createClient();
   const { error } = await sb.from("ai_allowed_numbers").delete().eq("id", id);
   if (error) throw new Error(error.message);

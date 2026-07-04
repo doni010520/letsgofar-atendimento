@@ -13,6 +13,7 @@ export function InboxLoader(props: {
   initialMessages: Message[];
   userId: string | null;
   hideAi?: boolean;
+  isAdmin?: boolean;
   tags: Tag[];
   agents: Profile[];
   departments: Department[];

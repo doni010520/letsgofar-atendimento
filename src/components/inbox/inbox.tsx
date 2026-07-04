@@ -71,6 +71,7 @@ export function Inbox({
   initialMessages,
   userId,
   hideAi = false,
+  isAdmin = false,
   tags,
   agents,
   departments,
@@ -84,6 +85,7 @@ export function Inbox({
   initialMessages: Message[];
   userId: string | null;
   hideAi?: boolean;
+  isAdmin?: boolean;
   tags: Tag[];
   agents: Profile[];
   departments: Department[];
@@ -749,6 +751,7 @@ export function Inbox({
           agents={agents.map((a) => ({ id: a.id, name: a.name ?? "Atendente", avatar_url: a.avatar_url }))}
           currentUserId={userId}
           hideAi={hideAi}
+          isAdmin={isAdmin}
           onSendFile={handleSendFile}
           onSendLocation={handleSendLocation}
           onSendContact={handleSendContact}

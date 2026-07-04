@@ -25,17 +25,25 @@ const CARDS = [
 ];
 
 export default async function AjustesPage() {
-  // Esconde o módulo de IA para usuários marcados (ex.: revisor da Meta).
+  // Esconde o módulo de IA para usuários marcados (ex.: revisor da Meta) e para
+  // não-administradores (configurar o agente de IA é restrito a admin).
   let hideAi = false;
+  let admin = true;
   if (!PREVIEW_MODE) {
     const session = await getSession();
     if (session?.userId) {
       const sb = await createClient();
-      const { data: me } = await sb.from("profiles").select("hide_ai").eq("id", session.userId).maybeSingle();
-      hideAi = !!(me as { hide_ai?: boolean } | null)?.hide_ai;
+      const { data: me } = await sb
+        .from("profiles")
+        .select("hide_ai, role, super_admin")
+        .eq("id", session.userId)
+        .maybeSingle();
+      const p = me as { hide_ai?: boolean; role?: string; super_admin?: boolean } | null;
+      hideAi = !!p?.hide_ai;
+      admin = p?.role === "admin" || !!p?.super_admin;
     }
   }
-  const cards = hideAi ? CARDS.filter((c) => c.href !== "/ajustes/ia") : CARDS;
+  const cards = hideAi || !admin ? CARDS.filter((c) => c.href !== "/ajustes/ia") : CARDS;
 
   return (
     <Scroll>

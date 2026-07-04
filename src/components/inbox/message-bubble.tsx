@@ -101,6 +101,7 @@ function MediaContent({ message, onImageClick }: { message: Message; onImageClic
 
 export function MessageBubble({
   message,
+  isAdmin = false,
   onReply,
   onReact,
   onEdit,
@@ -111,6 +112,7 @@ export function MessageBubble({
   quotedExcerpt,
 }: {
   message: Message;
+  isAdmin?: boolean;
   onReply?: (m: Message) => void;
   onReact?: (m: Message, emoji: string) => void;
   onEdit?: (m: Message) => void;
@@ -128,13 +130,15 @@ export function MessageBubble({
   const reactions = message.reactions ?? [];
 
   if (message.is_deleted) {
-    // Apagada: permanece visível para a equipe (auditoria), porém esmaecida.
-    // O conteúdo original é mantido no banco; o cliente é que deixa de vê-la (quando "para todos").
+    // Apagada: o conteúdo original é mantido no banco para auditoria, mas só
+    // administradores veem o texto riscado. Demais usuários veem apenas o selo.
     const label =
       message.deleted_scope === "everyone" ? "Apagada para todos"
       : message.deleted_scope === "me" ? "Apagada (só aqui)"
       : "Mensagem apagada";
-    const content = message.body ?? (message.content_type !== "text" ? `[${message.content_type}]` : null);
+    const content = isAdmin
+      ? (message.body ?? (message.content_type !== "text" ? `[${message.content_type}]` : null))
+      : null;
     return (
       <div className={cn("flex", out ? "justify-end" : "justify-start")}>
         <div className="max-w-[70%] rounded-2xl border border-dashed border-border bg-gray-50 px-3 py-2 text-sm text-ink-soft opacity-60">

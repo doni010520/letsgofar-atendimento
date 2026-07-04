@@ -18,6 +18,7 @@ export function ChatThread({
   agents,
   currentUserId,
   hideAi = false,
+  isAdmin = false,
   onSendFile,
   onSendLocation,
   onSendContact,
@@ -52,6 +53,7 @@ export function ChatThread({
   agents?: { id: string; name: string; avatar_url?: string | null }[];
   currentUserId?: string | null;
   hideAi?: boolean;
+  isAdmin?: boolean;
   onSendFile: (file: File, asSticker?: boolean) => void;
   onType?: () => void;
   onSendLocation: () => void;
@@ -262,6 +264,7 @@ export function ChatThread({
               <MessageBubble
                 key={m.id}
                 message={m}
+                isAdmin={isAdmin}
                 onReply={setReplyTo}
                 onReact={onReact}
                 onEdit={onEdit}

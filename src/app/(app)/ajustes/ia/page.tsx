@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Scroll } from "@/components/scroll";
 import { PageHeader, Card } from "@/components/ui";
@@ -6,7 +7,7 @@ import { AiAgentList, type AiAgentRow } from "@/components/ai-agent-form";
 import { AiAllowlist } from "@/components/ai-allowlist";
 import { defaultMvfPrompt } from "@/lib/whatsapp/ai";
 import { getChannels } from "@/lib/data/channels";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PREVIEW_MODE } from "@/lib/mock";
 import type { AiAllowedNumber } from "@/lib/types";
@@ -17,7 +18,9 @@ export default async function AiAgentPage() {
   let allowed: AiAllowedNumber[] = [];
   if (!PREVIEW_MODE) {
     const session = await getSession();
-    if (session?.organization) {
+    // Configurar o agente de IA é restrito a administradores.
+    if (!session || !isAdmin(session.profile)) notFound();
+    if (session.organization) {
       const sb = await createClient();
       const { data } = await sb
         .from("ai_agents")

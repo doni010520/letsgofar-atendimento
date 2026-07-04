@@ -31,3 +31,21 @@ export async function getSession(): Promise<{
 
   return { userId: user.id, profile: (profile as Profile) ?? null, organization };
 }
+
+/** true se o profile tem privilégio de admin: admin da org OU super_admin da plataforma. */
+export function isAdmin(profile: Profile | null): boolean {
+  if (!profile) return false;
+  return profile.role === "admin" || (profile as { super_admin?: boolean }).super_admin === true;
+}
+
+/**
+ * Garante que a sessão atual é de um administrador; lança se não for.
+ * Use em Server Actions sensíveis (ex.: configurar o agente de IA).
+ */
+export async function requireAdmin() {
+  const session = await getSession();
+  if (!session || !isAdmin(session.profile)) {
+    throw new Error("Acesso restrito a administradores.");
+  }
+  return session;
+}

@@ -31,13 +31,21 @@ export default async function AtendimentoPage({
 
   let userId: string | null = null;
   let hideAi = false;
+  let isAdmin = false;
   if (!PREVIEW_MODE) {
     const session = await getSession();
     userId = session?.userId ?? null;
     if (userId) {
       const sb = await createClient();
-      const { data: me } = await sb.from("profiles").select("hide_ai").eq("id", userId).maybeSingle();
-      hideAi = !!(me as { hide_ai?: boolean } | null)?.hide_ai;
+      const { data: me } = await sb
+        .from("profiles")
+        .select("hide_ai, role, super_admin")
+        .eq("id", userId)
+        .maybeSingle();
+      const p = me as { hide_ai?: boolean; role?: string; super_admin?: boolean } | null;
+      hideAi = !!p?.hide_ai;
+      // Só admin vê o conteúdo de mensagens apagadas (visão de auditoria).
+      isAdmin = p?.role === "admin" || !!p?.super_admin;
     }
   }
 
@@ -48,6 +56,7 @@ export default async function AtendimentoPage({
       initialMessages={initialMessages}
       userId={userId}
       hideAi={hideAi}
+      isAdmin={isAdmin}
       tags={tags}
       agents={agents}
       departments={departments}
