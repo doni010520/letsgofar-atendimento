@@ -608,7 +608,18 @@ export async function sendTemplateMessage(
       friendly = "Parâmetros do modelo incorretos (variáveis faltando ou a mais).";
     return { ok: false, error: friendly };
   }
-  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+  // Enviar um template é a reabertura deliberada do contato (fora da janela de 24h):
+  // a conversa PRECISA voltar a ficar aberta, senão a resposta do cliente não casa
+  // com nenhuma conversa em aberto e o inbound cria uma conversa nova (duplicada).
+  await supabase
+    .from("conversations")
+    .update({
+      last_message_at: new Date().toISOString(),
+      status: "open",
+      inactivity_warned_at: null,
+      assigned_user_id: session.userId,
+    })
+    .eq("id", conversationId);
   revalidatePath("/atendimento");
   return { ok: true };
 }
