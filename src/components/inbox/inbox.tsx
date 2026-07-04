@@ -780,13 +780,35 @@ export function Inbox({
         </div>
       )}
 
-      {selected && panelOpen && (
-        <ContactPanel
-          key={selected.id}
-          conversation={selected}
-          onClose={() => setPanelOpen(false)}
-          onOpenContact={handleOpenContact}
-        />
+      {selected && (
+        <>
+          {/* Backdrop apenas no modo gaveta (abaixo de xl), quando aberta. */}
+          {panelOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/40 xl:hidden"
+              onClick={() => setPanelOpen(false)}
+            />
+          )}
+          {/*
+            xl+: coluna fixa (dockada), sempre visível ao LADO da conversa — reflui o chat.
+            < xl: gaveta que desliza da direita POR CIMA do chat, só quando panelOpen.
+          */}
+          <div
+            className={
+              "shrink-0 transition-transform duration-200 " +
+              "max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-50 max-xl:shadow-2xl " +
+              (panelOpen ? "max-xl:translate-x-0" : "max-xl:translate-x-full") +
+              " xl:static xl:z-auto xl:translate-x-0 xl:shadow-none"
+            }
+          >
+            <ContactPanel
+              key={selected.id}
+              conversation={selected}
+              onClose={() => setPanelOpen(false)}
+              onOpenContact={handleOpenContact}
+            />
+          </div>
+        </>
       )}
 
       {closing && selected && (

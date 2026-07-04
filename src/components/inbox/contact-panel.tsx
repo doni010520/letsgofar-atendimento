@@ -87,10 +87,11 @@ export function ContactPanel({
   const title = conversation.contact_name ?? (isGroup ? "Grupo" : conversation.contact_phone);
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-surface">
+    <aside className="flex h-full w-80 max-w-[85vw] shrink-0 flex-col border-l border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-ink">{isGroup ? "Dados do grupo" : "Dados do contato"}</h2>
-        <button onClick={onClose} className="text-ink-soft hover:text-ink"><X size={18} /></button>
+        {/* Dockado no desktop (xl) é fixo — o fechar só existe no modo gaveta. */}
+        <button onClick={onClose} title="Fechar" className="text-ink-soft hover:text-ink xl:hidden"><X size={18} /></button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
