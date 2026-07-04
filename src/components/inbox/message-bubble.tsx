@@ -130,13 +130,14 @@ export function MessageBubble({
   const reactions = message.reactions ?? [];
 
   if (message.is_deleted) {
-    // Apagada: o conteúdo original é mantido no banco para auditoria, mas só
-    // administradores veem o texto riscado. Demais usuários veem apenas o selo.
+    // Apagada: o conteúdo original é mantido no banco para auditoria.
+    // Mensagem da própria equipe (out) permanece visível a todos (auditoria interna);
+    // o texto apagado PELO CLIENTE (in) só é revelado para administradores.
     const label =
       message.deleted_scope === "everyone" ? "Apagada para todos"
       : message.deleted_scope === "me" ? "Apagada (só aqui)"
       : "Mensagem apagada";
-    const content = isAdmin
+    const content = (out || isAdmin)
       ? (message.body ?? (message.content_type !== "text" ? `[${message.content_type}]` : null))
       : null;
     return (
