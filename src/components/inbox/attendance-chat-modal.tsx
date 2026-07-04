@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { X, UserCheck, ArrowRightLeft, CheckCircle2, Hash, Clock } from "lucide-react";
+import { X, UserCheck, ArrowRightLeft, CheckCircle2, Hash, Clock, PanelRight } from "lucide-react";
 import { ChatThread } from "./chat-thread";
-import { ContactPanel } from "./contact-panel";
+import { AttendancePanel } from "./attendance-panel";
 import { CloseModal, TransferModal } from "./attendance-modals";
 import { toast } from "@/components/toast";
 import {
@@ -82,6 +82,7 @@ export function AttendanceChatModal({
   const [transferring, setTransferring] = useState(false);
   const [noting, setNoting] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [showPanelMobile, setShowPanelMobile] = useState(false);
 
   const [startMs] = useState(() =>
     conversation.opened_at ? Date.parse(conversation.opened_at) : Date.now(),
@@ -326,14 +327,17 @@ export function AttendanceChatModal({
                 </button>
               </>
             )}
+            <button onClick={() => setShowPanelMobile(true)} title="Dados do contato" className="rounded-md p-1.5 text-ink-soft hover:bg-gray-100 hover:text-ink lg:hidden">
+              <PanelRight size={18} />
+            </button>
             <button onClick={onClose} title="Fechar" className="ml-1 rounded-md p-1.5 text-ink-soft hover:bg-gray-100 hover:text-ink">
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Corpo: chat (esquerda) + painel de contato (direita, dockado em telas largas) */}
-        <div className="flex min-h-0 flex-1">
+        {/* Corpo: chat (esquerda) + painel de contato em abas (direita, dockado em telas largas) */}
+        <div className="relative flex min-h-0 flex-1">
           <ChatThread
             conversation={conv}
             messages={messages}
@@ -363,9 +367,25 @@ export function AttendanceChatModal({
             templates={templates}
             pending={isPending}
           />
+          {/* Desktop: painel dockado. Mobile: gaveta acionada pelo botão do cabeçalho. */}
           <div className="hidden h-full lg:block">
-            <ContactPanel conversation={conv} onClose={() => {}} onOpenContact={() => {}} />
+            <AttendancePanel conversation={conv} />
           </div>
+          {showPanelMobile && (
+            <div className="absolute inset-0 z-[75] flex justify-end lg:hidden">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setShowPanelMobile(false)} />
+              <div className="relative h-full">
+                <button
+                  onClick={() => setShowPanelMobile(false)}
+                  title="Fechar"
+                  className="absolute -left-9 top-2 rounded-full bg-surface p-1.5 text-ink-soft shadow hover:text-ink"
+                >
+                  <X size={16} />
+                </button>
+                <AttendancePanel conversation={conv} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sub-modais */}
