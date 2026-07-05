@@ -9,12 +9,13 @@ import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [pinned, setPinned] = useState(false);
+  // Padrão: menu FIXO aberto. Só recolhe se o usuário tiver escolhido soltar ("0").
+  const [pinned, setPinned] = useState(true);
   const [hovered, setHovered] = useState(false);
   const expanded = pinned || hovered;
 
   useEffect(() => {
-    setPinned(localStorage.getItem("sb-pinned") === "1");
+    setPinned(localStorage.getItem("sb-pinned") !== "0");
   }, []);
 
   function togglePin() {
@@ -25,8 +26,10 @@ export function Sidebar() {
   }
 
   return (
-    // Espaçador: reserva a largura da barra fininha no layout (a barra real é overlay fixo).
-    <div className="w-[72px] shrink-0">
+    // Espaçador: quando FIXADO, reserva a largura total (240px) para o conteúdo
+    // refluir ao lado — não ficar por baixo do menu. No modo hover (não fixado),
+    // reserva só a barra fininha e o menu expande por cima temporariamente.
+    <div className={cn("shrink-0 transition-all duration-200", pinned ? "w-60" : "w-[72px]")}>
       <aside
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
