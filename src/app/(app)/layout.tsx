@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/toast";
 import { getSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const hasEnv = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,6 +17,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const session = await getSession();
     if (!session) redirect("/login");
     if (!session.organization) redirect("/onboarding");
+
+    // 2FA obrigatório (opcional via env REQUIRE_2FA=true). Quem ainda não está
+    // em AAL2 é mandado para /2fa (cadastrar ou validar o código). Contas em
+    // MFA_EXEMPT_EMAILS ficam isentas (ex.: revisor da Meta durante o review).
+    if (process.env.REQUIRE_2FA === "true") {
+      const exempt = (process.env.MFA_EXEMPT_EMAILS ?? "")
+        .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+      const emailLc = (session.profile?.email ?? "").toLowerCase();
+      if (!emailLc || !exempt.includes(emailLc)) {
+        let needs2fa = false;
+        try {
+          const sb = await createClient();
+          const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+          needs2fa = !!aal && aal.currentLevel !== "aal2";
+        } catch {
+          // Fail-open: erro transitório não deve trancar o app.
+          needs2fa = false;
+        }
+        if (needs2fa) redirect("/2fa"); // fora do try — redirect lança NEXT_REDIRECT
+      }
+    }
+
     userName = session.profile?.name || session.profile?.email || "Usuário";
     orgName = session.organization.name;
     email = session.profile?.email ?? undefined;
