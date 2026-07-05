@@ -22,8 +22,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // em AAL2 é mandado para /2fa (cadastrar ou validar o código). Contas em
     // MFA_EXEMPT_EMAILS ficam isentas (ex.: revisor da Meta durante o review).
     if (process.env.REQUIRE_2FA === "true") {
-      const exempt = (process.env.MFA_EXEMPT_EMAILS ?? "")
-        .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+      // Isenções padrão (garantidas mesmo sem a env): dono do app + revisor da Meta.
+      // Pode remover depois (ex.: após a aprovação da Meta) se quiser exigir 2FA deles.
+      const DEFAULT_EXEMPT = ["admin@mvf.com.br", "revisor@benitechlab.com"];
+      const exempt = [
+        ...DEFAULT_EXEMPT,
+        ...(process.env.MFA_EXEMPT_EMAILS ?? "").split(","),
+      ].map((s) => s.trim().toLowerCase()).filter(Boolean);
       const emailLc = (session.profile?.email ?? "").toLowerCase();
       if (!emailLc || !exempt.includes(emailLc)) {
         let needs2fa = false;
