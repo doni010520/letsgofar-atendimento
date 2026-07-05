@@ -115,7 +115,7 @@ export function ChatThread({
         {/* Linha 1: avatar + nome + protocolo */}
         <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 md:px-4">
           {onBack && (
-            <button onClick={onBack} className="shrink-0 rounded-lg p-1.5 text-ink-soft hover:bg-gray-100 md:hidden" title="Voltar">
+            <button onClick={onBack} className="shrink-0 rounded-lg p-1.5 text-ink-soft hover:bg-gray-100 lg:hidden" title="Voltar">
               <ArrowLeft size={20} />
             </button>
           )}

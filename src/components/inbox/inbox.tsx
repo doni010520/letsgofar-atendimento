@@ -730,8 +730,9 @@ export function Inbox({
         </div>
       )}
       <div className="flex flex-1 overflow-hidden">
-      {/* Mobile: mostra lista OU chat. Desktop: ambos. */}
-      <div className={`${selectedId ? "hidden md:flex" : "flex"} h-full w-full md:w-auto`}>
+      {/* Com conversa aberta, a lista some abaixo de lg para o painel de contato
+          caber dockado (chat + painel). Em lg+ mostra lista + chat + painel. */}
+      <div className={`${selectedId ? "hidden lg:flex" : "flex"} h-full w-full lg:w-auto`}>
         <ConversationList
           conversations={visibleConversations}
           selectedId={selectedId}
@@ -782,23 +783,23 @@ export function Inbox({
 
       {selected && (
         <>
-          {/* Backdrop apenas no modo gaveta (abaixo de lg), quando aberta. */}
+          {/* Backdrop apenas no modo gaveta (abaixo de md = celular), quando aberta. */}
           {panelOpen && (
             <div
-              className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+              className="fixed inset-0 z-40 bg-black/40 md:hidden"
               onClick={() => setPanelOpen(false)}
             />
           )}
           {/*
-            lg+: coluna fixa (dockada), sempre visível ao LADO da conversa — reflui o chat.
-            < lg: gaveta que desliza da direita POR CIMA do chat, só quando panelOpen.
+            md+: coluna fixa (dockada), SEMPRE visível ao LADO da conversa — reflui o chat.
+            < md (celular): gaveta que desliza da direita, só quando panelOpen.
           */}
           <div
             className={
               "shrink-0 transition-transform duration-200 " +
-              "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-50 max-lg:shadow-2xl " +
-              (panelOpen ? "max-lg:translate-x-0" : "max-lg:translate-x-full") +
-              " lg:static lg:z-auto lg:translate-x-0 lg:shadow-none"
+              "max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:shadow-2xl " +
+              (panelOpen ? "max-md:translate-x-0" : "max-md:translate-x-full") +
+              " md:static md:z-auto md:translate-x-0 md:shadow-none"
             }
           >
             <ContactPanel
