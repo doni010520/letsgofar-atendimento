@@ -306,6 +306,14 @@ export async function sendMessage(
     .select("id")
     .single();
 
+  // Marca atividade IMEDIATAMENTE (antes do round-trip do provedor, que leva
+  // segundos) para o cron de inatividade não encerrar a conversa que o atendente
+  // acabou de reativar. Também limpa o aviso pendente ("Você ainda está por aí?").
+  await supabase
+    .from("conversations")
+    .update({ last_message_at: new Date().toISOString(), inactivity_warned_at: null })
+    .eq("id", conversationId);
+
   // Envia pelo provedor do canal.
   let deliveryError: string | null = null;
   try {
@@ -352,6 +360,7 @@ export async function sendMessage(
     .from("conversations")
     .update({
       last_message_at: new Date().toISOString(),
+      inactivity_warned_at: null,
       status: conv.status === "closed" ? "open" : wasBot ? "open" : conv.status,
       ...(wasBot ? { ai_enabled: false, assigned_user_id: session.userId } : {}),
     })
