@@ -27,6 +27,25 @@ function colorForName(name: string): string {
   return AUTHOR_COLORS[h % AUTHOR_COLORS.length];
 }
 
+/** Renderiza a formatação do WhatsApp: *negrito*, _itálico_, ~tachado~. */
+function fmtWa(text: string): React.ReactNode[] {
+  const RE = /([*_~])(\S(?:[^*_~\n]*\S)?|\S)\1/g;
+  const out: React.ReactNode[] = [];
+  let last = 0, k = 0;
+  let m: RegExpExecArray | null;
+  RE.lastIndex = 0;
+  while ((m = RE.exec(text)) !== null) {
+    if (m.index > last) out.push(<span key={k++}>{text.slice(last, m.index)}</span>);
+    const inner = m[2];
+    if (m[1] === "*") out.push(<strong key={k++}>{inner}</strong>);
+    else if (m[1] === "_") out.push(<em key={k++}>{inner}</em>);
+    else out.push(<span key={k++} className="line-through">{inner}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(<span key={k++}>{text.slice(last)}</span>);
+  return out;
+}
+
 /** Transforma URLs no texto em links clicáveis (client-only para evitar hydration mismatch). */
 function Linkify({ text, className }: { text: string; className?: string }) {
   const URL_RE = /(?:https?:\/\/|www\.)[^\s<]+|wa\.me\/[^\s<]+/g;
@@ -49,14 +68,14 @@ function Linkify({ text, className }: { text: string; className?: string }) {
 
   const hasLinks = parts.some((p) => typeof p !== "string");
   if (!hasLinks) {
-    return <p className={className}>{text}</p>;
+    return <p className={className}>{fmtWa(text)}</p>;
   }
 
   return (
     <p className={className} suppressHydrationWarning>
       {parts.map((p, i) =>
         typeof p === "string" ? (
-          p /* text node direto — sem wrapper span */
+          <span key={i}>{fmtWa(p)}</span>
         ) : (
           <a
             key={i}
