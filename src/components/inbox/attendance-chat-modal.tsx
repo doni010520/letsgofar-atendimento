@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { X, UserCheck, ArrowRightLeft, CheckCircle2, Hash, Clock, PanelRight } from "lucide-react";
+import { X, UserCheck, ArrowRightLeft, CheckCircle2, Hash, Clock, PanelRight, RotateCcw } from "lucide-react";
 import { ChatThread } from "./chat-thread";
 import { AttendancePanel } from "./attendance-panel";
 import { CloseModal, TransferModal } from "./attendance-modals";
@@ -326,6 +326,11 @@ export function AttendanceChatModal({
                   <CheckCircle2 size={14} /> Encerrar
                 </button>
               </>
+            )}
+            {conv.status === "closed" && (
+              <button onClick={handleAssign} title="Reabrir e assumir este atendimento" className="inline-flex items-center gap-1 rounded-md bg-brand-light px-2.5 py-1.5 text-xs font-medium text-brand shadow-sm hover:bg-brand-light/70">
+                <RotateCcw size={14} /> Reabrir
+              </button>
             )}
             <button onClick={() => setShowPanelMobile(true)} title="Dados do contato" className="rounded-md p-1.5 text-ink-soft hover:bg-gray-100 hover:text-ink lg:hidden">
               <PanelRight size={18} />

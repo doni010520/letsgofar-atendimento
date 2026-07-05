@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote, Eye, EyeOff } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote, Eye, EyeOff, RotateCcw } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -109,7 +109,7 @@ export function ChatThread({
   const windowOpen = !isMeta || (!!lastInboundAt && Date.now() - new Date(lastInboundAt).getTime() < 24 * 3600 * 1000);
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-canvas">
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-canvas">
       {!hideHeader && (
       <header className="shrink-0 border-b border-border bg-surface">
         {/* Linha 1: avatar + nome + protocolo */}
@@ -196,7 +196,12 @@ export function ChatThread({
             </>
           )}
           {conversation.status === "closed" && (
-            <span className="rounded-md bg-gray-100 px-2 py-1 text-[11px] text-ink-soft">Encerrado</span>
+            <>
+              <span className="rounded-md bg-gray-100 px-2 py-1 text-[11px] text-ink-soft">Encerrado</span>
+              <button onClick={onAssign} title="Reabrir e assumir este atendimento" className="inline-flex items-center gap-1 rounded-md bg-brand-light px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand-light/70">
+                <RotateCcw size={12} /> Reabrir
+              </button>
+            </>
           )}
         </div>
       </header>
