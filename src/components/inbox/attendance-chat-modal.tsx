@@ -278,7 +278,9 @@ export function AttendanceChatModal({
   }
 
   function handleToggleAi() {
-    const next = conv.ai_enabled === false; // se pausada, reativa
+    // "IA conduzindo" = ai_enabled e status bot. Conduzindo → pausa; humano → ativa.
+    const aiHandling = conv.ai_enabled !== false && conv.status === "bot";
+    const next = !aiHandling;
     setConv((c) => ({ ...c, ai_enabled: next, status: next ? "bot" : "open" }));
     startTransition(async () => {
       await setConversationAi(convId, next);

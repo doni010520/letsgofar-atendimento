@@ -680,7 +680,10 @@ export function Inbox({
 
   function handleToggleAi() {
     if (!selectedId || selectedId === DRAFT_ID) return;
-    const next = selected?.ai_enabled === false; // se está pausada, reativa
+    // "IA conduzindo" = ai_enabled e status bot. Se está conduzindo → pausa (false);
+    // se é humano atendendo (open) → devolve para a IA (true).
+    const aiHandling = selected?.ai_enabled !== false && selected?.status === "bot";
+    const next = !aiHandling;
     setConversations((prev) =>
       prev.map((c) =>
         c.id === selectedId

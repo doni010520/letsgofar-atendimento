@@ -173,11 +173,16 @@ export class UazapiProvider implements ChannelProvider {
   private async setWebhook() {
     const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
     if (!base || !this.token) return;
+    // A UAZAPI NÃO envia header de auth nas chamadas de webhook. Se o nosso handler
+    // exige UAZAPI_WEBHOOK_TOKEN e ele não vier, responde 401 e descarta TODAS as
+    // mensagens recebidas. Por isso o token vai NA URL (?token=...).
+    const wt = process.env.UAZAPI_WEBHOOK_TOKEN;
+    const url = `${base}/api/webhooks/uazapi${wt ? `?token=${encodeURIComponent(wt)}` : ""}`;
     await this.req("/webhook", {
       method: "POST",
       body: JSON.stringify({
         enabled: true,
-        url: `${base}/api/webhooks/uazapi`,
+        url,
         events: ["messages", "messages_update", "connection"],
         excludeMessages: ["wasSentByApi"],
       }),

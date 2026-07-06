@@ -169,13 +169,13 @@ export function ChatThread({
           {conversation.status !== "closed" && (
             <>
               {showAi && !isGroup && (
-                aiPaused ? (
-                  <button onClick={onToggleAi} title="Devolver o atendimento para a IA" className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-200">
-                    <Bot size={12} /> Reativar IA
-                  </button>
-                ) : (
+                aiHandling ? (
                   <button onClick={onToggleAi} title="Pausar a IA e assumir o atendimento" className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
                     <BotOff size={12} /> Pausar IA
+                  </button>
+                ) : (
+                  <button onClick={onToggleAi} title="Devolver o atendimento para a IA" className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-200">
+                    <Bot size={12} /> Ativar IA
                   </button>
                 )
               )}

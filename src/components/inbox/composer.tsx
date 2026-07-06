@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker, X, Image as ImageIcon, FileText, LayoutTemplate } from "lucide-react";
+import { Send, Paperclip, Mic, Square, Loader2, MapPin, UserPlus, FileUp, Smile, Sticker, X, Image as ImageIcon, FileText, LayoutTemplate, MessageCircle, Lock } from "lucide-react";
 import { EmojiPicker } from "./emoji-picker";
 
 type Mention = { name: string; phone: string };
@@ -285,22 +285,24 @@ export function Composer({
 
       {/* ========== Abas: Responder cliente | Mensagem interna ========== */}
       {allowInternal && (
-        <div className="flex items-center gap-1 border-t border-border bg-surface px-3 pt-2">
+        <div className="flex items-center gap-1.5 border-t border-border bg-surface px-3 pt-2">
           <button
             onClick={() => { setMode("reply"); setMentionQuery(null); }}
-            className={`rounded-t-lg px-3 py-1.5 text-xs font-medium transition ${
-              !internalMode ? "bg-brand-light text-brand" : "text-ink-soft hover:text-ink"
+            title="Responder ao cliente — enviada no WhatsApp dele."
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+              !internalMode ? "border-brand bg-brand text-white shadow-sm" : "border-border bg-surface text-ink-soft hover:bg-gray-50 hover:text-ink"
             }`}
           >
-            Responder cliente
+            <MessageCircle size={13} /> Responder cliente
           </button>
           <button
             onClick={() => { setMode("internal"); setMentionQuery(null); }}
-            className={`flex items-center gap-1 rounded-t-lg px-3 py-1.5 text-xs font-medium transition ${
-              internalMode ? "bg-amber-100 text-amber-800" : "text-ink-soft hover:text-ink"
+            title="Nota interna da equipe — o cliente NÃO vê. Use @ para marcar um atendente."
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+              internalMode ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-border bg-surface text-ink-soft hover:bg-gray-50 hover:text-ink"
             }`}
           >
-            🔒 Mensagem interna
+            <Lock size={13} /> Mensagem interna
           </button>
         </div>
       )}
