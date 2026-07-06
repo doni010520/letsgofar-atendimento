@@ -183,18 +183,31 @@ export async function syncChannelStatus(channelId: string) {
   const { data: channel } = await supabase.from("channels").select("*").eq("id", channelId).single();
   if (!channel) return { status: "disconnected" as Channel["status"] };
 
+  const provider = getProvider(channel as Channel);
   let status: Channel["status"];
   try {
-    status = await getProvider(channel as Channel).status();
+    status = await provider.status();
   } catch {
+    // Erro transitório (5xx/rede): mantém o último status conhecido.
     status = (channel as Channel).status;
   }
-  // "connecting" persistente na lista = número caiu e a UAZAPI segue tentando
-  // reconectar em loop. Fora do modal de pareamento, isso é, na prática,
-  // DESCONECTADO — então não deixamos o badge preso em "Conectando".
-  if (status === "connecting") status = "disconnected";
-  if (status !== (channel as Channel).status) {
-    await supabase.from("channels").update({ status }).eq("id", channelId);
+
+  const updates: Record<string, unknown> = {};
+  if (status !== (channel as Channel).status) updates.status = status;
+
+  // Instância apagada na UAZAPI (token órfão): limpa o token para que o próximo
+  // "Conectar" crie uma instância NOVA — senão o canal fica preso reusando o
+  // token morto (status travado, envios falhando, sem conseguir reconectar).
+  if ((provider as { instanceGone?: boolean }).instanceGone) {
+    const creds = { ...((channel as Channel).credentials as Record<string, unknown> | null ?? {}) };
+    if (creds.token) {
+      delete creds.token;
+      updates.credentials = creds;
+    }
+  }
+
+  if (Object.keys(updates).length) {
+    await supabase.from("channels").update(updates).eq("id", channelId);
     revalidatePath("/canais");
   }
   return { status };

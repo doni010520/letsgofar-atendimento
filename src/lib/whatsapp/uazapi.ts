@@ -17,6 +17,9 @@ export class UazapiProvider implements ChannelProvider {
   private host: string;
   private token?: string;
   private channel: Channel;
+  /** true quando o último status() viu que a instância não existe mais na UAZAPI
+   *  (token inválido / instância apagada). O caller usa isso para limpar o token órfão. */
+  instanceGone = false;
 
   constructor(channel: Channel) {
     this.channel = channel;
@@ -33,7 +36,11 @@ export class UazapiProvider implements ChannelProvider {
     else if (this.token) headers["token"] = this.token;
 
     const res = await fetch(`${this.host}${path}`, { ...init, headers });
-    if (!res.ok) throw new Error(`UAZAPI ${path} -> ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(`UAZAPI ${path} -> ${res.status}`) as Error & { httpStatus?: number };
+      err.httpStatus = res.status;
+      throw err;
+    }
     return res.json();
   }
 
@@ -152,11 +159,22 @@ export class UazapiProvider implements ChannelProvider {
   }
 
   async status(): Promise<Channel["status"]> {
-    const o = await this.req("/instance/status");
-    const i = (o?.instance ?? o ?? {}) as { status?: string; connected?: boolean };
-    if (o?.connected || i.connected || i.status === "connected") return "connected";
-    if (i.status === "connecting") return "connecting";
-    return "disconnected";
+    try {
+      const o = await this.req("/instance/status");
+      const i = (o?.instance ?? o ?? {}) as { status?: string; connected?: boolean };
+      if (o?.connected || i.connected || i.status === "connected") return "connected";
+      if (i.status === "connecting") return "connecting";
+      return "disconnected";
+    } catch (e) {
+      const code = (e as { httpStatus?: number }).httpStatus;
+      // 4xx (401/403/404) = token inválido / instância apagada na UAZAPI → morta.
+      // A fonte da verdade é a UAZAPI: instância inexistente = desconectado.
+      if (code && code >= 400 && code < 500) {
+        this.instanceGone = true;
+        return "disconnected";
+      }
+      throw e; // 5xx / erro de rede: transitório — o caller mantém o status atual.
+    }
   }
 
   async sendText({ to, text, replyId, mentions }: SendTextParams) {
