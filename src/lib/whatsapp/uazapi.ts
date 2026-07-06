@@ -79,17 +79,27 @@ export class UazapiProvider implements ChannelProvider {
     // IMPORTANTE: NÃO repetir disconnect+connect. Cada disconnect cancela a tentativa
     // anterior ("connection attempt canceled by API") e o paircode nunca é emitido.
     // Fluxo certo: desconecta UMA vez → espera "disconnected" → conecta UMA vez → lê o código.
-    let r = { connected: false, qr: undefined as string | undefined, code: undefined as string | undefined };
+    // 0) Lê o status atual. Se já está conectado, não mexe.
+    const first = await this.req("/instance/status").catch(() => null);
+    let r = read(first ?? {});
+    dbg.push(`start:st=${statusOf(first ?? {})} conn=${r.connected ? "Y" : "n"}`);
 
-    // 1) Garante estado limpo (uma única vez).
-    await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
-    for (let j = 0; j < 8; j++) {
-      const s = await this.req("/instance/status").catch(() => null);
-      r = read(s ?? {});
-      if (r.connected) break; // já está logado
-      const st = statusOf(s) ?? "";
-      if (st === "disconnected" || st === "") break;
-      await sleep(700);
+    // 1) Se não está conectado, garante o estado LIMPO antes de conectar.
+    //    A UAZAPI só emite o PAIRCODE se a instância estiver DE FATO em
+    //    "disconnected" no momento do connect. Se estiver em "connecting" (QR
+    //    pendente de uma tentativa anterior), o connect ignora o modo pareamento
+    //    e devolve QR com paircode vazio. Por isso esperamos o "disconnected"
+    //    REAL — e NÃO saímos no status vazio/momentâneo (esse era o bug que
+    //    jogava a geração de código para o QR).
+    if (!r.connected) {
+      await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
+      for (let j = 0; j < 20; j++) { // até ~14s
+        await sleep(700);
+        const s = await this.req("/instance/status").catch(() => null);
+        if (read(s ?? {}).connected) { r.connected = true; break; }
+        if ((statusOf(s ?? {}) ?? "") === "disconnected") break; // só sai no disconnected REAL
+      }
+      await sleep(500); // folga para a UAZAPI assentar
     }
 
     // 2) Conecta UMA vez. O paircode/QR já vem na resposta do connect.
