@@ -189,6 +189,10 @@ export async function syncChannelStatus(channelId: string) {
   } catch {
     status = (channel as Channel).status;
   }
+  // "connecting" persistente na lista = número caiu e a UAZAPI segue tentando
+  // reconectar em loop. Fora do modal de pareamento, isso é, na prática,
+  // DESCONECTADO — então não deixamos o badge preso em "Conectando".
+  if (status === "connecting") status = "disconnected";
   if (status !== (channel as Channel).status) {
     await supabase.from("channels").update({ status }).eq("id", channelId);
     revalidatePath("/canais");

@@ -5,7 +5,7 @@ import type { Channel } from "@/lib/types";
 export function ChannelCard({ channel, action }: { channel: Channel; action?: React.ReactNode }) {
   const isMeta = channel.type === "meta_cloud";
   return (
-    <Card className="flex items-center gap-4">
+    <Card className="flex items-start gap-3">
       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-500 text-white">
         <WhatsAppGlyph />
         <span
@@ -18,12 +18,15 @@ export function ChannelCard({ channel, action }: { channel: Channel; action?: Re
       </div>
 
       <div className="min-w-0 flex-1">
-        <h3 className="truncate text-sm font-semibold text-ink">{channel.name}</h3>
-        <p className="text-xs text-ink-soft">{formatPhone(channel.phone)}</p>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="min-w-0 truncate text-sm font-semibold text-ink">{channel.name}</h3>
+          {action ? <div className="-mr-1 -mt-1 shrink-0">{action}</div> : null}
+        </div>
+        <p className="truncate text-xs text-ink-soft">{formatPhone(channel.phone)}</p>
+        <div className="mt-2">
+          <StatusBadge status={channel.status} />
+        </div>
       </div>
-
-      <StatusBadge status={channel.status} />
-      {action ? <div className="shrink-0">{action}</div> : null}
     </Card>
   );
 }
