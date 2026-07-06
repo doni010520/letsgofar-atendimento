@@ -46,18 +46,8 @@ export class UazapiProvider implements ChannelProvider {
 
   /** Cria a instância (se necessário) e retorna QR Code ou código de pareamento. */
   async connect(phone?: string): Promise<ConnectResult> {
-    if (!this.token) {
-      const created = await this.req(
-        "/instance/init",
-        { method: "POST", body: JSON.stringify({ name: this.channel.name }) },
-        true,
-      );
-      this.token = created?.token ?? created?.instance?.token;
-    }
-    // Configura o webhook da instância para apontar para o nosso app (best-effort).
-    await this.setWebhook().catch((e) => console.warn("uazapi setWebhook", e?.message));
-
     const digits = (phone || "").replace(/\D/g, "");
+    const isCode = digits.length > 0;
     const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
     const pick = (...vals: unknown[]) => vals.find((v) => typeof v === "string" && v.trim()) as string | undefined;
     const read = (o: any) => {
@@ -72,34 +62,60 @@ export class UazapiProvider implements ChannelProvider {
         ),
       };
     };
-    const body = digits ? JSON.stringify({ phone: digits }) : "{}";
+    const body = isCode ? JSON.stringify({ phone: digits }) : "{}";
     const statusOf = (o: any) => (o?.instance ?? o ?? {})?.status;
-    const dbg: string[] = [`mode=${digits ? "code(" + digits.length + "d)" : "qr"}`, `body=${body}`];
+    const dbg: string[] = [`mode=${isCode ? "code(" + digits.length + "d)" : "qr"}`, `body=${body}`];
 
-    // IMPORTANTE: NÃO repetir disconnect+connect. Cada disconnect cancela a tentativa
-    // anterior ("connection attempt canceled by API") e o paircode nunca é emitido.
-    // Fluxo certo: desconecta UMA vez → espera "disconnected" → conecta UMA vez → lê o código.
-    // 0) Lê o status atual. Se já está conectado, não mexe.
+    // (Re)cria a instância na UAZAPI e reaponta o webhook para o nosso app.
+    const initInstance = async () => {
+      const created = await this.req(
+        "/instance/init",
+        { method: "POST", body: JSON.stringify({ name: this.channel.name }) },
+        true,
+      );
+      this.token = created?.token ?? created?.instance?.token;
+      await this.setWebhook().catch((e) => console.warn("uazapi setWebhook", e?.message));
+    };
+
+    // Sem token: cria a instância — MAS não no modo código (lá ela é recriada
+    // logo abaixo; criar aqui seria init duplicado, criar-e-apagar em seguida).
+    if (!this.token && !isCode) {
+      await initInstance();
+    } else if (this.token && !isCode) {
+      await this.setWebhook().catch((e) => console.warn("uazapi setWebhook", e?.message));
+    }
+
+    // 0) Status atual. Se já está conectado, não mexe.
     const first = await this.req("/instance/status").catch(() => null);
     let r = read(first ?? {});
     dbg.push(`start:st=${statusOf(first ?? {})} conn=${r.connected ? "Y" : "n"}`);
 
-    // 1) Se não está conectado, garante o estado LIMPO antes de conectar.
-    //    A UAZAPI só emite o PAIRCODE se a instância estiver DE FATO em
-    //    "disconnected" no momento do connect. Se estiver em "connecting" (QR
-    //    pendente de uma tentativa anterior), o connect ignora o modo pareamento
-    //    e devolve QR com paircode vazio. Por isso esperamos o "disconnected"
-    //    REAL — e NÃO saímos no status vazio/momentâneo (esse era o bug que
-    //    jogava a geração de código para o QR).
     if (!r.connected) {
-      await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
-      for (let j = 0; j < 20; j++) { // até ~14s
-        await sleep(700);
-        const s = await this.req("/instance/status").catch(() => null);
-        if (read(s ?? {}).connected) { r.connected = true; break; }
-        if ((statusOf(s ?? {}) ?? "") === "disconnected") break; // só sai no disconnected REAL
+      if (isCode) {
+        // MODO CÓDIGO — o pulo do gato:
+        // A UAZAPI só emite o PAIRCODE se a instância estiver REALMENTE em
+        // "disconnected" no instante do connect. Uma instância "envenenada" por um
+        // QR pendente (o modal dispara um connect de QR ao abrir) NÃO volta pra
+        // disconnected via /instance/disconnect — fica "connecting" por ~2min.
+        // Solução robusta: RECRIAR a instância. Recém-criada = disconnected por
+        // definição → o paircode vem na 1ª resposta do connect, sem espera.
+        if (this.token) {
+          await this.req("/instance", { method: "DELETE" }).catch((e) => dbg.push(`del:ERR ${(e as Error)?.message}`));
+        }
+        await initInstance();
+        dbg.push(`recreated tok=${this.token ? "Y" : "n"}`);
+      } else {
+        // MODO QR — desconecta e espera o "disconnected" REAL (aqui o disconnect
+        // funciona; não faz sentido recriar/trocar token à toa).
+        await this.req("/instance/disconnect", { method: "POST", body: "{}" }).catch(() => {});
+        for (let j = 0; j < 20; j++) { // até ~14s
+          await sleep(700);
+          const s = await this.req("/instance/status").catch(() => null);
+          if (read(s ?? {}).connected) { r.connected = true; break; }
+          if ((statusOf(s ?? {}) ?? "") === "disconnected") break; // só sai no disconnected REAL
+        }
+        await sleep(500); // folga para a UAZAPI assentar
       }
-      await sleep(500); // folga para a UAZAPI assentar
     }
 
     // 2) Conecta UMA vez. O paircode/QR já vem na resposta do connect.
