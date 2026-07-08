@@ -376,6 +376,7 @@ export async function sendMessage(
       is_internal: true,
       status: "sent",
     });
+    void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} assumiu ao responder (IA pausada)`, { conversationId, userId: session.userId, action: "assumir_ao_responder" }, session.organization.id);
   }
 
   revalidatePath("/atendimento");
@@ -643,6 +644,7 @@ export async function assignToMe(conversationId: string) {
     .from("conversations")
     .update({ assigned_user_id: session.userId, status: "open", ai_enabled: false })
     .eq("id", conversationId);
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} assumiu o atendimento (IA pausada)`, { conversationId, userId: session.userId, action: "assumir" }, session.organization.id);
 
   // Mensagem de atribuição (se configurado).
   const orgSettings = (session.organization.settings ?? {}) as Record<string, unknown>;
@@ -741,6 +743,7 @@ export async function closeConversation(conversationId: string, opts: CloseOptio
     await sendSatisfactionSurvey(supabase, session.organization.id, conversationId);
   }
 
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} encerrou o atendimento`, { conversationId, userId: session.userId, action: "encerrar" }, session.organization.id);
   revalidatePath("/atendimento");
   return { ok: true };
 }
@@ -1029,6 +1032,7 @@ export async function setConversationAi(conversationId: string, enabled: boolean
     patch.assigned_user_id = session.userId;
   }
   await supabase.from("conversations").update(patch).eq("id", conversationId);
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} ${enabled ? "reativou a IA" : "pausou a IA"}`, { conversationId, userId: session.userId, action: enabled ? "ativar_ia" : "pausar_ia" }, session.organization.id);
 
   await supabase.from("messages").insert({
     organization_id: session.organization.id,
@@ -1107,6 +1111,7 @@ export async function transferConversation(conversationId: string, opts: Transfe
     await sendMessage(conversationId, opts.customerMessage.trim());
   }
 
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} transferiu o atendimento`, { conversationId, userId: session.userId, action: "transferir", toUserId: opts.toUserId ?? null, toDepartmentId: opts.toDepartmentId ?? null }, session.organization.id);
   revalidatePath("/atendimento");
   return { ok: true };
 }

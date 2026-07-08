@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
+import { logEvent } from "@/lib/log";
 
 /**
  * Move uma conversa entre as colunas do board (drag-drop):
@@ -30,6 +31,10 @@ export async function moveConversationStatus(id: string, status: "open" | "queue
 
   const { error } = await sb.from("conversations").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
+  const label = status === "open" ? "assumiu (moveu p/ Em andamento, IA pausada)"
+    : status === "queued" ? "moveu p/ Em espera (IA pausada)"
+    : "devolveu para a IA";
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} ${label} [V2]`, { conversationId: id, userId: session.userId, action: "mover", status }, session.organization.id);
   revalidatePath("/atendimento-v2");
   return { ok: true };
 }
