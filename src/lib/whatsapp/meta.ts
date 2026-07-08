@@ -15,6 +15,24 @@ interface MetaCreds {
   waba_id?: string;
 }
 
+/** Transcreve um áudio recebido via OpenAI (Whisper). Best-effort. */
+async function transcribeAudio(buffer: Buffer, mimetype: string): Promise<string | undefined> {
+  const ext = mimetype.includes("mpeg") ? "mp3"
+    : mimetype.includes("mp4") || mimetype.includes("m4a") ? "m4a"
+    : mimetype.includes("wav") ? "wav" : "ogg";
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(buffer)], { type: mimetype }), `audio.${ext}`);
+  form.append("model", "whisper-1");
+  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: form,
+  });
+  if (!res.ok) return undefined;
+  const data = (await res.json()) as { text?: string };
+  return data.text?.trim() || undefined;
+}
+
 export class MetaProvider implements ChannelProvider {
   private phoneNumberId?: string;
   private accessToken?: string;
@@ -36,6 +54,37 @@ export class MetaProvider implements ChannelProvider {
     });
     if (!res.ok) throw new Error(`Meta ${path} -> ${res.status} ${await res.text()}`);
     return res.json();
+  }
+
+  /**
+   * Baixa uma mídia recebida na Meta: (1) pega a URL temporária via Graph API
+   * pelo media id; (2) baixa os bytes COM o token (a URL exige Authorization);
+   * (3) áudio é transcrito via OpenAI (Whisper). Devolve os bytes — o re-host no
+   * Storage é feito pelo storeInboundMedia.
+   */
+  async downloadMedia(mediaId: string): Promise<{ buffer?: Buffer; mimetype?: string; transcription?: string }> {
+    if (!mediaId || !this.accessToken) return {};
+    try {
+      const metaRes = await fetch(`${GRAPH}/${mediaId}`, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      });
+      if (!metaRes.ok) return {};
+      const info = (await metaRes.json()) as { url?: string; mime_type?: string };
+      if (!info.url) return {};
+      const fileRes = await fetch(info.url, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      });
+      if (!fileRes.ok) return { mimetype: info.mime_type };
+      const buffer = Buffer.from(await fileRes.arrayBuffer());
+      const mimetype = info.mime_type || fileRes.headers.get("content-type") || undefined;
+      let transcription: string | undefined;
+      if (mimetype?.startsWith("audio") && process.env.OPENAI_API_KEY) {
+        transcription = await transcribeAudio(buffer, mimetype).catch(() => undefined);
+      }
+      return { buffer, mimetype, transcription };
+    } catch {
+      return {};
+    }
   }
 
   // Meta não usa QR/código: a "conexão" é a validação das credenciais.
@@ -250,7 +299,8 @@ export function parseMetaWebhook(payload: any): InboundMessage[] {
           contactName,
           contentType: (m?.type ?? "text") as InboundMessage["contentType"],
           body: m?.text?.body ?? m?.[m?.type]?.caption,
-          mediaUrl: undefined, // mídia da Meta requer download via /media (etapa posterior)
+          mediaUrl: undefined, // a mídia da Meta é baixada depois via Graph API (downloadMedia)
+          mediaId: m?.[m?.type]?.id, // id da mídia (audio/image/video/document/sticker)
           externalId: m?.id,
           timestamp: m?.timestamp,
         });

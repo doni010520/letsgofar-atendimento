@@ -35,8 +35,9 @@ export interface ChannelProvider {
   getProfilePicture?(phone: string): Promise<string | null>;
   /** Nome + imagem de um chat/grupo (UAZAPI). Para grupos, passe o JID `<id>@g.us`. */
   getChatInfo?(jid: string): Promise<{ name?: string; image?: string }>;
-  /** Baixa/descriptografa uma mídia recebida pelo id da mensagem (UAZAPI). */
-  downloadMedia?(externalId: string): Promise<{ url?: string; mimetype?: string; transcription?: string }>;
+  /** Baixa uma mídia recebida. UAZAPI: id da mensagem. Meta: media id.
+   *  Pode devolver os bytes (buffer) quando o download exige auth (Meta). */
+  downloadMedia?(id: string): Promise<{ url?: string; buffer?: Buffer; mimetype?: string; transcription?: string }>;
   /** Reage a uma mensagem com um emoji (string vazia remove a reação). */
   reactMessage?(to: string, externalId: string, emoji: string): Promise<void>;
   /** Edita o texto de uma mensagem enviada. */
@@ -76,6 +77,7 @@ export interface InboundMessage {
   contentType: "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker";
   body?: string;
   mediaUrl?: string;
+  mediaId?: string; // id da mídia (Meta) para download via Graph API
   externalId?: string; // id da mensagem no provedor
   timestamp?: string;
   isGroup?: boolean; // conversa de grupo

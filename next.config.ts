@@ -27,8 +27,8 @@ const securityHeaders = [
       "font-src 'self'",
       // Conexões: self + Supabase (API + Realtime)
       `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} wss://*.supabase.co`,
-      // Mídia: self + blob (preview de upload)
-      "media-src 'self' blob:",
+      // Mídia (áudio/vídeo): self + blob (preview) + Supabase (áudios/vídeos re-hospedados)
+      `media-src 'self' data: blob: ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}`,
       // Frames: só a própria origem
       "frame-ancestors 'self'",
       "object-src 'none'",

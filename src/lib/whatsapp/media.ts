@@ -24,16 +24,32 @@ export async function storeInboundMedia(
   const provider = getProvider(channel);
   if (!provider.downloadMedia) return {};
 
-  const { url, mimetype, transcription } = await provider.downloadMedia(externalId).catch(() => ({}) as never);
+  const { url, buffer, mimetype, transcription } = await provider
+    .downloadMedia(externalId)
+    .catch(() => ({}) as { url?: string; buffer?: Buffer; mimetype?: string; transcription?: string });
+  const safeId = externalId.replace(/[^a-zA-Z0-9]/g, "").slice(-40);
+
+  // Meta: os bytes já vieram (a URL da Graph API exige auth). Sobe direto no Storage.
+  if (buffer) {
+    try {
+      const ct = mimetype || "application/octet-stream";
+      const ext = EXT[ct.split(";")[0]] || "bin";
+      const path = `${channel.organization_id}/${safeId}.${ext}`;
+      const { error } = await db.storage.from("media").upload(path, buffer, { contentType: ct, upsert: true });
+      if (!error) return { url: db.storage.from("media").getPublicUrl(path).data.publicUrl, transcription };
+    } catch { /* segue sem url */ }
+    return { transcription };
+  }
+
   if (!url) return { transcription };
 
+  // UAZAPI: URL pública → baixa e re-hospeda.
   try {
     const resp = await fetch(url);
     if (resp.ok) {
       const buf = Buffer.from(await resp.arrayBuffer());
       const ct = resp.headers.get("content-type") || mimetype || "application/octet-stream";
       const ext = EXT[ct.split(";")[0]] || (url.split(".").pop() || "bin").slice(0, 5);
-      const safeId = externalId.replace(/[^a-zA-Z0-9]/g, "").slice(-40);
       const path = `${channel.organization_id}/${safeId}.${ext}`;
       const { error } = await db.storage
         .from("media")
