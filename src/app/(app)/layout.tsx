@@ -18,10 +18,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (!session) redirect("/login");
     if (!session.organization) redirect("/onboarding");
 
-    // 2FA obrigatório (opcional via env REQUIRE_2FA=true). Quem ainda não está
-    // em AAL2 é mandado para /2fa (cadastrar ou validar o código). Contas em
-    // MFA_EXEMPT_EMAILS ficam isentas (ex.: revisor da Meta durante o review).
-    if (process.env.REQUIRE_2FA === "true") {
+    // 2FA obrigatório por PADRÃO para todos os usuários não isentos. Quem ainda
+    // não está em AAL2 é mandado para /2fa (cadastrar ou validar o código).
+    // Isentos: DEFAULT_EXEMPT (dono + revisor) + MFA_EXEMPT_EMAILS.
+    // Off-switch: definir REQUIRE_2FA=false desliga a exigência globalmente.
+    if (process.env.REQUIRE_2FA !== "false") {
       // Isenções padrão (garantidas mesmo sem a env): dono do app + revisor da Meta.
       // Pode remover depois (ex.: após a aprovação da Meta) se quiser exigir 2FA deles.
       const DEFAULT_EXEMPT = ["admin@mvf.com.br", "revisor@benitechlab.com"];
