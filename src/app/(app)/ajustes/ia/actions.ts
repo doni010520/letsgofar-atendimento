@@ -17,7 +17,7 @@ export async function saveAiAgent(fd: FormData) {
   const values = {
     name: String(fd.get("name") || "").trim() || "Agente de IA",
     prompt: String(fd.get("prompt") || "").trim() || null,
-    model: String(fd.get("model") || "gpt-4o-mini"),
+    model: "gpt-4.1-mini", // modelo fixo (seletor removido da UI)
     channel_id: channelId,
     active: fd.get("active") === "on",
     config: {

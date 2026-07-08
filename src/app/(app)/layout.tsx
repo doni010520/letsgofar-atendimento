@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/toast";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let orgName = "Modo preview";
   let email: string | undefined;
   let userId: string | null = null;
+  let admin = true; // preview: mostra tudo
 
   if (hasEnv) {
     const session = await getSession();
@@ -49,11 +50,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     orgName = session.organization.name;
     email = session.profile?.email ?? undefined;
     userId = session.userId ?? null;
+    admin = isAdmin(session.profile);
   }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar isAdmin={admin} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar userName={userName} orgName={orgName} email={email} userId={userId} />
         {!hasEnv && (

@@ -13,6 +13,7 @@ import {
   Tag,
   Building2,
   Contact,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,6 +21,8 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Item visível apenas para administradores. */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -43,6 +46,7 @@ export const NAV: NavGroup[] = [
       { href: "/atendimento-v2", label: "Atendimento V2", icon: LayoutGrid },
       { href: "/mensagens", label: "Mensagens", icon: Tag },
       { href: "/automacoes", label: "Automações", icon: Bot },
+      { href: "/ajustes/ia", label: "Agente de IA", icon: Sparkles, adminOnly: true },
       { href: "/campanhas", label: "Campanhas", icon: Megaphone },
     ],
   },

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, X, Bot, MessageSquare, Settings2, ChevronRight, ChevronLeft, Check } from "lucide-react";
-import { Button, Card } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { saveAiAgent, deleteAiAgent } from "@/app/(app)/ajustes/ia/actions";
 import type { Channel } from "@/lib/types";
 
@@ -29,12 +29,6 @@ export interface AiAgentRow {
   };
 }
 
-const MODELS = [
-  { id: "gpt-4o-mini", label: "GPT-4o mini (rápido e barato)" },
-  { id: "gpt-4o", label: "GPT-4o (mais capaz)" },
-  { id: "gpt-4.1-mini", label: "GPT-4.1 mini" },
-  { id: "gpt-4.1", label: "GPT-4.1" },
-];
 
 const TONES = ["Profissional", "Amigável", "Casual", "Formal", "Empático", "Direto", "Divertido"];
 const VOICES = [
@@ -225,20 +219,12 @@ function AgentWizard({ agent, channels, defaultBasePrompt, onClose }: { agent: A
                   placeholder="Ex.: Atue como um especialista em suporte técnico, mantendo um tom profissional e empático."
                   className={`${inputCls} resize-none font-mono`} />
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-ink-soft">Modelo</label>
-                  <select name="model" defaultValue={agent?.model ?? "gpt-4o-mini"} className={inputCls}>
-                    {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-ink-soft">Tom de voz</label>
-                  <select name="tone" defaultValue={c.tone ?? ""} className={inputCls}>
-                    <option value="">Padrão (cordial e objetivo)</option>
-                    {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Tom de voz</label>
+                <select name="tone" defaultValue={c.tone ?? ""} className={inputCls}>
+                  <option value="">Padrão (cordial e objetivo)</option>
+                  {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">

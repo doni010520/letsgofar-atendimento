@@ -7,7 +7,7 @@ import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   // Padrão: menu FIXO aberto. Só recolhe se o usuário tiver escolhido soltar ("0").
   const [pinned, setPinned] = useState(true);
@@ -59,7 +59,7 @@ export function Sidebar() {
               ) : (
                 <span className="mx-auto my-1 h-px w-6 bg-border" aria-hidden />
               )}
-              {group.items.map((item) => {
+              {group.items.filter((item) => !item.adminOnly || isAdmin).map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + "/");
                 const Icon = item.icon;
                 return (
