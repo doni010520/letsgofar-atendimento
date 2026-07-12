@@ -29,12 +29,15 @@ export function CloseModal({
 }: {
   tags: Tag[];
   protocol: string | null;
-  onConfirm: (opts: { reason: string; tagIds: string[]; sendSurvey: boolean }) => void;
+  onConfirm: (opts: { reason: string; solution: string; forwardings: string; pending: string; tagIds: string[]; sendSurvey: boolean }) => void;
   onCancel: () => void;
   pending?: boolean;
 }) {
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [reason, setReason] = useState("");
+  const [solution, setSolution] = useState("");
+  const [forwardings, setForwardings] = useState("");
+  const [pendencias, setPendencias] = useState("");
   const [sendSurvey, setSendSurvey] = useState(false);
 
   function toggle(id: string) {
@@ -79,14 +82,47 @@ export function CloseModal({
         </div>
       )}
 
-      <label className="mb-1.5 block text-xs font-medium text-ink-soft">Motivo do encerramento</label>
+      <p className="mb-2 text-[11px] text-ink-soft">
+        Registre o atendimento para que qualquer atendente dê continuidade depois — sem o cliente repetir tudo.
+      </p>
+
+      <label className="mb-1.5 block text-xs font-medium text-ink-soft">Motivo do atendimento</label>
       <textarea
         autoFocus
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        rows={3}
-        placeholder="Ex.: Dúvida resolvida, cliente satisfeito."
+        rows={2}
+        placeholder="Por que o cliente entrou em contato?"
         className={`mb-3 resize-none ${inputCls}`}
+      />
+
+      <label className="mb-1.5 block text-xs font-medium text-ink-soft">Solução apresentada</label>
+      <textarea
+        value={solution}
+        onChange={(e) => setSolution(e.target.value)}
+        rows={2}
+        placeholder="O que foi feito / orientado para resolver."
+        className={`mb-3 resize-none ${inputCls}`}
+      />
+
+      <label className="mb-1.5 block text-xs font-medium text-ink-soft">Encaminhamentos realizados</label>
+      <textarea
+        value={forwardings}
+        onChange={(e) => setForwardings(e.target.value)}
+        rows={2}
+        placeholder="Ex.: aberto chamado técnico, transferido ao financeiro…"
+        className={`mb-3 resize-none ${inputCls}`}
+      />
+
+      <label className="mb-1.5 block text-xs font-medium text-ink-soft">
+        Pendências <span className="font-normal text-ink-soft/70">(se houver)</span>
+      </label>
+      <textarea
+        value={pendencias}
+        onChange={(e) => setPendencias(e.target.value)}
+        rows={2}
+        placeholder="O que ficou em aberto para o próximo atendimento."
+        className={`mb-3 resize-none ${inputCls} border-amber-300 focus:border-amber-400`}
       />
 
       <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-ink">
@@ -107,7 +143,7 @@ export function CloseModal({
           Cancelar
         </button>
         <button
-          onClick={() => onConfirm({ reason, tagIds, sendSurvey })}
+          onClick={() => onConfirm({ reason, solution, forwardings, pending: pendencias, tagIds, sendSurvey })}
           disabled={pending}
           className="rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
         >

@@ -592,7 +592,7 @@ export function Inbox({
     setClosing(true);
   }
 
-  function confirmClose(opts: { reason: string; tagIds: string[]; sendSurvey: boolean }) {
+  function confirmClose(opts: { reason: string; solution: string; forwardings: string; pending: string; tagIds: string[]; sendSurvey: boolean }) {
     if (!selectedId) return;
     const id = selectedId;
     setClosing(false);

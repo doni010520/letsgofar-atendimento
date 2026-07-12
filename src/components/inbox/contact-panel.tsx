@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Users, Crown, Shield, Loader2, Save, Check, History, Hash, Receipt, QrCode, Unlock, Wrench, Plus, Printer, UserMinus } from "lucide-react";
+import { X, Users, Crown, Shield, Loader2, Save, Check, Receipt, QrCode, Unlock, Wrench, Plus, Printer, UserMinus } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
+import { AttendanceHistory, type AttendanceHistoryItem } from "./attendance-history";
 import {
   getContactDetails,
   updateContactDetails,
@@ -44,7 +45,7 @@ export function ContactPanel({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [history, setHistory] = useState<{ id: string; protocol: string | null; status: string; opened_at: string | null; closed_at: string | null }[]>([]);
+  const [history, setHistory] = useState<AttendanceHistoryItem[]>([]);
 
   useEffect(() => {
     let cancel = false;
@@ -234,31 +235,10 @@ export function ContactPanel({
               </div>
             )}
 
-            {/* Histórico de atendimentos anteriores */}
+            {/* Histórico de atendimentos anteriores (com resumo + pendências) */}
             {history.length > 0 && (
               <div className="mt-4 border-t border-border pt-4">
-                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-ink-soft">
-                  <History size={12} /> Atendimentos anteriores
-                </p>
-                <div className="space-y-1.5">
-                  {history.map((h) => (
-                    <div key={h.id} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
-                      {h.protocol && (
-                        <span className="inline-flex items-center gap-0.5 font-mono text-ink-soft">
-                          <Hash size={9} />{h.protocol}
-                        </span>
-                      )}
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                        h.status === "closed" ? "bg-gray-100 text-ink-soft" : "bg-green-100 text-green-700"
-                      }`}>
-                        {h.status === "closed" ? "Encerrado" : "Aberto"}
-                      </span>
-                      <span className="ml-auto text-ink-soft">
-                        {h.opened_at ? (() => { const d = new Date(h.opened_at); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })() : "—"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <AttendanceHistory items={history} currentId={conversation.id} />
               </div>
             )}
           </div>

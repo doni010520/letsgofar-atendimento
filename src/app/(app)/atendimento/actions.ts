@@ -179,11 +179,32 @@ export async function getContactHistory(conversationId: string) {
   if (!conv) return [];
   const { data } = await supabase
     .from("conversations")
-    .select("id, protocol, status, opened_at, closed_at")
+    .select("id, protocol, status, opened_at, closed_at, close_reason")
     .eq("contact_id", conv.contact_id)
     .order("created_at", { ascending: false })
     .limit(20);
-  return (data ?? []) as { id: string; protocol: string | null; status: string; opened_at: string | null; closed_at: string | null }[];
+  const rows = (data ?? []) as { id: string; protocol: string | null; status: string; opened_at: string | null; closed_at: string | null; close_reason: string | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    protocol: r.protocol,
+    status: r.status,
+    opened_at: r.opened_at,
+    closed_at: r.closed_at,
+    summary: parseCloseSummary(r.close_reason),
+  }));
+}
+
+/** Resumo estruturado do encerramento (parse do close_reason, com fallback para
+ *  reasons antigos em texto puro). Não exportado (arquivo "use server"). */
+function parseCloseSummary(raw: string | null): { motivo: string; solucao: string; encaminhamentos: string; pendencias: string } | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw) as Record<string, string>;
+    if (o && typeof o === "object" && ("motivo" in o || "solucao" in o || "encaminhamentos" in o || "pendencias" in o)) {
+      return { motivo: o.motivo ?? "", solucao: o.solucao ?? "", encaminhamentos: o.encaminhamentos ?? "", pendencias: o.pendencias ?? "" };
+    }
+  } catch { /* não é JSON: reason antigo em texto puro */ }
+  return { motivo: raw, solucao: "", encaminhamentos: "", pendencias: "" };
 }
 
 /** Salva nome, observações e campos personalizados (CRM) do contato. */
@@ -662,7 +683,10 @@ export async function assignToMe(conversationId: string) {
 }
 
 export interface CloseOptions {
-  reason?: string;
+  reason?: string; // Motivo do atendimento
+  solution?: string; // Solução apresentada
+  forwardings?: string; // Encaminhamentos realizados
+  pending?: string; // Pendências (se houver)
   tagIds?: string[];
   sendSurvey?: boolean;
 }
@@ -715,17 +739,33 @@ export async function closeConversation(conversationId: string, opts: CloseOptio
     }
   }
 
+  // Resumo estruturado do atendimento (continuidade): motivo, solução,
+  // encaminhamentos e pendências — guardado como JSON no close_reason.
+  const summary = {
+    motivo: opts.reason?.trim() || "",
+    solucao: opts.solution?.trim() || "",
+    encaminhamentos: opts.forwardings?.trim() || "",
+    pendencias: opts.pending?.trim() || "",
+  };
+  const hasSummary = Object.values(summary).some(Boolean);
+
   await supabase
     .from("conversations")
     .update({
       status: "closed",
       closed_at: new Date().toISOString(),
-      close_reason: opts.reason?.trim() || null,
+      close_reason: hasSummary ? JSON.stringify(summary) : null,
     })
     .eq("id", conversationId);
 
   // Registro interno do encerramento (histórico, não vai ao cliente).
-  if (opts.reason?.trim()) {
+  if (hasSummary) {
+    const lines = [
+      summary.motivo && `*Motivo:* ${summary.motivo}`,
+      summary.solucao && `*Solução:* ${summary.solucao}`,
+      summary.encaminhamentos && `*Encaminhamentos:* ${summary.encaminhamentos}`,
+      summary.pendencias && `*Pendências:* ${summary.pendencias}`,
+    ].filter(Boolean).join("\n");
     await supabase.from("messages").insert({
       organization_id: session.organization.id,
       conversation_id: conversationId,
@@ -733,7 +773,7 @@ export async function closeConversation(conversationId: string, opts: CloseOptio
       sender_type: "system",
       sender_id: session.userId,
       content_type: "text",
-      body: `Atendimento encerrado — Motivo: ${opts.reason.trim()}`,
+      body: `📋 Atendimento encerrado\n${lines}`,
       is_internal: true,
       status: "sent",
     });
