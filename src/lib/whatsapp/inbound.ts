@@ -10,6 +10,23 @@ import { logEvent } from "@/lib/log";
 // Cache de participantes por grupo (5 min) para resolver menções sem bater toda hora.
 const groupPartsCache = new Map<string, { at: number; parts: { phone: string; lid: string }[] }>();
 
+// Mutex por conversa: serializa os turnos do bot DENTRO do processo. Sem isto,
+// mensagens do cliente em sequência ("Sim" → "internet lenta" → CPF) que escapam
+// do debounce disparam runChatbot concorrentes que atropelam bot_node_id/histórico
+// — a IA re-saúda ("você já é nosso cliente?") e ferramentas rodam 2×. O app roda
+// em processo único (Easypanel), então um lock em memória basta.
+const convChains = new Map<string, Promise<unknown>>();
+function runExclusive<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = convChains.get(key) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  convChains.set(key, next);
+  // Libera a chave quando esta for a última execução na fila (evita vazamento).
+  next.catch(() => {}).finally(() => {
+    if (convChains.get(key) === next) convChains.delete(key);
+  });
+  return next;
+}
+
 /** Troca "@<número/lid>" no texto pelo nome do participante (resolvido via grupo + contatos). */
 async function resolveMentions(db: DB, channel: Channel, groupJid: string, body: string): Promise<string> {
   if (!/@\d{5,}/.test(body)) return body;
@@ -437,18 +454,48 @@ export async function persistInbound(messages: InboundMessage[]) {
         if (fresh && fresh.status !== "bot" && !isNew) continue;
         botNode = fresh?.bot_node_id ?? convBotNode;
       }
-      const r = await runChatbot(
-        db,
-        channel as Channel,
-        { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: botNode },
-        automation as { id: string; flow: { nodes: never[]; edges: never[] }; integration_id?: string | null },
-        body ?? "",
-      ).catch((e) => {
-        console.warn("chatbot", (e as Error)?.message);
-        void logEvent("error", "chatbot", `Falha no chatbot: ${(e as Error)?.message ?? e}`, { conversationId }, org);
-        return null;
+      // Seção crítica serializada por conversa (ver runExclusive): garante que
+      // um turno leia o estado/histórico já consolidados pelo turno anterior.
+      await runExclusive(conversationId, async () => {
+        // Re-lê o estado DENTRO do lock (pode ter mudado enquanto esperava a vez).
+        const { data: cur } = await db
+          .from("conversations")
+          .select("status, bot_node_id")
+          .eq("id", conversationId)
+          .maybeSingle();
+        if (cur && cur.status !== "bot" && !isNew) return; // humano assumiu
+
+        // Guard anti-duplicação: se o BOT já respondeu depois desta mensagem,
+        // outro turno da rajada já a atendeu — não responde de novo (é o que
+        // evita a re-saudação e o consultar_cliente em dobro). Só considera
+        // sender_type "bot"; auto-mensagens de evento (welcome/away) são "system"
+        // e não devem bloquear a saudação inicial em conversas novas.
+        if (inboundTs) {
+          const { data: answered } = await db
+            .from("messages")
+            .select("id")
+            .eq("conversation_id", conversationId)
+            .eq("direction", "out")
+            .eq("sender_type", "bot")
+            .gt("created_at", inboundTs)
+            .limit(1)
+            .maybeSingle();
+          if (answered) return;
+        }
+
+        const r = await runChatbot(
+          db,
+          channel as Channel,
+          { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: cur?.bot_node_id ?? botNode },
+          automation as { id: string; flow: { nodes: never[]; edges: never[] }; integration_id?: string | null },
+          body ?? "",
+        ).catch((e) => {
+          console.warn("chatbot", (e as Error)?.message);
+          void logEvent("error", "chatbot", `Falha no chatbot: ${(e as Error)?.message ?? e}`, { conversationId }, org);
+          return null;
+        });
+        if (r === "queued") await db.from("conversations").update({ status: "queued" }).eq("id", conversationId);
       });
-      if (r === "queued") await db.from("conversations").update({ status: "queued" }).eq("id", conversationId);
     }
   }
 }
