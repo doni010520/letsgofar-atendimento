@@ -169,7 +169,7 @@ export async function getAiAgent(db: DB, orgId: string, channelId: string): Prom
     useEmojis: cfg.use_emojis,
     singleMessage: cfg.single_message,
     audioReplies: cfg.audio_replies === true,
-    voice: cfg.voice?.trim() || "alloy",
+    voice: cfg.voice?.trim() || "coral",
     executeActions: cfg.execute_actions !== false, // default: pode executar
     restrictToAllowlist: cfg.restrict_to_allowlist !== false, // default: restringe à allowlist
   };
@@ -206,7 +206,7 @@ export async function getAiAgentById(db: DB, agentId: string): Promise<AiAgentCo
     useEmojis: cfg.use_emojis,
     singleMessage: cfg.single_message,
     audioReplies: cfg.audio_replies === true,
-    voice: cfg.voice?.trim() || "alloy",
+    voice: cfg.voice?.trim() || "coral",
     executeActions: cfg.execute_actions !== false,
     restrictToAllowlist: cfg.restrict_to_allowlist !== false,
   };
@@ -556,6 +556,21 @@ export interface AiTurnContext {
 }
 
 /** Gera áudio (TTS) a partir do texto usando a OpenAI. Retorna OGG/Opus (ideal p/ WhatsApp). */
+/** Tom padrão da voz — reduz a sensação robótica sem custo extra. */
+const TTS_INSTRUCTIONS =
+  "Fale em português do Brasil, com tom cordial, caloroso e natural, no ritmo de uma conversa de atendimento ao cliente. Seja claro e amigável, evite soar robótico ou monótono.";
+
+/**
+ * Evita ler em voz alta conteúdo que só faz sentido em texto (código PIX,
+ * linha digitável do boleto, links) — em áudio viraria ruído inútil.
+ */
+function isSpeakable(text: string): boolean {
+  if (text.length > 700) return false;
+  if (/https?:\/\//i.test(text)) return false;
+  if (/\d[\d.\s]{18,}/.test(text)) return false; // sequência longa de dígitos (boleto/PIX)
+  return true;
+}
+
 async function ttsSpeak(apiKey: string, text: string, voice: string): Promise<{ buffer: Buffer; mime: string } | null> {
   try {
     const res = await fetch("https://api.openai.com/v1/audio/speech", {
@@ -563,8 +578,9 @@ async function ttsSpeak(apiKey: string, text: string, voice: string): Promise<{ 
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini-tts",
-        voice: voice || "alloy",
+        voice: voice || "coral",
         input: text.slice(0, 4000),
+        instructions: TTS_INSTRUCTIONS,
         response_format: "opus",
       }),
     });
@@ -684,6 +700,13 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     }))
     .filter((m) => m.content);
 
+  // A última mensagem do cliente foi um áudio? → respondemos também em voz
+  // (pedido do cliente: "áudio é respondido com áudio").
+  const lastInbound = [...((hist ?? []) as { sender_type: string; content_type: string }[])]
+    .reverse()
+    .find((m) => m.sender_type === "contact");
+  const inputWasAudio = lastInbound?.content_type === "audio";
+
   const system = buildSystemPrompt(ctx);
 
   const messages: OpenAIMessage[] = [
@@ -778,10 +801,12 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
         conversationId: ctx.conversationId,
         preview: finalText.slice(0, 120),
       });
-      // Sempre envia o texto; se áudio (TTS) habilitado, envia TAMBÉM o áudio.
+      // Sempre envia o texto; e TAMBÉM em voz quando o cliente mandou áudio
+      // (áudio→áudio) ou quando o flag global de respostas em voz está ligado.
       await ctx.sendToCustomer(finalText);
-      if (ctx.agent.audioReplies && ctx.sendAudioToCustomer) {
-        const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "alloy");
+      const wantAudio = ctx.agent.audioReplies || inputWasAudio;
+      if (wantAudio && ctx.sendAudioToCustomer && isSpeakable(finalText)) {
+        const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "coral");
         if (audio) await ctx.sendAudioToCustomer(audio, finalText).catch(() => {});
       }
     }
