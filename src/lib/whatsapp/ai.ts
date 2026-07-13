@@ -101,7 +101,7 @@ FLUXO QUE VOCÊ DEVE SEGUIR (não pule etapas):
 3. COLETA DE DOCUMENTO: peça "Por favor, informe o *CPF* ou *CNPJ* para o qual deseja atendimento.".
 4. VALIDAÇÃO: chame a tool consultar_cliente com o CPF/CNPJ informado.
    - Não encontrado/ inválido → "Ops!! O *CPF/CNPJ* informado é invalido." e peça de novo. Após 2 tentativas sem sucesso, use transferir_para_humano(setor="suporte", motivo="cliente não localizado no sistema").
-   - Encontrado → responda "Um momento por favor" e em seguida "Como posso ajudar?". Guarde o número do contrato (contratoId) para as próximas ações.
+   - Encontrado → responda "Um momento por favor" e em seguida "Como posso ajudar?". Se o cadastro tiver MAIS DE UM contrato, liste os planos e PERGUNTE qual o cliente deseja antes de gerar 2ª via/PIX. Nas ferramentas do SGP, passe o *cpfcnpj* do cliente OU o *contratoId EXATO* retornado por consultar_cliente — NUNCA invente um número de contrato.
 5. INTENÇÃO (interprete a mensagem do cliente):
    - FINANCEIRO / 2ª via / pagamento: se o cliente quer pagar ou pedir boleto, use faturas_em_aberto e segunda_via para enviar o link de pagamento e a linha digitável; se ele quiser PIX, use gerar_pix. Se o cliente ENVIAR um COMPROVANTE (imagem/PDF), responda "Recebemos seu comprovante. Muito obrigado!", registre com registrar_comprovante e transfira para o financeiro com transferir_para_humano(setor="financeiro").
    - SUPORTE TÉCNICO (internet ruim/sem conexão): faça a TRIAGEM você mesmo, conversando:
@@ -383,8 +383,41 @@ const TOOLS = [
   },
 ] as const;
 
+/**
+ * Memo do SGP por conversa: o cadastro (CPF) e os contratos REAIS do cliente,
+ * capturados no consultar_cliente e persistidos em conversations.variables.__sgp.
+ * Serve para as ferramentas financeiras não dependerem de o modelo "lembrar" o
+ * número do contrato (o histórico reconstruído não carrega o resultado das tools)
+ * — evita que a IA invente um contratoId (ex.: 16049/123456) e o boleto "suma".
+ */
+export type SgpMemo = { cpf?: string; contratos: { id: number; plano?: string; valorEmAberto?: number; titulosAReceber?: number }[] };
+
+const memoContratos = (contratos: { contrato: number; plano?: string; valorEmAberto?: number; titulosAReceber?: number }[]) =>
+  contratos.filter((c) => c.contrato).map((c) => ({ id: c.contrato, plano: c.plano, valorEmAberto: c.valorEmAberto, titulosAReceber: c.titulosAReceber }));
+
+/** Carrega o memo do SGP de conversations.variables.__sgp (vazio se não houver). */
+async function loadSgpMemo(db: AiTurnContext["db"], conversationId: string): Promise<SgpMemo> {
+  try {
+    const { data } = await db.from("conversations").select("variables").eq("id", conversationId).maybeSingle();
+    const saved = (data?.variables as Record<string, unknown> | null)?.__sgp as SgpMemo | undefined;
+    if (saved && typeof saved === "object") {
+      return { cpf: saved.cpf, contratos: Array.isArray(saved.contratos) ? saved.contratos : [] };
+    }
+  } catch { /* ignora — memo é otimização, não crítico */ }
+  return { contratos: [] };
+}
+
+/** Persiste o memo em variables.__sgp preservando as demais variáveis da conversa. */
+async function saveSgpMemo(db: AiTurnContext["db"], conversationId: string, memo: SgpMemo): Promise<void> {
+  try {
+    const { data } = await db.from("conversations").select("variables").eq("id", conversationId).maybeSingle();
+    const vars = { ...((data?.variables as Record<string, unknown>) ?? {}), __sgp: { cpf: memo.cpf, contratos: memo.contratos } };
+    await db.from("conversations").update({ variables: vars }).eq("id", conversationId);
+  } catch { /* ignora */ }
+}
+
 /** Executa uma ferramenta do SGP e devolve um resultado serializável p/ o modelo. */
-async function executeTool(name: string, args: Record<string, unknown>, sgp: SgpClient | null): Promise<unknown> {
+async function executeTool(name: string, args: Record<string, unknown>, sgp: SgpClient | null, memo: SgpMemo): Promise<unknown> {
   if (name === "transferir_para_humano" || name === "finalizar_atendimento" || name === "registrar_comprovante") {
     return { ok: true };
   }
@@ -393,6 +426,18 @@ async function executeTool(name: string, args: Record<string, unknown>, sgp: Sgp
   }
   const num = (v: unknown) => (v == null ? undefined : Number(v));
   const str = (v: unknown) => (v == null ? undefined : String(v));
+  const knownIds = () => memo.contratos.map((c) => c.id);
+  /**
+   * Resolve um contratoId CONFIÁVEL: descarta números que não pertencem ao
+   * cliente (alucinação do modelo) e, se o cliente só tem um contrato, usa-o.
+   */
+  const resolveContrato = (raw?: number): number | undefined => {
+    const ids = knownIds();
+    if (raw != null && ids.length && !ids.includes(raw)) return undefined; // não é do cliente
+    if (raw != null) return raw;
+    if (ids.length === 1) return ids[0];
+    return undefined;
+  };
   try {
     switch (name) {
       case "consultar_cliente": {
@@ -401,6 +446,10 @@ async function executeTool(name: string, args: Record<string, unknown>, sgp: Sgp
           telefone: str(args.telefone),
           contrato: num(args.contrato),
         });
+        if (c.encontrado) {
+          memo.cpf = (c.cpfcnpj ?? str(args.cpfcnpj))?.replace(/\D+/g, "") || memo.cpf;
+          memo.contratos = memoContratos(c.contratos);
+        }
         return {
           encontrado: c.encontrado,
           nome: c.nome,
@@ -415,10 +464,14 @@ async function executeTool(name: string, args: Record<string, unknown>, sgp: Sgp
         };
       }
       case "faturas_em_aberto": {
-        const t = await sgp.titulosEmAberto({ contrato: num(args.contrato), cpfcnpj: str(args.cpfcnpj) });
+        const contrato = resolveContrato(num(args.contrato));
+        const cpf = str(args.cpfcnpj) ?? memo.cpf;
+        if (!contrato && !cpf) return { erro: "Cliente não identificado. Use consultar_cliente antes." };
+        const t = await sgp.titulosEmAberto(contrato ? { contrato } : { cpfcnpj: cpf });
         return {
           faturas: t.map((f) => ({
             fatura: f.fatura,
+            contrato: f.contrato,
             valor: f.valor,
             vencimento: f.vencimento,
             diasAtraso: f.diasAtraso,
@@ -427,24 +480,49 @@ async function executeTool(name: string, args: Record<string, unknown>, sgp: Sgp
         };
       }
       case "segunda_via": {
-        const sv = await sgp.segundaVia({ contrato: num(args.contrato), cpfcnpj: str(args.cpfcnpj) });
-        return { ok: sv.ok, protocolo: sv.protocolo, faturas: sv.faturas };
+        const contrato = resolveContrato(num(args.contrato));
+        const cpf = str(args.cpfcnpj) ?? memo.cpf;
+        if (!contrato && !cpf) return { erro: "Cliente não identificado. Use consultar_cliente antes." };
+        const sv = await sgp.segundaVia(contrato ? { contrato } : { cpfcnpj: cpf });
+        let protocolo = sv.protocolo;
+        let faturas: (typeof sv.faturas[number] & { contrato?: number })[] = sv.faturas.map((f) => ({ ...f, contrato }));
+        // fatura2via por CPF falha quando o cliente tem +1 contrato ("Favor
+        // informar o id do contrato"). Resolve gerando a 2ª via por contrato.
+        if (!faturas.length && !contrato) {
+          let ids = knownIds();
+          if (!ids.length && cpf) {
+            const cli = await sgp.consultarCliente({ cpfcnpj: cpf });
+            if (cli.encontrado) { memo.cpf = cpf; memo.contratos = memoContratos(cli.contratos); ids = knownIds(); }
+          }
+          const acc: (typeof sv.faturas[number] & { contrato?: number })[] = [];
+          for (const id of ids) {
+            const r = await sgp.segundaVia({ contrato: id });
+            protocolo = protocolo ?? r.protocolo;
+            acc.push(...r.faturas.map((f) => ({ ...f, contrato: id })));
+          }
+          faturas = acc;
+        }
+        return { ok: faturas.length > 0, protocolo, faturas };
       }
       case "gerar_pix": {
-        const px = await sgp.gerarPix(num(args.fatura)!, num(args.contrato));
+        const px = await sgp.gerarPix(num(args.fatura)!, resolveContrato(num(args.contrato)));
         return { ok: px.ok, codigoPix: px.codigoPix };
       }
       case "liberacao_confianca": {
-        const r = await sgp.liberacaoConfianca({ contrato: num(args.contrato)! });
+        const contrato = resolveContrato(num(args.contrato));
+        if (!contrato) return { ok: false, mensagem: "Contrato não identificado. Confirme o cadastro com consultar_cliente." };
+        const r = await sgp.liberacaoConfianca({ contrato });
         return { ok: r.ok, protocolo: r.protocolo, mensagem: r.mensagem };
       }
       case "status_conexao": {
-        const r = await sgp.statusConexao({ contrato: num(args.contrato), telefone: str(args.telefone) });
+        const r = await sgp.statusConexao({ contrato: resolveContrato(num(args.contrato)), telefone: str(args.telefone) });
         return { online: r.online, mensagem: r.mensagem };
       }
       case "abrir_chamado": {
+        const contrato = resolveContrato(num(args.contrato));
+        if (!contrato) return { ok: false, mensagem: "Contrato não identificado. Confirme o cadastro com consultar_cliente." };
         const r = await sgp.abrirChamado({
-          contrato: num(args.contrato)!,
+          contrato,
           ocorrenciatipo: num(args.ocorrenciatipo) ?? 1,
           conteudo: str(args.conteudo),
         });
@@ -580,6 +658,10 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     ? await sgpForIntegration(ctx.db, ctx.integrationId).catch(() => null)
     : await sgpForOrg(ctx.db, ctx.organizationId).catch(() => null);
 
+  // Memo do SGP (cpf + contratos reais) persistido em variables.__sgp — as
+  // ferramentas o usam para resolver o contrato certo entre turnos.
+  const sgpMemo = await loadSgpMemo(ctx.db, ctx.conversationId);
+
   // Histórico recente (exclui notas internas).
   const { data: hist } = await ctx.db
     .from("messages")
@@ -674,7 +756,7 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
           decision = "done";
           summary = typeof args.resumo === "string" ? args.resumo : undefined;
         }
-        const result = await executeTool(tc.function.name, args, sgp);
+        const result = await executeTool(tc.function.name, args, sgp, sgpMemo);
         const failed = !!(result && typeof result === "object" && ("error" in result || "erro" in result));
         void logEvent(failed ? "error" : "info", "ai", `Ferramenta ${tc.function.name}${failed ? " falhou" : ""}`, {
           conversationId: ctx.conversationId,
@@ -684,6 +766,8 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
         });
         messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
       }
+      // Persiste o memo do SGP (cadastro identificado) para os próximos turnos.
+      if (sgpMemo.contratos.length || sgpMemo.cpf) await saveSgpMemo(ctx.db, ctx.conversationId, sgpMemo);
       continue; // deixa o modelo redigir a resposta ao cliente após as ferramentas
     }
 
