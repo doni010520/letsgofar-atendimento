@@ -169,7 +169,7 @@ export async function getAiAgent(db: DB, orgId: string, channelId: string): Prom
     useEmojis: cfg.use_emojis,
     singleMessage: cfg.single_message,
     audioReplies: cfg.audio_replies === true,
-    voice: cfg.voice?.trim() || "coral",
+    voice: cfg.voice?.trim() || "ash",
     executeActions: cfg.execute_actions !== false, // default: pode executar
     restrictToAllowlist: cfg.restrict_to_allowlist !== false, // default: restringe à allowlist
   };
@@ -206,7 +206,7 @@ export async function getAiAgentById(db: DB, agentId: string): Promise<AiAgentCo
     useEmojis: cfg.use_emojis,
     singleMessage: cfg.single_message,
     audioReplies: cfg.audio_replies === true,
-    voice: cfg.voice?.trim() || "coral",
+    voice: cfg.voice?.trim() || "ash",
     executeActions: cfg.execute_actions !== false,
     restrictToAllowlist: cfg.restrict_to_allowlist !== false,
   };
@@ -556,9 +556,10 @@ export interface AiTurnContext {
 }
 
 /** Gera áudio (TTS) a partir do texto usando a OpenAI. Retorna OGG/Opus (ideal p/ WhatsApp). */
-/** Tom padrão da voz — reduz a sensação robótica sem custo extra. */
+/** Tom padrão da voz — reduz a sensação robótica sem custo extra. Sem travar
+ *  gênero: a voz configurada define o timbre; a instrução foca em naturalidade. */
 const TTS_INSTRUCTIONS =
-  "Fale em português do Brasil, com tom cordial, caloroso e natural, no ritmo de uma conversa de atendimento ao cliente. Seja claro e amigável, evite soar robótico ou monótono.";
+  "Fale em português do Brasil como um atendente de internet real, simpático e próximo. Use entonação variada, pausas naturais e ritmo de conversa do dia a dia. Soe como uma pessoa de verdade conversando no WhatsApp — nunca como leitura automática, monótona ou robótica.";
 
 /**
  * Evita ler em voz alta conteúdo que só faz sentido em texto (código PIX,
@@ -578,7 +579,7 @@ async function ttsSpeak(apiKey: string, text: string, voice: string): Promise<{ 
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini-tts",
-        voice: voice || "coral",
+        voice: voice || "ash",
         input: text.slice(0, 4000),
         instructions: TTS_INSTRUCTIONS,
         response_format: "opus",
@@ -806,7 +807,7 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
       await ctx.sendToCustomer(finalText);
       const wantAudio = ctx.agent.audioReplies || inputWasAudio;
       if (wantAudio && ctx.sendAudioToCustomer && isSpeakable(finalText)) {
-        const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "coral");
+        const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "ash");
         if (audio) await ctx.sendAudioToCustomer(audio, finalText).catch(() => {});
       }
     }
