@@ -32,12 +32,16 @@ export interface AiAgentRow {
 
 const TONES = ["Profissional", "Amigável", "Casual", "Formal", "Empático", "Direto", "Divertido"];
 const VOICES = [
+  { id: "ash", label: "Ash (masculina, natural)" },
+  { id: "onyx", label: "Onyx (masculina grave)" },
+  { id: "echo", label: "Echo (masculina)" },
+  { id: "ballad", label: "Ballad (masculina suave)" },
+  { id: "verse", label: "Verse (masculina expressiva)" },
   { id: "alloy", label: "Alloy (neutra)" },
+  { id: "coral", label: "Coral (feminina calorosa)" },
   { id: "nova", label: "Nova (feminina)" },
   { id: "shimmer", label: "Shimmer (feminina suave)" },
-  { id: "echo", label: "Echo (masculina)" },
-  { id: "onyx", label: "Onyx (masculina grave)" },
-  { id: "fable", label: "Fable (expressiva)" },
+  { id: "sage", label: "Sage (feminina)" },
 ];
 
 const inputCls = "w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand";
