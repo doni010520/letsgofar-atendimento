@@ -802,14 +802,20 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
         conversationId: ctx.conversationId,
         preview: finalText.slice(0, 120),
       });
-      // Sempre envia o texto; e TAMBÉM em voz quando o cliente mandou áudio
-      // (áudio→áudio) ou quando o flag global de respostas em voz está ligado.
-      await ctx.sendToCustomer(finalText);
+      // Quando o cliente mandou áudio (ou o flag global está ligado), responde
+      // SÓ em voz — a transcrição vai no corpo da própria mensagem de áudio, então
+      // continua no histórico/auditoria. Cai pro texto se o TTS falhar ou se o
+      // conteúdo não for "falável" (código PIX, linha digitável, link).
       const wantAudio = ctx.agent.audioReplies || inputWasAudio;
+      let sentAudio = false;
       if (wantAudio && ctx.sendAudioToCustomer && isSpeakable(finalText)) {
         const audio = await ttsSpeak(apiKey, finalText, ctx.agent.voice || "ash");
-        if (audio) await ctx.sendAudioToCustomer(audio, finalText).catch(() => {});
+        if (audio) {
+          await ctx.sendAudioToCustomer(audio, finalText).catch(() => {});
+          sentAudio = true;
+        }
       }
+      if (!sentAudio) await ctx.sendToCustomer(finalText);
     }
     break;
   }
