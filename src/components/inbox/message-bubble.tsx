@@ -300,8 +300,8 @@ function Actions({
                 <MessageSquare size={14} /> Responder no privado
               </button>
             )}
-            {out && (
-              <button onClick={() => { onEdit?.(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
+            {out && onEdit && (
+              <button onClick={() => { onEdit(message); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-ink hover:bg-gray-50">
                 <Pencil size={14} /> Editar
               </button>
             )}

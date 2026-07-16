@@ -277,7 +277,9 @@ export function ChatThread({
                 isAdmin={isAdmin}
                 onReply={setReplyTo}
                 onReact={onReact}
-                onEdit={onEdit}
+                // Meta (API Oficial) não permite editar msg enviada → esconde o "Editar"
+                // para não dar falsa impressão (só a cópia local mudaria).
+                onEdit={isMeta ? undefined : onEdit}
                 onDelete={isMeta ? undefined : onDelete}
                 onAuthorClick={onAuthorClick}
                 onReplyPrivate={isGroup ? onReplyPrivate : undefined}
