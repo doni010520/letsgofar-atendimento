@@ -42,21 +42,38 @@ export default function TwoFactorGate() {
     setMode("enroll");
   }
 
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace("/login"); return; }
-      // AAL e fatores em paralelo (não dependem um do outro).
-      const [aalRes, factorsRes] = await Promise.all([
-        supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-        supabase.auth.mfa.listFactors(),
+  // Prepara a tela (challenge se já tem fator verificado; senão enroll com QR).
+  // Erros ficam VISÍVEIS + com "Tentar novamente" (antes travava em "Carregando…").
+  async function load() {
+    setError(null);
+    setMode("loading");
+    try {
+      // Timeout de 15s: se alguma chamada ao Supabase pendurar, vira erro + retry
+      // (antes ficava em "Carregando…" pra sempre).
+      await Promise.race([
+        (async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) { router.replace("/login"); return; }
+          // AAL e fatores em paralelo (não dependem um do outro).
+          const [aalRes, factorsRes] = await Promise.all([
+            supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+            supabase.auth.mfa.listFactors(),
+          ]);
+          if (aalRes.data?.currentLevel === "aal2") { router.replace("/dashboard"); return; }
+          const totp = (factorsRes.data?.totp ?? []) as Factor[];
+          const verified = totp.find((f) => f.status === "verified");
+          if (verified) { setFactorId(verified.id); setMode("challenge"); }
+          else { await startEnroll(totp); } // reusa a lista já buscada
+        })(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000)),
       ]);
-      if (aalRes.data?.currentLevel === "aal2") { router.replace("/dashboard"); return; }
-      const totp = (factorsRes.data?.totp ?? []) as Factor[];
-      const verified = totp.find((f) => f.status === "verified");
-      if (verified) { setFactorId(verified.id); setMode("challenge"); }
-      else { await startEnroll(totp); } // reusa a lista já buscada
-    })().catch(() => setError("Falha ao carregar. Recarregue a página."));
+    } catch {
+      setError("Não consegui preparar a verificação. Toque em Tentar novamente.");
+    }
+  }
+
+  useEffect(() => {
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,9 +133,16 @@ export default function TwoFactorGate() {
         </div>
 
         {mode === "loading" && (
-          <p className="flex items-center justify-center gap-2 text-sm text-ink-soft">
-            <Loader2 size={16} className="animate-spin" /> Carregando…
-          </p>
+          error ? (
+            <div className="space-y-3 text-center">
+              <p className="text-sm text-danger">{error}</p>
+              <Button onClick={load} className="w-full">Tentar novamente</Button>
+            </div>
+          ) : (
+            <p className="flex items-center justify-center gap-2 text-sm text-ink-soft">
+              <Loader2 size={16} className="animate-spin" /> Carregando…
+            </p>
+          )
         )}
 
         {mode === "enroll" && enroll && (
