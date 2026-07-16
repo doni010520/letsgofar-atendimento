@@ -103,6 +103,18 @@ export interface SgpConexao {
   raw?: unknown;
 }
 
+/** ONU (equipamento de fibra) de um contrato — FTTH. */
+export interface SgpOnu {
+  id: number;                 // id_onu (usado no reset)
+  onuid?: number;
+  oltName?: string;
+  descricao?: string;         // ex.: "12169 - cintiatia"
+  phyAddr?: string;           // MAC/serial
+  status?: string;
+  sinalRx?: string;           // potência óptica de recepção (dBm)
+  raw?: unknown;
+}
+
 /** Erro lançado pelo cliente SGP (HTTP ou de negócio). */
 export class SgpError extends Error {
   constructor(

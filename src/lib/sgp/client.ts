@@ -6,6 +6,7 @@ import {
   type SgpSegundaVia,
   type SgpAcaoResult,
   type SgpConexao,
+  type SgpOnu,
   SgpError,
 } from "./types";
 
@@ -88,6 +89,26 @@ export class SgpClient {
     let res: Response;
     try {
       res = await this.fetchT(url, { method: "POST", headers: this.headers("application/x-www-form-urlencoded"), body: params.toString() });
+    } catch (e) {
+      if (e instanceof SgpError) throw e;
+      throw new SgpError(`SGP: falha de rede em ${path}: ${(e as Error).message}`);
+    }
+    return this.parse(res, path) as Promise<T>;
+  }
+
+  /** GET com app+token (e demais campos) na query string. Usado nas rotas FTTH. */
+  async getQuery<T = unknown>(path: string, fields: Record<string, unknown> = {}): Promise<T> {
+    const params = new URLSearchParams();
+    params.set("app", this.app);
+    params.set("token", this.token);
+    for (const [k, v] of Object.entries(fields)) {
+      if (v === undefined || v === null || v === "") continue;
+      params.set(k, String(v));
+    }
+    const url = `${this.base}/${path.replace(/^\/+/, "")}?${params.toString()}`;
+    let res: Response;
+    try {
+      res = await this.fetchT(url, { method: "GET", headers: { Accept: "application/json", ...(this.authHeader ? { Authorization: this.authHeader } : {}) } });
     } catch (e) {
       if (e instanceof SgpError) throw e;
       throw new SgpError(`SGP: falha de rede em ${path}: ${(e as Error).message}`);
@@ -195,6 +216,36 @@ export class SgpClient {
       mensagem: msg || undefined,
       raw,
     };
+  }
+
+  /** Lista as ONUs (equipamentos de fibra) por contrato ou CPF/CNPJ. GET /api/fttx/onu/list/ */
+  async listarOnus(by: { contrato?: number; cpfcnpj?: string }): Promise<SgpOnu[]> {
+    const raw = await this.getQuery<unknown>("api/fttx/onu/list/", {
+      contrato: by.contrato,
+      cpfcnpj: by.cpfcnpj ? onlyDigits(by.cpfcnpj) : undefined,
+    });
+    return asArray(raw)
+      .filter((o) => pick(o, ["id"]) != null)
+      .map((o) => ({
+        id: pickNum(o, ["id"]) ?? 0,
+        onuid: pickNum(o, ["onuid"]),
+        oltName: pickStr(o, ["olt_name"]),
+        descricao: pickStr(o, ["description"]),
+        phyAddr: pickStr(o, ["phy_addr"]),
+        status: pickStr(o, ["status", "connection"]),
+        sinalRx: pickStr(o, ["info_rx"]),
+        raw: o,
+      }));
+  }
+
+  /** Reinicia (reset) remotamente uma ONU pelo seu id. GET /api/fttx/onu/{id}/reset/ */
+  async resetarOnu(idOnu: number): Promise<{ ok: boolean; mensagem?: string; raw?: unknown }> {
+    const raw = await this.getQuery<Record<string, unknown>>(`api/fttx/onu/${idOnu}/reset/`);
+    // A resposta varia; consideramos sucesso se não houver erro explícito.
+    const status = pickNum(raw, ["status"]);
+    const erro = pick(raw, ["erro", "error"]);
+    const ok = status != null ? status === 1 : !erro;
+    return { ok, mensagem: pickStr(raw, ["msg", "mensagem", "detalhe", "erro"]), raw };
   }
 
   /** Abre um chamado/O.S. de suporte. POST /api/ura/chamado/ (JSON; aceita arrays). */

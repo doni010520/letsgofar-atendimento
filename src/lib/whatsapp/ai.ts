@@ -108,7 +108,7 @@ FLUXO (use como GUIA, com INTELIGÊNCIA: INTERPRETE a intenção do cliente desd
    - SUPORTE TÉCNICO (internet ruim/sem conexão): faça a TRIAGEM você mesmo, conversando:
        a) "A sua conexão está com problema apenas no *cabo*, apenas no *Wi-Fi* ou nos *dois*?"
        b) Se Wi-Fi: pergunte se está longe do roteador, se há paredes/móveis no caminho, se o roteador está dentro de rack/atrás de móvel.
-       c) Proponha reiniciar o equipamento: "Vamos reiniciar seu equipamento rapidinho para tentar normalizar a conexão, tudo bem? 😊" e depois "Aguarde cerca de 1 minuto até ele estabilizar e me avise se melhorou.".
+       c) Ofereça reiniciar o equipamento REMOTAMENTE: "Posso reiniciar seu equipamento agora pra tentar normalizar a conexão, tudo bem? 😊 (sua internet fica alguns instantes fora)". Só quando o cliente ACEITAR, chame a tool reiniciar_equipamento(contrato) e, SÓ DEPOIS de executar com sucesso, diga "Pronto, reiniciei seu equipamento! ✅ Aguarde cerca de 1 minuto até ele estabilizar e me avise se melhorou.". NUNCA diga que reiniciou sem ter chamado a tool. Se o reinício falhar, avise que não foi possível reiniciar remotamente e siga para suporte.
        d) Você pode usar status_conexao(contrato) para checar se o serviço está online.
        e) Se NÃO resolver, ou o cliente pedir um especialista/humano → transferir_para_humano(setor="suporte"). Se for um defeito que precisa de visita técnica, use abrir_chamado antes de transferir.
    - COMERCIAL (instalação, novo plano, mudança de plano): "Claro! Vou levar sua solicitação para o setor comercial para verificar as opções." → transferir_para_humano(setor="comercial").
@@ -321,6 +321,18 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: { contrato: { type: "number" }, telefone: { type: "string" } },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "reiniciar_equipamento",
+      description:
+        "Reinicia (reset) REMOTAMENTE a ONU/equipamento de fibra do cliente para tentar normalizar a conexão. A conexão dele cai por ~1-2 min. Use SOMENTE após o cliente concordar e com o contrato já identificado (consultar_cliente).",
+      parameters: {
+        type: "object",
+        properties: { contrato: { type: "number" } },
       },
     },
   },
@@ -549,6 +561,14 @@ async function executeTool(name: string, args: Record<string, unknown>, sgpList:
         const r = await sgp.statusConexao({ contrato: resolveContrato(num(args.contrato)), telefone: str(args.telefone) });
         return { online: r.online, mensagem: r.mensagem };
       }
+      case "reiniciar_equipamento": {
+        const contrato = resolveContrato(num(args.contrato));
+        if (!contrato) return { ok: false, mensagem: "Contrato não identificado. Confirme o cadastro com consultar_cliente." };
+        const onus = await sgp.listarOnus({ contrato });
+        if (!onus.length) return { ok: false, mensagem: "Não encontrei o equipamento (ONU) deste contrato para reiniciar." };
+        const r = await sgp.resetarOnu(onus[0].id);
+        return { ok: r.ok, mensagem: r.mensagem ?? (r.ok ? "Equipamento reiniciado." : "Não foi possível reiniciar.") };
+      }
       case "abrir_chamado": {
         const contrato = resolveContrato(num(args.contrato));
         if (!contrato) return { ok: false, mensagem: "Contrato não identificado. Confirme o cadastro com consultar_cliente." };
@@ -753,7 +773,7 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
   }
 
   // Modo somente-consulta: remove as tools que alteram o sistema.
-  const MUTATING = new Set(["liberacao_confianca", "abrir_chamado"]);
+  const MUTATING = new Set(["liberacao_confianca", "abrir_chamado", "reiniciar_equipamento"]);
   const availableTools = ctx.agent.executeActions ? TOOLS : TOOLS.filter((t) => !MUTATING.has(t.function.name));
 
   let decision: AiDecision = "wait";
