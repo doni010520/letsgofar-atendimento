@@ -26,11 +26,14 @@ export default function TwoFactorGate() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function startEnroll() {
-    // Remove fatores não verificados pendentes (evita "factor already exists").
-    const { data } = await supabase.auth.mfa.listFactors();
-    for (const f of (data?.totp ?? []) as Factor[]) {
-      if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
+  // `known` = lista de fatores já buscada (evita re-consultar). Fatores TOTP
+  // não verificados pendentes são removidos EM PARALELO (eles se acumulam a cada
+  // tentativa não concluída e a remoção sequencial era o que travava o QR).
+  async function startEnroll(known?: Factor[]) {
+    const totp = known ?? (((await supabase.auth.mfa.listFactors()).data?.totp ?? []) as Factor[]);
+    const unverified = totp.filter((f) => f.status !== "verified");
+    if (unverified.length) {
+      await Promise.all(unverified.map((f) => supabase.auth.mfa.unenroll({ factorId: f.id }).catch(() => {})));
     }
     const { data: en, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
     if (error) { setError(error.message); return; }
@@ -43,12 +46,16 @@ export default function TwoFactorGate() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace("/login"); return; }
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal?.currentLevel === "aal2") { router.replace("/dashboard"); return; }
-      const { data } = await supabase.auth.mfa.listFactors();
-      const verified = ((data?.totp ?? []) as Factor[]).find((f) => f.status === "verified");
+      // AAL e fatores em paralelo (não dependem um do outro).
+      const [aalRes, factorsRes] = await Promise.all([
+        supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+        supabase.auth.mfa.listFactors(),
+      ]);
+      if (aalRes.data?.currentLevel === "aal2") { router.replace("/dashboard"); return; }
+      const totp = (factorsRes.data?.totp ?? []) as Factor[];
+      const verified = totp.find((f) => f.status === "verified");
       if (verified) { setFactorId(verified.id); setMode("challenge"); }
-      else { await startEnroll(); }
+      else { await startEnroll(totp); } // reusa a lista já buscada
     })().catch(() => setError("Falha ao carregar. Recarregue a página."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
