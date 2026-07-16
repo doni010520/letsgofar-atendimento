@@ -35,7 +35,10 @@ export default function TwoFactorGate() {
     if (unverified.length) {
       await Promise.all(unverified.map((f) => supabase.auth.mfa.unenroll({ factorId: f.id }).catch(() => {})));
     }
-    const { data: en, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+    // friendlyName ÚNICO: o Supabase exige nome único por usuário. Sem isso, o
+    // enroll padrão usa "" e colide com um fator "" pendente ("A factor with the
+    // friendly name '' already exists"), travando o 2FA. Nome único nunca colide.
+    const { data: en, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `totp-${Date.now()}` });
     if (error) { setError(error.message); return; }
     setEnroll({ qr: en.totp.qr_code, secret: en.totp.secret });
     setFactorId(en.id);
