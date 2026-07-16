@@ -36,7 +36,8 @@ export async function changeOwnPassword(fd: FormData) {
   if (password.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres.");
   if (password !== confirm) throw new Error("As senhas não coincidem.");
   const sb = await createClient();
-  const { error } = await sb.auth.updateUser({ password });
+  // Troca a senha E limpa a flag de senha provisória (caso seja o 1º acesso).
+  const { error } = await sb.auth.updateUser({ password, data: { must_change_password: false } });
   if (error) throw new Error(error.message);
   return { ok: true };
 }

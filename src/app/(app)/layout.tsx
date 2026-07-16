@@ -19,6 +19,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (!session) redirect("/login");
     if (!session.organization) redirect("/onboarding");
 
+    // Senha provisória: força a troca no primeiro acesso, antes de tudo.
+    if (session.mustChangePassword) redirect("/trocar-senha");
+
     // 2FA obrigatório por PADRÃO para todos os usuários não isentos. Quem ainda
     // não está em AAL2 é mandado para /2fa (cadastrar ou validar o código).
     // Isentos: DEFAULT_EXEMPT (dono + revisor) + MFA_EXEMPT_EMAILS.

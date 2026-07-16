@@ -6,12 +6,17 @@ export async function getSession(): Promise<{
   userId: string;
   profile: Profile | null;
   organization: Organization | null;
+  /** true quando a conta foi criada com senha provisória e ainda não foi trocada. */
+  mustChangePassword: boolean;
 } | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  const mustChangePassword =
+    (user.user_metadata as { must_change_password?: boolean } | null | undefined)?.must_change_password === true;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -29,7 +34,7 @@ export async function getSession(): Promise<{
     organization = org ?? null;
   }
 
-  return { userId: user.id, profile: (profile as Profile) ?? null, organization };
+  return { userId: user.id, profile: (profile as Profile) ?? null, organization, mustChangePassword };
 }
 
 /** true se o profile tem privilégio de admin: admin da org OU super_admin da plataforma. */
