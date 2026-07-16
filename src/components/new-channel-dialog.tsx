@@ -6,6 +6,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui";
 import { createChannel } from "@/app/(app)/canais/actions";
 import { QrConnectModal } from "@/components/qr-connect-modal";
+import { MetaConnectButton } from "@/components/meta-connect-button";
 import { SHOW_UAZAPI } from "@/lib/flags";
 
 type ChannelType = "uazapi" | "meta_cloud";
@@ -87,6 +88,12 @@ export function NewChannelDialog({ hideUazapi = false }: { hideUazapi?: boolean 
 
               {type === "meta_cloud" && (
                 <>
+                  {/* Conexão em 1 clique via Embedded Signup / Coexistência (número
+                      já no app WhatsApp Business, pareado por QR). */}
+                  <MetaConnectButton onConnected={() => { setOpen(false); router.refresh(); }} />
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-ink-soft">
+                    <span className="h-px flex-1 bg-border" /> ou insira manualmente <span className="h-px flex-1 bg-border" />
+                  </div>
                   <Field name="phone_number_id" label="Phone Number ID" placeholder="Ex: 120596359925687" required />
                   <Field name="waba_id" label="WhatsApp Business Account ID (WABA)" placeholder="Ex: 166623730459..." />
                   <Field name="access_token" label="Token permanente" placeholder="Token do System User (EAAV...)" required />
