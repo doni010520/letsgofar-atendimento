@@ -1,5 +1,5 @@
 import type { createServiceClient } from "@/lib/supabase/server";
-import { sgpForOrg, sgpForIntegration, type SgpClient } from "@/lib/sgp";
+import { sgpFromConfig, type SgpClient } from "@/lib/sgp";
 import { logEvent } from "@/lib/log";
 
 type DB = ReturnType<typeof createServiceClient>;
@@ -391,7 +391,7 @@ const TOOLS = [
  * número do contrato (o histórico reconstruído não carrega o resultado das tools)
  * — evita que a IA invente um contratoId (ex.: 16049/123456) e o boleto "suma".
  */
-export type SgpMemo = { cpf?: string; contratos: { id: number; plano?: string; valorEmAberto?: number; titulosAReceber?: number }[] };
+export type SgpMemo = { cpf?: string; integrationId?: string; contratos: { id: number; plano?: string; valorEmAberto?: number; titulosAReceber?: number }[] };
 
 const memoContratos = (contratos: { contrato: number; plano?: string; valorEmAberto?: number; titulosAReceber?: number }[]) =>
   contratos.filter((c) => c.contrato).map((c) => ({ id: c.contrato, plano: c.plano, valorEmAberto: c.valorEmAberto, titulosAReceber: c.titulosAReceber }));
@@ -402,7 +402,7 @@ async function loadSgpMemo(db: AiTurnContext["db"], conversationId: string): Pro
     const { data } = await db.from("conversations").select("variables").eq("id", conversationId).maybeSingle();
     const saved = (data?.variables as Record<string, unknown> | null)?.__sgp as SgpMemo | undefined;
     if (saved && typeof saved === "object") {
-      return { cpf: saved.cpf, contratos: Array.isArray(saved.contratos) ? saved.contratos : [] };
+      return { cpf: saved.cpf, integrationId: saved.integrationId, contratos: Array.isArray(saved.contratos) ? saved.contratos : [] };
     }
   } catch { /* ignora — memo é otimização, não crítico */ }
   return { contratos: [] };
@@ -412,19 +412,41 @@ async function loadSgpMemo(db: AiTurnContext["db"], conversationId: string): Pro
 async function saveSgpMemo(db: AiTurnContext["db"], conversationId: string, memo: SgpMemo): Promise<void> {
   try {
     const { data } = await db.from("conversations").select("variables").eq("id", conversationId).maybeSingle();
-    const vars = { ...((data?.variables as Record<string, unknown>) ?? {}), __sgp: { cpf: memo.cpf, contratos: memo.contratos } };
+    const vars = { ...((data?.variables as Record<string, unknown>) ?? {}), __sgp: { cpf: memo.cpf, integrationId: memo.integrationId, contratos: memo.contratos } };
     await db.from("conversations").update({ variables: vars }).eq("id", conversationId);
   } catch { /* ignora */ }
 }
 
-/** Executa uma ferramenta do SGP e devolve um resultado serializável p/ o modelo. */
-async function executeTool(name: string, args: Record<string, unknown>, sgp: SgpClient | null, memo: SgpMemo): Promise<unknown> {
+/** Todas as contas SGP ATIVAS da org (multi-cidade). O cliente pode estar em qualquer uma. */
+async function sgpListForOrg(db: AiTurnContext["db"], orgId: string): Promise<{ id: string; client: SgpClient }[]> {
+  try {
+    const { data } = await db.from("integrations").select("id, config").eq("organization_id", orgId).eq("type", "sgp").eq("active", true);
+    const rows = (data ?? []) as { id: string; config: unknown }[];
+    const out: { id: string; client: SgpClient }[] = [];
+    for (const r of rows) {
+      try { out.push({ id: r.id, client: sgpFromConfig(r.config) }); } catch { /* config incompleta */ }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Executa uma ferramenta do SGP e devolve um resultado serializável p/ o modelo.
+ *  `sgpList` = todas as contas SGP da org; `defaultSgpId` = a do fluxo/automação.
+ *  O SGP "ativo" é aquele onde o cliente foi localizado (memo.integrationId). */
+async function executeTool(name: string, args: Record<string, unknown>, sgpList: { id: string; client: SgpClient }[], defaultSgpId: string | undefined, memo: SgpMemo): Promise<unknown> {
   if (name === "transferir_para_humano" || name === "finalizar_atendimento" || name === "registrar_comprovante") {
     return { ok: true };
   }
-  if (!sgp) {
+  if (!sgpList.length) {
     return { erro: "Integração SGP não configurada. Não é possível consultar o sistema." };
   }
+  // SGP ativo: onde o cliente já foi localizado; senão o do fluxo (padrão).
+  const sgp: SgpClient =
+    (memo.integrationId && sgpList.find((s) => s.id === memo.integrationId)?.client) ||
+    sgpList.find((s) => s.id === defaultSgpId)?.client ||
+    sgpList[0].client;
   const num = (v: unknown) => (v == null ? undefined : Number(v));
   const str = (v: unknown) => (v == null ? undefined : String(v));
   const knownIds = () => memo.contratos.map((c) => c.id);
@@ -442,12 +464,20 @@ async function executeTool(name: string, args: Record<string, unknown>, sgp: Sgp
   try {
     switch (name) {
       case "consultar_cliente": {
-        const c = await sgp.consultarCliente({
-          cpfcnpj: str(args.cpfcnpj),
-          telefone: str(args.telefone),
-          contrato: num(args.contrato),
-        });
-        if (c.encontrado) {
+        // Procura o cliente em TODAS as contas SGP (multi-cidade: Iguaí, Nova Canaã…)
+        // e LEMBRA em qual foi achado, para as ações seguintes usarem o SGP certo.
+        const by = { cpfcnpj: str(args.cpfcnpj), telefone: str(args.telefone), contrato: num(args.contrato) };
+        let c: Awaited<ReturnType<SgpClient["consultarCliente"]>> | null = null;
+        let foundId: string | undefined;
+        for (const s of sgpList) {
+          const r = await s.client.consultarCliente(by).catch(() => null);
+          if (!r) continue;
+          if (r.encontrado) { c = r; foundId = s.id; break; }
+          if (!c) c = r; // guarda um "não encontrado" como resposta de fallback
+        }
+        if (!c) c = { encontrado: false, contratos: [], raw: {} };
+        if (c.encontrado && foundId) {
+          memo.integrationId = foundId;
           memo.cpf = (c.cpfcnpj ?? str(args.cpfcnpj))?.replace(/\D+/g, "") || memo.cpf;
           memo.contratos = memoContratos(c.contratos);
         }
@@ -672,9 +702,11 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     return { decision: "transfer", transfer: { motivo: "IA indisponível (sem chave OpenAI)" } };
   }
 
-  const sgp = ctx.integrationId
-    ? await sgpForIntegration(ctx.db, ctx.integrationId).catch(() => null)
-    : await sgpForOrg(ctx.db, ctx.organizationId).catch(() => null);
+  // Todas as contas SGP da org (multi-cidade). O SGP do fluxo é o "padrão";
+  // consultar_cliente procura o cliente em todas e fixa a certa no memo.
+  const sgpList = await sgpListForOrg(ctx.db, ctx.organizationId);
+  const defaultSgpId =
+    ctx.integrationId && sgpList.some((s) => s.id === ctx.integrationId) ? ctx.integrationId : sgpList[0]?.id;
 
   // Memo do SGP (cpf + contratos reais) persistido em variables.__sgp — as
   // ferramentas o usam para resolver o contrato certo entre turnos.
@@ -781,7 +813,7 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
           decision = "done";
           summary = typeof args.resumo === "string" ? args.resumo : undefined;
         }
-        const result = await executeTool(tc.function.name, args, sgp, sgpMemo);
+        const result = await executeTool(tc.function.name, args, sgpList, defaultSgpId, sgpMemo);
         const failed = !!(result && typeof result === "object" && ("error" in result || "erro" in result));
         void logEvent(failed ? "error" : "info", "ai", `Ferramenta ${tc.function.name}${failed ? " falhou" : ""}`, {
           conversationId: ctx.conversationId,
