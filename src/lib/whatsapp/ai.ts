@@ -54,9 +54,15 @@ export interface AiTurnResult {
   summary?: string;
 }
 
+/** Parte de conteúdo multimodal (texto ou imagem) — usado p/ o modelo LER imagens
+ *  enviadas pelo cliente (ex.: comprovante de PIX). */
+type OpenAIContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 interface OpenAIMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content: string | OpenAIContentPart[] | null;
   tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[];
   tool_call_id?: string;
 }
@@ -104,7 +110,7 @@ FLUXO (use como GUIA, com INTELIGÊNCIA: INTERPRETE a intenção do cliente desd
    - Não encontrado/ inválido → "Ops!! O *CPF/CNPJ* informado é invalido." e peça de novo. Após 2 tentativas sem sucesso, use transferir_para_humano(setor="suporte", motivo="cliente não localizado no sistema").
    - Encontrado → responda "Um momento por favor" e em seguida "Como posso ajudar?". Se o cadastro tiver MAIS DE UM contrato, liste os planos e PERGUNTE qual o cliente deseja antes de gerar 2ª via/PIX. Nas ferramentas do SGP, passe o *cpfcnpj* do cliente OU o *contratoId EXATO* retornado por consultar_cliente — NUNCA invente um número de contrato.
 5. INTENÇÃO (interprete a mensagem do cliente):
-   - FINANCEIRO / 2ª via / pagamento: se o cliente quer pagar ou pedir boleto, use faturas_em_aberto e segunda_via para enviar o link de pagamento e a linha digitável; se ele quiser PIX, use gerar_pix. Se o cliente ENVIAR um COMPROVANTE (imagem/PDF), responda "Recebemos seu comprovante. Muito obrigado!", registre com registrar_comprovante e transfira para o financeiro com transferir_para_humano(setor="financeiro").
+   - FINANCEIRO / 2ª via / pagamento: se o cliente quer pagar ou pedir boleto, use faturas_em_aberto e segunda_via para enviar o link de pagamento e a linha digitável; se ele quiser PIX, use gerar_pix. Se o cliente ENVIAR um COMPROVANTE de pagamento (imagem), você CONSEGUE LER a imagem. Faça a TRIAGEM assim: (1) leia *valor*, *nome/CNPJ do destino*, *data* e *ID da transação*; (2) confira se o DESTINO é da empresa — vale se o nome for *Seza e Cruz Ltda* (ou *MVF NETWORK*) ou se o CNPJ começar com a raiz *07861662* (as filiais e a chave PIX de Nova Canaã são todas dessa empresa); (3) confronte o VALOR com o que ele deve (use faturas_em_aberto); (4) responda "Recebemos seu comprovante. Muito obrigado!" e chame registrar_comprovante com o que você leu; (5) transfira ao financeiro com transferir_para_humano(setor="financeiro") informando no motivo o resultado da conferência (ex.: "comprovante R$ 60,00 de 15/07 — destino confere — bate com a fatura de R$ 60,00" OU "ATENÇÃO: valor não confere (pagou R$ 50, deve R$ 61,26)" OU "ATENÇÃO: destino NÃO é da MVF"). NUNCA confirme que o pagamento foi baixado nem libere o serviço só pelo comprovante — quem confirma é o financeiro.
    - SUPORTE TÉCNICO (internet ruim/sem conexão): faça a TRIAGEM você mesmo, conversando:
        a) "A sua conexão está com problema apenas no *cabo*, apenas no *Wi-Fi* ou nos *dois*?"
        b) Se Wi-Fi: pergunte se está longe do roteador, se há paredes/móveis no caminho, se o roteador está dentro de rack/atrás de móvel.
@@ -358,8 +364,19 @@ const TOOLS = [
     function: {
       name: "registrar_comprovante",
       description:
-        "Registra que o cliente enviou um comprovante de pagamento (imagem/PDF). Use antes de transferir para o financeiro.",
-      parameters: { type: "object", properties: {} },
+        "Registra o comprovante de pagamento que o cliente enviou, com os dados que você LEU da imagem e o resultado da conferência. Use antes de transferir para o financeiro.",
+      parameters: {
+        type: "object",
+        properties: {
+          valor: { type: "number", description: "Valor do comprovante (ex.: 60.00)" },
+          destino: { type: "string", description: "Nome/CNPJ do destinatário lido no comprovante" },
+          data: { type: "string", description: "Data do pagamento lida no comprovante" },
+          id_transacao: { type: "string", description: "ID/E2E da transação, se visível" },
+          destino_confere: { type: "boolean", description: "true se o destino é da MVF (Seza e Cruz / CNPJ raiz 07861662)" },
+          valor_confere: { type: "boolean", description: "true se o valor bate com a fatura em aberto do cliente" },
+          observacao: { type: "string", description: "Resumo da conferência (ex.: bate com fatura de R$60 venc 13/07)" },
+        },
+      },
     },
   },
   {
@@ -732,27 +749,48 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
   // ferramentas o usam para resolver o contrato certo entre turnos.
   const sgpMemo = await loadSgpMemo(ctx.db, ctx.conversationId);
 
-  // Histórico recente (exclui notas internas).
+  // Histórico recente (exclui notas internas). media_url entra p/ o modelo LER
+  // imagens do cliente (comprovante de PIX).
   const { data: hist } = await ctx.db
     .from("messages")
-    .select("direction, sender_type, body, content_type, is_internal")
+    .select("direction, sender_type, body, content_type, is_internal, media_url")
     .eq("conversation_id", ctx.conversationId)
     .order("created_at", { ascending: true })
     .limit(30);
 
-  const history: OpenAIMessage[] = ((hist ?? []) as {
+  type HistRow = {
     direction: string;
     sender_type: string;
     body: string | null;
     content_type: string;
     is_internal?: boolean;
-  }[])
-    .filter((m) => !m.is_internal)
-    .map((m): OpenAIMessage => ({
-      role: m.sender_type === "contact" ? "user" : "assistant",
-      content: m.body ?? (m.content_type !== "text" ? `[${m.content_type}]` : ""),
-    }))
-    .filter((m) => m.content);
+    media_url?: string | null;
+  };
+  const rows = ((hist ?? []) as HistRow[]).filter((m) => !m.is_internal);
+
+  // Só as 2 imagens MAIS RECENTES do cliente viram visão (custo/tokens sob controle).
+  const imageIdx = rows
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => m.sender_type === "contact" && m.content_type === "image" && !!m.media_url)
+    .slice(-2)
+    .map(({ i }) => i);
+
+  const history: OpenAIMessage[] = rows
+    .map((m, i): OpenAIMessage => {
+      const role = m.sender_type === "contact" ? "user" : "assistant";
+      const text = m.body ?? (m.content_type !== "text" ? `[${m.content_type}]` : "");
+      if (imageIdx.includes(i)) {
+        return {
+          role,
+          content: [
+            { type: "text", text: text || "[imagem enviada pelo cliente]" },
+            { type: "image_url", image_url: { url: m.media_url! } },
+          ],
+        };
+      }
+      return { role, content: text };
+    })
+    .filter((m) => (Array.isArray(m.content) ? m.content.length > 0 : !!m.content));
 
   // A última mensagem do cliente foi um áudio? → respondemos também em voz
   // (pedido do cliente: "áudio é respondido com áudio").
@@ -767,8 +805,10 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
     { role: "system", content: system },
     ...history,
   ];
-  // Garante que a última mensagem do usuário esteja presente (caso ainda não no histórico).
-  if (history[history.length - 1]?.content !== ctx.userText && ctx.userText.trim()) {
+  // Garante que a última mensagem do usuário esteja presente (caso ainda não no
+  // histórico). Se a última já é multimodal (imagem), o texto dela já está junto.
+  const lastHist = history[history.length - 1];
+  if (!Array.isArray(lastHist?.content) && lastHist?.content !== ctx.userText && ctx.userText.trim()) {
     messages.push({ role: "user", content: ctx.userText });
   }
 
@@ -833,6 +873,30 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
           decision = "done";
           summary = typeof args.resumo === "string" ? args.resumo : undefined;
         }
+        if (tc.function.name === "registrar_comprovante") {
+          // Grava a leitura do comprovante como NOTA INTERNA (o financeiro vê no
+          // atendimento). Antes essa tool não guardava nada.
+          const f = (k: string) => (args[k] == null || args[k] === "" ? "—" : String(args[k]));
+          const flag = (v: unknown, ok: string, bad: string) => (v === true ? ok : v === false ? bad : "—");
+          const nota =
+            `🧾 *Comprovante recebido* (lido pela IA)\n` +
+            `• Valor: R$ ${f("valor")}\n` +
+            `• Destino: ${f("destino")} — ${flag(args.destino_confere, "✅ confere", "⚠️ NÃO é da MVF")}\n` +
+            `• Valor x fatura: ${flag(args.valor_confere, "✅ bate", "⚠️ NÃO bate")}\n` +
+            `• Data: ${f("data")} | ID: ${f("id_transacao")}\n` +
+            `• Obs.: ${f("observacao")}\n` +
+            `_Conferência automática — confirme a baixa no sistema antes de liberar._`;
+          await ctx.db.from("messages").insert({
+            organization_id: ctx.organizationId,
+            conversation_id: ctx.conversationId,
+            direction: "out",
+            sender_type: "system",
+            content_type: "text",
+            body: nota,
+            is_internal: true,
+            status: "sent",
+          }).then(() => {}, () => {});
+        }
         const result = await executeTool(tc.function.name, args, sgpList, defaultSgpId, sgpMemo);
         const failed = !!(result && typeof result === "object" && ("error" in result || "erro" in result));
         void logEvent(failed ? "error" : "info", "ai", `Ferramenta ${tc.function.name}${failed ? " falhou" : ""}`, {
@@ -848,8 +912,9 @@ export async function runAiTurn(ctx: AiTurnContext): Promise<AiTurnResult> {
       continue; // deixa o modelo redigir a resposta ao cliente após as ferramentas
     }
 
-    // Sem tool calls → resposta final ao cliente.
-    const finalText = choice.content?.trim();
+    // Sem tool calls → resposta final ao cliente. (A resposta do modelo é sempre
+    // texto; o tipo aceita array só por causa das imagens que ENVIAMOS a ele.)
+    const finalText = typeof choice.content === "string" ? choice.content.trim() : undefined;
     if (finalText) {
       void logEvent("info", "ai", "IA respondeu ao cliente", {
         conversationId: ctx.conversationId,
