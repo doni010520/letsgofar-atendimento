@@ -2,11 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { finalizeMetaCoexistence } from "@/app/(app)/canais/actions";
-
-const APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
-const CONFIG_ID = process.env.NEXT_PUBLIC_META_CONFIG_ID;
-const GRAPH_V = process.env.NEXT_PUBLIC_META_GRAPH_VERSION || "v23.0";
+import { finalizeMetaCoexistence, getMetaConnectConfig } from "@/app/(app)/canais/actions";
 
 declare global {
   interface Window {
@@ -20,7 +16,17 @@ export function MetaConnectButton({ onConnected }: { onConnected?: () => void })
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cfg, setCfg] = useState<{ appId: string | null; configId: string | null; graphVersion: string } | null>(null);
   const sessionInfo = useRef<{ waba_id?: string; phone_number_id?: string }>({});
+
+  // Config (appId/configId) vem do SERVIDOR em runtime (não do build).
+  useEffect(() => {
+    getMetaConnectConfig().then(setCfg).catch(() => setCfg({ appId: null, configId: null, graphVersion: "v23.0" }));
+  }, []);
+
+  const APP_ID = cfg?.appId ?? undefined;
+  const CONFIG_ID = cfg?.configId ?? undefined;
+  const GRAPH_V = cfg?.graphVersion ?? "v23.0";
 
   useEffect(() => {
     if (!APP_ID) return;
@@ -62,7 +68,8 @@ export function MetaConnectButton({ onConnected }: { onConnected?: () => void })
       setReady(true);
     }
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [APP_ID, GRAPH_V]);
 
   const launch = useCallback(() => {
     const FB = window.FB;
@@ -103,12 +110,13 @@ export function MetaConnectButton({ onConnected }: { onConnected?: () => void })
     );
   }, [router, onConnected]);
 
+  if (cfg === null) {
+    return <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-ink-soft">Carregando conexão com a Meta…</p>;
+  }
   if (!APP_ID || !CONFIG_ID) {
     return (
       <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-        Configure as variáveis <code>NEXT_PUBLIC_META_APP_ID</code> e{" "}
-        <code>NEXT_PUBLIC_META_CONFIG_ID</code> (após aprovação como Tech Provider) para conectar via
-        Embedded Signup / Coexistência.
+        Conexão via Meta ainda não configurada no servidor (App ID / Config ID).
       </p>
     );
   }

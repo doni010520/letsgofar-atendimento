@@ -12,6 +12,23 @@ import {
 } from "@/lib/whatsapp/meta";
 import type { Channel } from "@/lib/types";
 
+/**
+ * Config do Embedded Signup lida em RUNTIME (server). Necessário porque as
+ * NEXT_PUBLIC_* do Next.js são fixadas no build — como a imagem é buildada no CI
+ * sem elas, o botão obtém appId/configId do servidor (onde o env do Easypanel
+ * vale na hora). Aceita nomes com ou sem NEXT_PUBLIC_.
+ */
+export async function getMetaConnectConfig(): Promise<{ appId: string | null; configId: string | null; graphVersion: string }> {
+  const session = await getSession();
+  if (!session?.organization) return { appId: null, configId: null, graphVersion: "v23.0" };
+  const env = process.env;
+  return {
+    appId: env.NEXT_PUBLIC_META_APP_ID || env.META_APP_ID || null,
+    configId: env.NEXT_PUBLIC_META_CONFIG_ID || env.META_CONFIG_ID || null,
+    graphVersion: env.NEXT_PUBLIC_META_GRAPH_VERSION || env.META_GRAPH_VERSION || "v23.0",
+  };
+}
+
 export async function createChannel(formData: FormData) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     throw new Error("Modo preview: configure o Supabase (.env.local) para cadastrar canais reais.");
