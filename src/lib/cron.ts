@@ -79,7 +79,11 @@ export async function runCronJobs(): Promise<{ closed: number; warned: number; t
     if (inactivityEnabled && closeMin > 0) {
       const { data: chans } = await db.from("channels").select("*").eq("organization_id", org.id);
       const channelsById = new Map<string, Channel>(((chans ?? []) as Channel[]).map((c) => [c.id, c]));
-      const statuses = ["bot", "open", "queued"];
+      // Inatividade só encerra conversas AINDA no bot (cliente sumiu no meio do
+      // atendimento automático). Se está com um humano (open) ou esperando um
+      // humano na fila (queued) — ex.: lead transferido ao comercial — NÃO fecha:
+      // quem encerra é a pessoa. (Antes fechava queued/open e derrubava o lead.)
+      const statuses = ["bot"];
       const closeThreshold = new Date(now.getTime() - closeMin * 60000).toISOString();
       const sel = "id, organization_id, channel_id, status, contacts(phone, is_group)";
       type Row = {
