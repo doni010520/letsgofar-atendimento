@@ -35,6 +35,22 @@ export async function moveConversationStatus(id: string, status: "open" | "queue
     : status === "queued" ? "moveu p/ Em espera (IA pausada)"
     : "devolveu para a IA";
   void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} ${label} [V2]`, { conversationId: id, userId: session.userId, action: "mover", status }, session.organization.id);
+
+  // Mensagem visível no chat (histórico de ativação/desativação da IA, com nome).
+  const quem = session.profile?.name ? ` por ${session.profile.name}` : "";
+  const nota = status === "bot" ? `Atendimento devolvido para a IA${quem}.`
+    : status === "queued" ? `Atendimento devolvido à fila${quem} (IA pausada).`
+    : `IA pausada — atendimento assumido${quem}.`;
+  await sb.from("messages").insert({
+    organization_id: session.organization.id,
+    conversation_id: id,
+    direction: "out",
+    sender_type: "system",
+    content_type: "text",
+    body: nota,
+    is_internal: true,
+    status: "sent",
+  }).then(() => {}, () => {});
   revalidatePath("/atendimento-v2");
   return { ok: true };
 }

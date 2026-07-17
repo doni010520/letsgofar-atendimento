@@ -1081,7 +1081,7 @@ export async function setConversationAi(conversationId: string, enabled: boolean
     sender_type: "system",
     content_type: "text",
     body: enabled
-      ? "Atendimento devolvido para a IA."
+      ? `Atendimento devolvido para a IA${session.profile?.name ? ` por ${session.profile.name}` : ""}.`
       : `IA pausada — atendimento assumido${session.profile?.name ? ` por ${session.profile.name}` : ""}.`,
     is_internal: true,
     status: "sent",
