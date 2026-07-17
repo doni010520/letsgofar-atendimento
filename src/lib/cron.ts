@@ -4,10 +4,10 @@ import { getProvider } from "@/lib/whatsapp";
 import { logEvent } from "@/lib/log";
 import type { Channel } from "@/lib/types";
 
-const DEFAULT_WARN =
-  "Você ainda está por aí? 😊 Se não responder, vou encerrar este atendimento em alguns minutos. Quando precisar, é só me chamar de novo.";
-const DEFAULT_GOODBYE =
-  "Encerrei este atendimento por inatividade. Obrigado por falar com a *MVF NET*! 👋 Sempre que precisar, é só mandar uma mensagem.";
+// Ao ficar sem resposta, NÃO encerramos: encaminhamos para um atendente humano
+// e avisamos sobre o horário comercial (pedido do cliente).
+const DEFAULT_FORWARD =
+  "Como não tivemos retorno por aqui, vou encaminhar seu atendimento para um de nossos atendentes. 🧑‍💻\n\n🕐 O atendimento humano funciona em horário comercial. Se você nos chamou fora do horário, será atendido assim que começar o próximo expediente. 😊";
 
 /**
  * Envia uma mensagem do bot numa conversa e registra no banco. NÃO mexe em last_message_at.
@@ -69,21 +69,17 @@ export async function runCronJobs(): Promise<{ closed: number; warned: number; t
     const transferCompanyMin = Number(s.auto_transfer_company_min) || 0;
     const transferDeptId = String(s.auto_transfer_dept_id ?? "");
 
-    // ── Encerramento por inatividade (padrão: avisa 10min, encerra 15min) ──
+    // ── Inatividade: sem resposta do cliente → NÃO encerra. Encaminha para um
+    //    atendente humano (fila) e avisa sobre o horário comercial. (padrão 15min) ──
     const inactivityEnabled = s.inactivity_enabled !== false;
-    const warnMin = s.inactivity_warn_min != null ? Number(s.inactivity_warn_min) : 10;
     const closeMin = s.inactivity_close_min != null ? Number(s.inactivity_close_min) : 15;
-    const warnMsg = String(s.inactivity_warn_message || DEFAULT_WARN);
-    const goodbyeMsg = String(s.inactivity_goodbye_message || DEFAULT_GOODBYE);
+    const forwardMsg = String(s.inactivity_goodbye_message || DEFAULT_FORWARD);
 
     if (inactivityEnabled && closeMin > 0) {
       const { data: chans } = await db.from("channels").select("*").eq("organization_id", org.id);
       const channelsById = new Map<string, Channel>(((chans ?? []) as Channel[]).map((c) => [c.id, c]));
-      // Inatividade só encerra conversas AINDA no bot (cliente sumiu no meio do
-      // atendimento automático). Se está com um humano (open) ou esperando um
-      // humano na fila (queued) — ex.: lead transferido ao comercial — NÃO fecha:
-      // quem encerra é a pessoa. (Antes fechava queued/open e derrubava o lead.)
-      const statuses = ["bot"];
+      // Só age em conversas AINDA no bot (cliente sumiu no meio do atendimento
+      // automático). Se já tem humano (open) ou está na fila (queued), não mexe.
       const closeThreshold = new Date(now.getTime() - closeMin * 60000).toISOString();
       const sel = "id, organization_id, channel_id, status, contacts(phone, is_group)";
       type Row = {
@@ -95,41 +91,29 @@ export async function runCronJobs(): Promise<{ closed: number; warned: number; t
         return { id: c.id, organization_id: c.organization_id, channel_id: c.channel_id, contact_phone: ct?.phone ?? "", is_group: !!ct?.is_group };
       };
 
-      // 1) ENCERRAR: ocioso há >= closeMin → despede, fecha e reseta o fluxo.
-      const { data: toClose } = await db
+      // ENCAMINHAR: ocioso há >= closeMin no bot → avisa e passa para a fila humana
+      // (IA desligada, sem encerrar). Um atendente assume no expediente.
+      const { data: toForward } = await db
         .from("conversations")
         .select(sel)
         .eq("organization_id", org.id)
-        .in("status", statuses)
+        .eq("status", "bot")
         .lt("last_message_at", closeThreshold)
         .limit(200);
-      for (const c of (toClose ?? []) as Row[]) {
+      for (const c of (toForward ?? []) as Row[]) {
         const conv = shape(c);
-        if (conv.contact_phone) await sendBotMessage(db, channelsById, conv, goodbyeMsg);
+        if (conv.contact_phone) await sendBotMessage(db, channelsById, conv, forwardMsg);
         await db.from("conversations")
-          .update({ status: "closed", closed_at: now.toISOString(), bot_node_id: null, inactivity_warned_at: null })
+          .update({ status: "queued", ai_enabled: false, bot_node_id: null, inactivity_warned_at: null })
           .eq("id", c.id);
+        // Nota interna para o atendente saber o contexto.
+        await db.from("messages").insert({
+          organization_id: org.id, conversation_id: c.id,
+          direction: "out", sender_type: "system", content_type: "text",
+          body: "Encaminhado para atendimento humano por falta de resposta do cliente (inatividade).",
+          is_internal: true, status: "sent",
+        }).then(() => {}, () => {});
         closedCount++;
-      }
-
-      // 2) AVISAR: ocioso entre warnMin e closeMin e ainda não avisado.
-      if (warnMin > 0 && warnMin < closeMin) {
-        const warnThreshold = new Date(now.getTime() - warnMin * 60000).toISOString();
-        const { data: toWarn } = await db
-          .from("conversations")
-          .select(sel)
-          .eq("organization_id", org.id)
-          .in("status", statuses)
-          .lt("last_message_at", warnThreshold)
-          .gte("last_message_at", closeThreshold)
-          .is("inactivity_warned_at", null)
-          .limit(200);
-        for (const c of (toWarn ?? []) as Row[]) {
-          const conv = shape(c);
-          if (conv.contact_phone) await sendBotMessage(db, channelsById, conv, warnMsg);
-          await db.from("conversations").update({ inactivity_warned_at: now.toISOString() }).eq("id", c.id);
-          warnedCount++;
-        }
       }
     }
 
