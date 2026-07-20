@@ -7,7 +7,7 @@ import type { Channel } from "@/lib/types";
 // Ao ficar sem resposta, NÃO encerramos: encaminhamos para um atendente humano
 // e avisamos sobre o horário comercial (pedido do cliente).
 const DEFAULT_FORWARD =
-  "Como não tivemos retorno por aqui, vou encaminhar seu atendimento para um de nossos atendentes. 🧑‍💻\n\n🕐 O atendimento humano funciona em horário comercial. Se você nos chamou fora do horário, será atendido assim que começar o próximo expediente. 😊";
+  "Como não tivemos retorno por aqui, vou encaminhar seu atendimento para um de nossos atendentes. 😊\n\n🕐 Nosso funcionamento é em horário comercial. Se você nos chamou fora desse horário, será atendido assim que começar o expediente.";
 
 /**
  * Envia uma mensagem do bot numa conversa e registra no banco. NÃO mexe em last_message_at.
