@@ -709,11 +709,16 @@ export function Inbox({
     });
   }
 
-  // Conversas filtradas: esconde as de canais desconectados.
+  // Conversas filtradas: esconde as de canais desconectados e, para ATENDENTE
+  // (não-admin), esconde as atribuídas a OUTRO atendente — só as não-atribuídas
+  // (fila/bot) e as dele. Blindagem no client (o servidor já filtra em getConversations).
   const disconnectedIds = new Set(disconnectedChannels.map((c) => c.id));
-  const visibleConversations = disconnectedIds.size > 0
+  let visibleConversations = disconnectedIds.size > 0
     ? conversations.filter((c) => !disconnectedIds.has(c.channel_id))
     : conversations;
+  if (!isAdmin) {
+    visibleConversations = visibleConversations.filter((c) => !c.assigned_user_id || c.assigned_user_id === userId);
+  }
   const allDisconnected = disconnectedChannels.length > 0 && visibleConversations.length === 0 && conversations.length > 0;
 
   return (
