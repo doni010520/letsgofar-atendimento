@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/toast";
+import { VersionWatcher } from "@/components/version-watcher";
 import { getSession, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -70,6 +71,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
       </div>
       <Toaster />
+      <VersionWatcher />
     </div>
   );
 }

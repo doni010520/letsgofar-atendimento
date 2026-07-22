@@ -1,0 +1,44 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { APP_VERSION } from "@/lib/version";
+
+/**
+ * Detecta que saiu uma versão nova do app e oferece recarregar. Resolve o
+ * problema recorrente de "precisa dar F5": quem fica com a aba aberta continua
+ * no bundle antigo depois de um deploy (realtime/polling do código velho).
+ * Compara o APP_VERSION embutido no bundle com o /api/version do servidor.
+ */
+export function VersionWatcher() {
+  const [stale, setStale] = useState(false);
+  const loaded = useRef(APP_VERSION);
+
+  useEffect(() => {
+    let cancel = false;
+    const check = async () => {
+      try {
+        const r = await fetch("/api/version", { cache: "no-store" });
+        const j = (await r.json()) as { version?: string };
+        if (!cancel && j.version && j.version !== loaded.current) setStale(true);
+      } catch {
+        /* silencioso */
+      }
+    };
+    const t = setInterval(check, 60000); // a cada 1 min
+    const onVis = () => { if (!document.hidden) check(); }; // e ao voltar o foco
+    document.addEventListener("visibilitychange", onVis);
+    check();
+    return () => { cancel = true; clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+
+  if (!stale) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => window.location.reload()}
+      className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 animate-pulse rounded-full bg-brand px-4 py-2 text-sm font-medium text-white shadow-lg transition hover:animate-none hover:bg-brand-dark"
+    >
+      🔄 Nova versão disponível — clique para atualizar
+    </button>
+  );
+}

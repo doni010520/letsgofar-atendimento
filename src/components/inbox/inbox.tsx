@@ -202,6 +202,21 @@ export function Inbox({
     return () => { cancel = true; clearInterval(t); };
   }, [live]);
 
+  // Ao voltar o foco na aba (atendente deixou em segundo plano), atualiza na
+  // hora — navegadores estrangulam timers/WebSocket em abas ocultas, o que
+  // fazia parecer que "precisa dar F5" pra ver mensagens novas.
+  useEffect(() => {
+    if (!live) return;
+    const onVisible = () => {
+      if (document.hidden) return;
+      fetchConversations().then((c) => Array.isArray(c) && setConversations(c)).catch(() => {});
+      if (selectedId) fetchMessages(selectedId).then((m) => setMessagesByConv((prev) => ({ ...prev, [selectedId]: m }))).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => { document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", onVisible); };
+  }, [live, selectedId]);
+
   // Polling de mensagens da conversa aberta a cada 3s.
   useEffect(() => {
     if (!live || !selectedId) return;
