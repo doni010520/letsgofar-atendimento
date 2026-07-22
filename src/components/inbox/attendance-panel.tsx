@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Home, User, Receipt, LifeBuoy, Loader2, Save, Check,
-  QrCode, Unlock, Wrench, Printer, Plus, Users, Crown, Shield, UserMinus,
+  QrCode, Unlock, Wrench, Printer, Plus, Users, Crown, Shield, UserMinus, Search,
 } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import { AttendanceHistory, type AttendanceHistoryItem } from "./attendance-history";
@@ -14,6 +14,7 @@ import {
   getContactHistory,
   removeGroupParticipant,
   sgpAction,
+  sgpLookupByCpf,
   type ContactDetails,
   type GroupInfoResult,
 } from "@/app/(app)/atendimento/actions";
@@ -79,6 +80,35 @@ export function AttendancePanel({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<AttendanceHistoryItem[]>([]);
+  const [sgpLoading, setSgpLoading] = useState(false);
+  const [sgpMsg, setSgpMsg] = useState<string | null>(null);
+
+  /** Busca o CPF/CNPJ no SGP e autopreenche o cadastro. */
+  async function doSgpLookup() {
+    const cpf = (fields.cpfcnpj ?? "").trim();
+    if (!cpf) { setSgpMsg("Digite o CPF/CNPJ primeiro."); return; }
+    setSgpLoading(true); setSgpMsg(null);
+    try {
+      const r = await sgpLookupByCpf(cpf);
+      if (!r.encontrado) { setSgpMsg(r.erro ?? "Cadastro não localizado no SGP."); return; }
+      if (r.nome) setName(r.nome);
+      setFields((s) => ({
+        ...s,
+        cpfcnpj: r.cpfcnpj ?? s.cpfcnpj,
+        contrato: r.contrato ?? s.contrato,
+        plano: r.plano ?? s.plano,
+        status_cliente: r.status_cliente ?? s.status_cliente,
+        endereco: r.endereco ?? s.endereco,
+        email: r.email || s.email,
+      }));
+      const n = r.contratos?.length ?? 0;
+      setSgpMsg(`✓ ${r.nome}${n > 1 ? ` — ${n} contratos (preenchi o principal)` : ""}. Confira e clique em Salvar.`);
+    } catch (e) {
+      setSgpMsg(e instanceof Error ? e.message : "Erro na busca do SGP.");
+    } finally {
+      setSgpLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancel = false;
@@ -237,7 +267,29 @@ export function AttendancePanel({
                 <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Field>
                 {CRM_FIELDS.map((f) => (
                   <Field key={f.key} label={f.label}>
-                    {f.type === "select" ? (
+                    {f.key === "cpfcnpj" ? (
+                      <div className="space-y-1">
+                        <div className="flex gap-1.5">
+                          <input
+                            value={fields.cpfcnpj ?? ""}
+                            onChange={(e) => setFields((s) => ({ ...s, cpfcnpj: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") doSgpLookup(); }}
+                            placeholder="CPF ou CNPJ (só números)"
+                            className={inputCls}
+                          />
+                          <button
+                            type="button"
+                            onClick={doSgpLookup}
+                            disabled={sgpLoading}
+                            title="Buscar no SGP e preencher os dados"
+                            className="flex shrink-0 items-center gap-1 rounded-lg bg-brand px-2.5 text-xs font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
+                          >
+                            {sgpLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} SGP
+                          </button>
+                        </div>
+                        {sgpMsg && <p className="text-[11px] text-ink-soft">{sgpMsg}</p>}
+                      </div>
+                    ) : f.type === "select" ? (
                       <select value={fields[f.key] ?? ""} onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} className={inputCls}>
                         {f.options!.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
                       </select>

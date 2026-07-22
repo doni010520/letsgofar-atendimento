@@ -1187,6 +1187,57 @@ export async function searchByProtocol(protocol: string) {
 }
 
 /** Ação SGP manual no painel do contato (2ª via, PIX, liberação, status). */
+/**
+ * Busca um CPF/CNPJ em TODAS as contas SGP da org (multi-cidade) e devolve os
+ * dados do cadastro para autopreencher o painel do contato. Usa o contrato com
+ * débito (ou o primeiro) para plano/status/endereço.
+ */
+export async function sgpLookupByCpf(cpfcnpj: string): Promise<{
+  encontrado: boolean; erro?: string;
+  nome?: string; cpfcnpj?: string; contrato?: string; plano?: string;
+  status_cliente?: string; endereco?: string; email?: string;
+  contratos?: { contrato: number; plano?: string; status?: string }[];
+}> {
+  if (isPreview()) return { encontrado: false, erro: "Modo preview." };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const cpf = String(cpfcnpj || "").replace(/\D+/g, "");
+  if (cpf.length < 11) return { encontrado: false, erro: "Informe um CPF (11) ou CNPJ (14) válido." };
+
+  const supabase = await createClient();
+  const { sgpFromConfig } = await import("@/lib/sgp");
+  const { data: integs } = await supabase
+    .from("integrations")
+    .select("config")
+    .eq("organization_id", session.organization.id)
+    .eq("type", "sgp")
+    .eq("active", true);
+
+  const clients = ((integs ?? []) as { config: unknown }[])
+    .map((r) => { try { return sgpFromConfig(r.config); } catch { return null; } })
+    .filter((c): c is NonNullable<typeof c> => !!c);
+  if (!clients.length) return { encontrado: false, erro: "Nenhum SGP configurado." };
+
+  for (const sgp of clients) {
+    const c = await sgp.consultarCliente({ cpfcnpj: cpf }).catch(() => null);
+    if (c?.encontrado && c.contratos.length) {
+      const ct = c.contratos.find((x) => (x.valorEmAberto ?? 0) > 0) ?? c.contratos[0];
+      return {
+        encontrado: true,
+        nome: c.nome ?? "",
+        cpfcnpj: c.cpfcnpj ?? cpf,
+        contrato: ct.contrato ? String(ct.contrato) : "",
+        plano: ct.plano ?? "",
+        status_cliente: ct.status ?? "",
+        endereco: ct.endereco ?? "",
+        email: c.emails?.[0] ?? "",
+        contratos: c.contratos.map((x) => ({ contrato: x.contrato, plano: x.plano, status: x.status })),
+      };
+    }
+  }
+  return { encontrado: false, erro: "Cadastro não localizado no SGP." };
+}
+
 export async function sgpAction(conversationId: string, action: string, contrato: number): Promise<string> {
   if (isPreview()) return "Modo preview.";
   const session = await getSession();
