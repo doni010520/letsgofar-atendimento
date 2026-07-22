@@ -9,8 +9,9 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   // Não envia Referer para origens externas.
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // Desativa recursos sensíveis desnecessários.
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  // Recursos sensíveis: microfone (gravar áudio) e geolocalização (enviar local)
+  // liberados só para a PRÓPRIA origem; câmera e pagamento seguem bloqueados.
+  { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(self), payment=()" },
   // CSP: restringe origens de scripts/estilos/conexões.
   // AJUSTE conforme adicionar CDNs/fontes externas.
   {
