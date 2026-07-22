@@ -9,10 +9,20 @@ export async function getConversations(): Promise<ConversationOverview[]> {
 
   const supabase = await createClient();
 
-  // Canais PRIVADOS: um canal com credentials.private_owner só aparece para esse
-  // usuário (as conversas dele ficam ocultas para todos os demais).
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id ?? null;
+
+  // Papel do usuário: admin (ou dono) vê tudo; ATENDENTE vê só as conversas
+  // NÃO ATRIBUÍDAS (fila/bot) + as atribuídas a ELE. Nunca as de outro atendente.
+  let isAdmin = false;
+  if (userId) {
+    const { data: me } = await supabase.from("profiles").select("role, super_admin").eq("id", userId).maybeSingle();
+    const p = me as { role?: string; super_admin?: boolean } | null;
+    isAdmin = p?.role === "admin" || p?.super_admin === true;
+  }
+
+  // Canais PRIVADOS: um canal com credentials.private_owner só aparece para esse
+  // usuário (as conversas dele ficam ocultas para todos os demais).
   const { data: chans } = await supabase.from("channels").select("id, credentials");
   const hidden = new Set<string>();
   for (const c of (chans ?? []) as { id: string; credentials: Record<string, unknown> | null }[]) {
@@ -24,8 +34,12 @@ export async function getConversations(): Promise<ConversationOverview[]> {
     .from("conversation_overview")
     .select("*")
     .order("last_message_at", { ascending: false, nullsFirst: false });
-  const rows = (data as ConversationOverview[]) ?? [];
-  return hidden.size ? rows.filter((r) => !hidden.has(r.channel_id)) : rows;
+  let rows = (data as ConversationOverview[]) ?? [];
+  if (hidden.size) rows = rows.filter((r) => !hidden.has(r.channel_id));
+  if (!isAdmin) {
+    rows = rows.filter((r) => !r.assigned_user_id || r.assigned_user_id === userId);
+  }
+  return rows;
 }
 
 /** Mapa conversa → lista de tag_ids (para filtros do board). */
