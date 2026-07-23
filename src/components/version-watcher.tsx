@@ -18,9 +18,13 @@ export function VersionWatcher() {
   useEffect(() => {
     let cancel = false;
     const markStale = () => {
-      // Aba em segundo plano: recarrega SOZINHA (ninguém está digitando ali).
-      // Aba ativa: mostra o botão (não interrompe quem está atendendo).
-      if (document.hidden) window.location.reload();
+      // Aba em segundo plano → recarrega sozinha. Aba ativa: só recarrega
+      // sozinha se NINGUÉM estiver digitando (senão perderia o texto) — aí
+      // mostra o botão. Objetivo: ninguém fica preso em bundle antigo.
+      if (document.hidden) { window.location.reload(); return; }
+      const typing = Array.from(document.querySelectorAll("textarea, input[type=text], input:not([type])"))
+        .some((el) => (el as HTMLInputElement | HTMLTextAreaElement).value?.trim());
+      if (!typing) window.location.reload();
       else setStale(true);
     };
     const check = async () => {
