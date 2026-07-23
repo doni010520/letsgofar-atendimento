@@ -318,8 +318,8 @@ export function AttendanceChatModal({
           <div className="flex items-center gap-1">
             {conv.status !== "closed" && (
               <>
-                <button onClick={handleAssign} title="Assumir atendimento" className="inline-flex items-center gap-1 rounded-md bg-surface px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm hover:bg-gray-100">
-                  <UserCheck size={14} /> Assumir
+                <button onClick={handleAssign} title="Atribuir este atendimento a mim" className="inline-flex items-center gap-1 rounded-md bg-surface px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm hover:bg-gray-100">
+                  <UserCheck size={14} /> Atribuir
                 </button>
                 <button onClick={() => setTransferring(true)} title="Transferir" className="inline-flex items-center gap-1 rounded-md bg-surface px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm hover:bg-gray-100">
                   <ArrowRightLeft size={14} /> Transferir
@@ -330,7 +330,7 @@ export function AttendanceChatModal({
               </>
             )}
             {conv.status === "closed" && (
-              <button onClick={handleAssign} title="Reabrir e assumir este atendimento" className="inline-flex items-center gap-1 rounded-md bg-brand-light px-2.5 py-1.5 text-xs font-medium text-brand shadow-sm hover:bg-brand-light/70">
+              <button onClick={handleAssign} title="Reabrir e atribuir a mim" className="inline-flex items-center gap-1 rounded-md bg-brand-light px-2.5 py-1.5 text-xs font-medium text-brand shadow-sm hover:bg-brand-light/70">
                 <RotateCcw size={14} /> Reabrir
               </button>
             )}

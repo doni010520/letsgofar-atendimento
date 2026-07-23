@@ -107,12 +107,14 @@ export function ConversationList({
   onSelect,
   onPauseAi,
   onNewConversation,
+  userId = null,
 }: {
   conversations: ConversationOverview[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onPauseAi?: (id: string) => void;
   onNewConversation?: () => void;
+  userId?: string | null;
 }) {
   const [statusTab, setStatusTab] = useState<ConversationStatus | "all">("all");
   const [query, setQuery] = useState("");
@@ -159,6 +161,9 @@ export function ConversationList({
     return conversations.filter((c) => {
       // Aba de status
       if (statusTab !== "all" && c.status !== statusTab) return false;
+      // "Em andamento" = SÓ as minhas (atribuídas a mim), inclusive p/ admin —
+      // que em "Todos" vê tudo, mas em "Em andamento" quer só o que ele assumiu.
+      if (statusTab === "open" && userId && c.assigned_user_id !== userId) return false;
       // Busca textual
       if (query) {
         const q = query.toLowerCase();
@@ -369,7 +374,7 @@ export function ConversationList({
                           e.stopPropagation();
                           onPauseAi(c.id);
                         }}
-                        title="Pausar IA e assumir"
+                        title="Pausar IA e atribuir a mim"
                         className="rounded p-0.5 text-ink-soft opacity-0 transition hover:bg-violet-100 hover:text-violet-700 group-hover:opacity-100"
                       >
                         <BotOff size={14} />

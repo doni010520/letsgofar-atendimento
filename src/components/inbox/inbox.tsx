@@ -779,6 +779,7 @@ export function Inbox({
           onSelect={selectConversation}
           onPauseAi={handlePauseAiQuick}
           onNewConversation={(channels?.length ?? 0) > 0 ? openNewConversation : undefined}
+          userId={userId}
         />
       </div>
       {selected ? (

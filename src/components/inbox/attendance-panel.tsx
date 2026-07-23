@@ -14,6 +14,7 @@ import {
   getContactHistory,
   removeGroupParticipant,
   sgpAction,
+  sgpSendPix,
   sgpLookupByCpf,
   type ContactDetails,
   type GroupInfoResult,
@@ -333,7 +334,15 @@ export function AttendancePanel({
                       ] as const).map(({ action, label, icon: Icon }) => (
                         <button key={action} type="button"
                           onClick={async () => {
-                            const r = await sgpAction(conversation.id, action, parseInt(fields.contrato, 10));
+                            const ct = parseInt(fields.contrato, 10);
+                            if (action === "pix") {
+                              // PIX: envia o copia-e-cola direto pro cliente na conversa.
+                              if (!confirm("Enviar o PIX (copia e cola) para o cliente agora?")) return;
+                              const r = await sgpSendPix(conversation.id, ct);
+                              alert(r.message);
+                              return;
+                            }
+                            const r = await sgpAction(conversation.id, action, ct);
                             alert(typeof r === "string" ? r : JSON.stringify(r, null, 2));
                           }}
                           className="flex items-center justify-center gap-1.5 rounded-lg bg-gray-50 px-2 py-2 text-xs font-medium text-ink transition hover:bg-gray-100">

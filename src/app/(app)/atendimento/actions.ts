@@ -1279,6 +1279,81 @@ export async function sgpAction(conversationId: string, action: string, contrato
   }
 }
 
+/**
+ * Gera o PIX copia-e-cola da 1ª fatura em aberto e ENVIA direto ao cliente na
+ * conversa (não só devolve o texto). Busca em todos os SGPs configurados para
+ * achar o que tem esse contrato — cobre operação multi-cidade (Iguaí, Nova
+ * Canaã, etc.). Usado pelo botão "PIX" na aba Financeiro do atendimento.
+ */
+export async function sgpSendPix(conversationId: string, contrato: number): Promise<{ ok: boolean; message: string }> {
+  if (isPreview()) return { ok: true, message: "Modo preview." };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  if (!contrato || Number.isNaN(contrato)) return { ok: false, message: "Contrato inválido." };
+
+  const supabase = await createClient();
+  const { sgpFromConfig } = await import("@/lib/sgp");
+  const { data: integs } = await supabase
+    .from("integrations")
+    .select("config")
+    .eq("organization_id", session.organization.id)
+    .eq("type", "sgp")
+    .eq("active", true);
+
+  const clients = ((integs ?? []) as { config: unknown }[])
+    .map((r) => { try { return sgpFromConfig(r.config); } catch { return null; } })
+    .filter((c): c is NonNullable<typeof c> => !!c);
+  if (!clients.length) return { ok: false, message: "Nenhum SGP configurado." };
+
+  // Acha o SGP que tem fatura em aberto para este contrato e gera o PIX.
+  let codigoPix: string | null = null;
+  for (const sgp of clients) {
+    const titulos = await sgp.titulosEmAberto({ contrato }).catch(() => [] as Awaited<ReturnType<typeof sgp.titulosEmAberto>>);
+    if (!titulos.length) continue;
+    const px = await sgp.gerarPix(titulos[0].fatura, contrato).catch(() => null);
+    if (px?.codigoPix) { codigoPix = px.codigoPix; break; }
+  }
+  if (!codigoPix) return { ok: false, message: "Nenhuma fatura em aberto (ou PIX indisponível) para este contrato." };
+
+  // Envia ao cliente: uma mensagem de instrução + o código copia-e-cola sozinho
+  // (numa mensagem separada, pra facilitar o copiar).
+  const { to, channel } = await recipientFor(supabase, conversationId);
+  const intro = "Segue o PIX *copia e cola* para pagamento. É só copiar o código abaixo e pagar pelo app do seu banco: 👇";
+
+  let allOk = true;
+  for (const body of [intro, codigoPix]) {
+    const { data: msg } = await supabase
+      .from("messages")
+      .insert({
+        organization_id: session.organization.id,
+        conversation_id: conversationId,
+        direction: "out",
+        sender_type: "agent",
+        sender_id: session.userId,
+        content_type: "text",
+        body,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    try {
+      const res = await getProvider(channel).sendText({ to, text: body });
+      await supabase.from("messages").update({ status: "sent", external_id: res?.externalId ?? null }).eq("id", msg!.id);
+    } catch (e) {
+      allOk = false;
+      console.error("sgpSendPix", e);
+      await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
+    }
+  }
+
+  await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} enviou PIX ao cliente (contrato ${contrato})`, { conversationId, userId: session.userId, action: "enviar_pix" }, session.organization.id);
+  revalidatePath("/atendimento");
+  return allOk
+    ? { ok: true, message: "PIX enviado ao cliente. ✅" }
+    : { ok: false, message: "Não foi possível enviar o PIX ao cliente. Tente novamente." };
+}
+
 /** Remove um participante de um grupo WhatsApp. */
 export async function removeGroupParticipant(conversationId: string, phone: string): Promise<{ ok: boolean; error?: string }> {
   if (isPreview()) return { ok: false, error: "Modo preview." };
