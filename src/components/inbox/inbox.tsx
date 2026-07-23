@@ -291,9 +291,26 @@ export function Inbox({
           );
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Se o canal cair (rede/token expirado), re-sincroniza pelo polling na
+        // hora — evita ficar "surdo" sem perceber (o "precisa dar F5").
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          fetchConversations().then((c) => Array.isArray(c) && setConversations(c)).catch(() => {});
+        }
+      });
+
+    // Mantém o WebSocket do realtime AUTENTICADO quando o token do navegador é
+    // renovado (~a cada 1h). Sem isto, depois de um tempo o realtime para de
+    // entregar mensagens novas sem erro visível — a causa clássica do "só vejo
+    // mensagem nova dando F5".
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
+    });
 
     return () => {
+      authSub.subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [live, router]);

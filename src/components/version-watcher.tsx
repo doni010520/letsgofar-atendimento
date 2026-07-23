@@ -11,21 +11,32 @@ import { APP_VERSION } from "@/lib/version";
  */
 export function VersionWatcher() {
   const [stale, setStale] = useState(false);
+  const staleRef = useRef(false);
   const loaded = useRef(APP_VERSION);
+  useEffect(() => { staleRef.current = stale; }, [stale]);
 
   useEffect(() => {
     let cancel = false;
+    const markStale = () => {
+      // Aba em segundo plano: recarrega SOZINHA (ninguém está digitando ali).
+      // Aba ativa: mostra o botão (não interrompe quem está atendendo).
+      if (document.hidden) window.location.reload();
+      else setStale(true);
+    };
     const check = async () => {
       try {
         const r = await fetch("/api/version", { cache: "no-store" });
         const j = (await r.json()) as { version?: string };
-        if (!cancel && j.version && j.version !== loaded.current) setStale(true);
+        if (!cancel && j.version && j.version !== loaded.current) markStale();
       } catch {
         /* silencioso */
       }
     };
+    const onVis = () => {
+      if (document.hidden) { if (staleRef.current) window.location.reload(); } // saiu da aba desatualizado → atualiza
+      else check(); // voltou pra aba → confere na hora
+    };
     const t = setInterval(check, 60000); // a cada 1 min
-    const onVis = () => { if (!document.hidden) check(); }; // e ao voltar o foco
     document.addEventListener("visibilitychange", onVis);
     check();
     return () => { cancel = true; clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
