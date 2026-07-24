@@ -35,6 +35,10 @@ export async function getConversations(): Promise<ConversationOverview[]> {
     .select("*")
     .order("last_message_at", { ascending: false, nullsFirst: false });
   let rows = (data as ConversationOverview[]) ?? [];
+  // Grupos não fazem parte do atendimento: novas mensagens de grupo já são
+  // descartadas no webhook (inbound.ts); aqui escondemos as que ficaram do
+  // período anterior, sem apagar o histórico.
+  rows = rows.filter((r) => !r.is_group);
   if (hidden.size) rows = rows.filter((r) => !hidden.has(r.channel_id));
   if (!isAdmin) {
     rows = rows.filter((r) => !r.assigned_user_id || r.assigned_user_id === userId);

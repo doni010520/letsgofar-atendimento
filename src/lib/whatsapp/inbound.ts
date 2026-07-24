@@ -129,6 +129,11 @@ export async function persistInbound(messages: InboundMessage[]) {
   for (const msg of messages) {
     if (!msg.channelExternalId || !msg.from) continue;
 
+    // Conversas de GRUPO não entram na aplicação: descarta antes de criar
+    // contato/conversa/mensagem. O atendimento é 1:1 — grupo só gerava ruído
+    // na caixa de entrada. (Também cobre as reações vindas de grupo.)
+    if (msg.isGroup || String(msg.chatJid ?? "").endsWith("@g.us")) continue;
+
     const { data: channel } = await db
       .from("channels")
       .select("*")
