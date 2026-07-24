@@ -1279,8 +1279,15 @@ export async function sgpAction(conversationId: string, action: string, contrato
   }
 }
 
+/** "2026-08-25" -> "25/08/2026" (deixa passar o que já vier em outro formato). */
+function fmtVenc(v?: string): string | null {
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : v;
+}
+
 /**
- * Gera o PIX copia-e-cola da 1ª fatura em aberto e ENVIA direto ao cliente na
+ * Gera o PIX copia-e-cola da fatura mais antiga em aberto e ENVIA direto ao cliente na
  * conversa (não só devolve o texto). Busca em todos os SGPs configurados para
  * achar o que tem esse contrato — cobre operação multi-cidade (Iguaí, Nova
  * Canaã, etc.). Usado pelo botão "PIX" na aba Financeiro do atendimento.
@@ -1305,20 +1312,27 @@ export async function sgpSendPix(conversationId: string, contrato: number): Prom
     .filter((c): c is NonNullable<typeof c> => !!c);
   if (!clients.length) return { ok: false, message: "Nenhum SGP configurado." };
 
-  // Acha o SGP que tem fatura em aberto para este contrato e gera o PIX.
+  // Acha o SGP que tem fatura em aberto para este contrato e gera o PIX da
+  // fatura MAIS ANTIGA em aberto (titulosEmAberto já ordena por vencimento e
+  // descarta canceladas) — nunca de uma parcela futura.
   let codigoPix: string | null = null;
+  let alvo: { fatura: number; valor?: number; vencimento?: string } | null = null;
   for (const sgp of clients) {
     const titulos = await sgp.titulosEmAberto({ contrato }).catch(() => [] as Awaited<ReturnType<typeof sgp.titulosEmAberto>>);
     if (!titulos.length) continue;
-    const px = await sgp.gerarPix(titulos[0].fatura, contrato).catch(() => null);
-    if (px?.codigoPix) { codigoPix = px.codigoPix; break; }
+    const t = titulos[0];
+    const px = await sgp.gerarPix(t.fatura, contrato).catch(() => null);
+    if (px?.codigoPix) { codigoPix = px.codigoPix; alvo = { fatura: t.fatura, valor: t.valor, vencimento: t.vencimento }; break; }
   }
-  if (!codigoPix) return { ok: false, message: "Nenhuma fatura em aberto (ou PIX indisponível) para este contrato." };
+  if (!codigoPix || !alvo) return { ok: false, message: "Nenhuma fatura em aberto (ou PIX indisponível) para este contrato." };
 
   // Envia ao cliente: uma mensagem de instrução + o código copia-e-cola sozinho
   // (numa mensagem separada, pra facilitar o copiar).
   const { to, channel } = await recipientFor(supabase, conversationId);
-  const intro = "Segue o PIX *copia e cola* para pagamento. É só copiar o código abaixo e pagar pelo app do seu banco: 👇";
+  const venc = fmtVenc(alvo.vencimento);
+  const val = typeof alvo.valor === "number" ? `R$ ${alvo.valor.toFixed(2).replace(".", ",")}` : null;
+  const ref = [val, venc ? `venc. ${venc}` : null].filter(Boolean).join(" — ");
+  const intro = `Segue o PIX *copia e cola* da sua fatura${ref ? ` (${ref})` : ""}. É só copiar o código abaixo e pagar pelo app do seu banco: 👇`;
 
   let allOk = true;
   for (const body of [intro, codigoPix]) {
@@ -1347,10 +1361,10 @@ export async function sgpSendPix(conversationId: string, contrato: number): Prom
   }
 
   await supabase.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
-  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} enviou PIX ao cliente (contrato ${contrato})`, { conversationId, userId: session.userId, action: "enviar_pix" }, session.organization.id);
+  void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} enviou PIX ao cliente (contrato ${contrato}, fatura ${alvo.fatura}${venc ? `, venc. ${venc}` : ""})`, { conversationId, userId: session.userId, action: "enviar_pix", fatura: alvo.fatura, vencimento: alvo.vencimento }, session.organization.id);
   revalidatePath("/atendimento");
   return allOk
-    ? { ok: true, message: "PIX enviado ao cliente. ✅" }
+    ? { ok: true, message: `PIX enviado ao cliente ✅\n\nFatura ${alvo.fatura}${ref ? ` — ${ref}` : ""}\n(a mais antiga em aberto)` }
     : { ok: false, message: "Não foi possível enviar o PIX ao cliente. Tente novamente." };
 }
 

@@ -156,10 +156,22 @@ export class SgpClient {
     return normalizeTitulos(raw);
   }
 
-  /** Atalho: só os títulos ainda não pagos (filtra localmente). */
+  /**
+   * Atalho: só os títulos realmente cobráveis (filtra localmente).
+   *
+   * Duas regras importantes — o SGP devolve a lista em ordem arbitrária (na
+   * prática, id decrescente = fatura MAIS FUTURA primeiro) e mistura títulos
+   * cancelados junto dos abertos:
+   *  - exclui pagos E cancelados (cancelado não pode virar cobrança);
+   *  - ordena por vencimento CRESCENTE, para que `[0]` seja sempre a fatura
+   *    mais antiga em aberto — a que o cliente deve pagar primeiro.
+   * Sem isso, o PIX/2ª via saía com uma fatura de meses no futuro.
+   */
   async titulosEmAberto(by: { contrato?: number; cpfcnpj?: string }): Promise<SgpTitulo[]> {
     const list = await this.listarTitulos(by);
-    return list.filter((t) => !t.pago);
+    return list
+      .filter((t) => !t.pago && !t.cancelado)
+      .sort((a, b) => String(a.vencimento ?? "").localeCompare(String(b.vencimento ?? "")));
   }
 
   /** Gera/retorna a 2ª via (linha digitável + link, uma ou várias faturas). POST /api/ura/fatura2via/ */
@@ -350,6 +362,9 @@ export function normalizeCliente(raw: Record<string, unknown>): SgpCliente {
 }
 
 const PAGO = /pag|liquidad|quitad|baixad/i;
+// "cancelado"/"estornado" NÃO é cobrável — o SGP devolve esses títulos
+// misturados com os abertos na mesma listagem.
+const CANCELADO = /cancelad|estornad/i;
 
 export function normalizeTitulos(raw: Record<string, unknown>): SgpTitulo[] {
   const list = asArray(raw.titulos ?? raw.faturas ?? raw);
@@ -367,6 +382,7 @@ export function normalizeTitulos(raw: Record<string, unknown>): SgpTitulo[] {
         diasAtraso: pickNum(t, ["diasAtraso"]),
         status,
         pago: status ? PAGO.test(status) : (pickNum(t, ["statusid"]) === 2),
+        cancelado: status ? CANCELADO.test(status) : false,
         linhaDigitavel: pickStr(t, ["linhaDigitavel", "linhadigitavel"]),
         codigoBarras: pickStr(t, ["codigoBarras", "codigobarras"]),
         codigoPix: pickStr(t, ["codigoPix", "codigopix"]),

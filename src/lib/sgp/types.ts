@@ -59,8 +59,9 @@ export interface SgpTitulo {
   valorCorrigido?: number;
   vencimento: string;
   diasAtraso?: number;
-  status?: string;            // ex.: "Gerado", "Pago", "Vencido"
+  status?: string;            // ex.: "Gerado", "Pago", "Vencido", "cancelado"
   pago?: boolean;
+  cancelado?: boolean;        // título cancelado/estornado — nunca cobrar
   linhaDigitavel?: string;
   codigoBarras?: string;
   codigoPix?: string;
