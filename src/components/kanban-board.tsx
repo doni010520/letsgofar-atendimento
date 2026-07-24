@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Hash, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { moveConversationStatus } from "@/app/(app)/atendimento-v2/actions";
 import { AttendanceChatModal } from "@/components/inbox/attendance-chat-modal";
 import type {
@@ -71,6 +72,68 @@ export function KanbanBoard({
   const [deptId, setDeptId] = useState("");
   const [tagId, setTagId] = useState("");
   const [search, setSearch] = useState("");
+
+  // ---------------------------------------------------------------------
+  // Atualização automática do board.
+  //
+  // O Kanban (Atendimento V2) recebe as conversas do servidor e NÃO tinha
+  // nenhuma atualização própria: só recarregava depois de uma ação manual.
+  // Resultado: mensagem/conversa nova só aparecia com F5. Aqui replicamos o
+  // que o Inbox (V1) já faz — realtime + polling de segurança + refresh ao
+  // voltar para a aba.
+  //
+  // Tudo converge para router.refresh(), que refaz o fetch no servidor
+  // (getConversations) e re-renderiza com os dados novos.
+  // ---------------------------------------------------------------------
+  const refreshing = useRef(false);
+  useEffect(() => {
+    // Agrupa rajadas de eventos: várias mensagens seguidas = um refresh só.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (refreshing.current) return;
+        refreshing.current = true;
+        router.refresh();
+        setTimeout(() => { refreshing.current = false; }, 800);
+      }, 400);
+    };
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("kanban-board")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, scheduleRefresh)
+      .subscribe((status) => {
+        // Se o socket cair (rede/suspensão), re-sincroniza ao voltar.
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") scheduleRefresh();
+      });
+
+    // Token renovado → o realtime precisa do token novo, senão para de receber.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
+    });
+
+    // Rede de segurança: se o realtime falhar silenciosamente, o board ainda
+    // se atualiza sozinho. Só roda com a aba visível, para não gastar à toa.
+    const poll = setInterval(() => { if (!document.hidden) scheduleRefresh(); }, 8000);
+
+    // Voltou para a aba → atualiza na hora.
+    const onVisible = () => { if (!document.hidden) scheduleRefresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      authSub?.subscription?.unsubscribe();
+      supabase.removeChannel(channel);
+    };
+  }, [router]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
