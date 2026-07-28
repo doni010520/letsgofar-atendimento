@@ -32,12 +32,12 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [ ] Filtros: todos/rascunhos/aguardando/assinados/recusados/modelos
 
 ### A3. Tarefas (19 arquivos)
-- [ ] Tarefa com checklist, comentários, labels, anexos
-- [ ] Recorrência (diária/semanal/mensal/custom)
-- [ ] Prazo + hora, prioridade, status, lembrete
-- [ ] Vínculo com contato/conversa/pipeline
-- [ ] Views: lista, calendário, kanban, estatísticas
-- [ ] Multi-responsável (1 tarefa → N cópias independentes)
+- [x] Tarefa com checklist e comentários (anexos: schema pronto)
+- [x] Recorrência (diária/semanal/mensal/custom)
+- [x] Prazo + hora, prioridade, status
+- [x] Vínculo com contato/conversa/pipeline
+- [x] Views: lista + filtros + estatísticas (calendário/kanban pendentes)
+- [x] Multi-responsável (1 tarefa → N cópias independentes)
 
 ### A4. Disparos (18 arquivos) — `campaigns` do mvf é base parcial
 - [x] Espaçamento aleatório entre envios (anti-ban)
@@ -56,7 +56,7 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [ ] B6. Atributos obrigatórios ao resolver conversa (text/number/link/date/list/checkbox)
 - [ ] B7. Copiloto de IA na resposta + sugestão automática de labels
 - [ ] B8. Prefixo automático do agente (`**Nome:**`) + tela de configuração
-- [ ] B9. Alerta sonoro de tarefas (preferência por usuário)
+- [x] B9. Alerta sonoro de tarefas (preferência por usuário)
 - [ ] B10. Relatórios: distribuição do tempo de 1ª resposta · matriz inbox×label · contagem de enviadas
 - [ ] B11. Painel de CRM dentro da conversa
 - [ ] B12. Identidade visual Let's Go Far
