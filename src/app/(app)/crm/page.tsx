@@ -28,15 +28,31 @@ async function getData() {
   if (PREVIEW_MODE) return { pipelines: [], stages: [], cards: [], agents: [], fields: [], automations: [], tags: [] };
   const sb = await createClient();
 
+  // Visibilidade do CRM por usuário: 'all' vê tudo, 'own' só o que atende,
+  // 'none' não vê nada (mesma ideia do policy_scope do Chatwoot).
+  const { data: auth } = await sb.auth.getUser();
+  const { data: me } = await sb
+    .from("profiles")
+    .select("id, role, crm_visibility")
+    .eq("id", auth.user?.id ?? "")
+    .maybeSingle();
+  const perfil = me as { id: string; role: string; crm_visibility: string } | null;
+  const visibilidade = perfil?.crm_visibility ?? "all";
+  const vePorUsuario =
+    visibilidade === "own" && !["admin", "supervisor"].includes(perfil?.role ?? "");
+
+  let cardsQuery = sb
+    .from("conversations")
+    .select("id, stage_id, deal_value, closed_won, assigned_user_id, last_message_at, contacts(id, name, phone)")
+    .not("stage_id", "is", null)
+    .limit(500);
+  if (vePorUsuario && perfil?.id) cardsQuery = cardsQuery.eq("assigned_user_id", perfil.id);
+
   const [{ data: pipelines }, { data: stages }, { data: cards }, { data: agents },
          { data: fields }, { data: automations }, { data: tags }] = await Promise.all([
     sb.from("pipelines").select("id, name, is_default").order("created_at"),
     sb.from("pipeline_stages").select("id, pipeline_id, name, color, position, outcome").order("position"),
-    sb
-      .from("conversations")
-      .select("id, stage_id, deal_value, closed_won, assigned_user_id, last_message_at, contacts(id, name, phone)")
-      .not("stage_id", "is", null)
-      .limit(500),
+    visibilidade === "none" ? Promise.resolve({ data: [] }) : cardsQuery,
     sb.from("profiles").select("id, name").order("name"),
     sb.from("pipeline_fields").select("id, pipeline_id, name, key, field_type, required, options").order("position"),
     sb.from("pipeline_automations").select("id, pipeline_id, name, trigger_type, actions, is_active, executions_count, last_executed_at").order("created_at"),

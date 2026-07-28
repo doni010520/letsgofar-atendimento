@@ -59,6 +59,7 @@ export const NAV: NavGroup[] = [
     title: "CRM",
     items: [
       { href: "/crm", label: "CRM", icon: KanbanSquare },
+      { href: "/crm/dashboard", label: "Painel do CRM", icon: LayoutDashboard },
       { href: "/tarefas", label: "Tarefas", icon: CheckSquare },
       { href: "/disparos", label: "Disparos", icon: Send },
       { href: "/contratos", label: "Contratos", icon: FileSignature },

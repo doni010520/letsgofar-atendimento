@@ -19,8 +19,8 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] Campos personalizados por pipeline (UI de criação e listagem)
 - [x] Motor de automações: 8 gatilhos × 7 ações + logs de execução
 - [x] Atividades/timeline por conversa
-- [ ] Permissões de CRM por usuário (visibilidade)
-- [ ] Dashboard do Kanban + Dashboard de controle de leads
+- [x] Permissões de CRM por usuário (all/own/none aplicado na consulta)
+- [x] Painel do CRM: funil, conversão, por responsável e leads parados
 
 ### A2. Contratos (41 arquivos)
 - [x] Modelos de contrato com variáveis dinâmicas
@@ -36,8 +36,8 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] Recorrência (diária/semanal/mensal/custom)
 - [x] Prazo + hora, prioridade, status, ações iniciar/cancelar/reabrir
 - [x] **Visibilidade**: admin vê tudo; atendente vê o que criou ou o que é dele (igual Chatwoot)
-- [ ] Anexos: schema pronto, falta upload na tela
-- [ ] Etiquetas na tarefa: schema pronto, falta UI
+- [x] Anexos (upload e remoção no painel de detalhe)
+- [x] Etiquetas na tarefa (no painel de detalhe)
 - [ ] ~~Lembrete~~: as colunas existiam no Chatwoot mas **nada as usava** — não é regressão
 - [x] Vínculo com contato/conversa/pipeline
 - [x] Views: lista, **calendário**, **kanban** + filtros e estatísticas
