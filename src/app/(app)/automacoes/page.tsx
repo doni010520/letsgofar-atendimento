@@ -1,6 +1,7 @@
 import { Scroll } from "@/components/scroll";
 import { PageHeader } from "@/components/ui";
 import { AutomationsClient } from "@/components/automations-client";
+import { TriagemButton } from "@/components/triagem-button";
 import { getChannels } from "@/lib/data/channels";
 import { createClient } from "@/lib/supabase/server";
 import { PREVIEW_MODE } from "@/lib/mock";
@@ -32,7 +33,10 @@ export default async function AutomacoesPage() {
   ]);
   return (
     <Scroll>
-      <PageHeader title="Automações" subtitle="Fluxos de chatbot vinculados aos seus canais." />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader title="Automações" subtitle="Fluxos de chatbot vinculados aos seus canais." />
+        <TriagemButton />
+      </div>
       <AutomationsClient automations={automations} channels={channels} integrations={integrations} />
     </Scroll>
   );

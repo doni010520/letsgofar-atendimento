@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
+import { withAgentPrefix, isAgentPrefixEnabled } from "@/lib/agent-prefix";
 import { getProvider } from "@/lib/whatsapp";
 import { getMessages, getConversations } from "@/lib/data/conversations";
 import { logEvent } from "@/lib/log";
@@ -310,6 +311,13 @@ export async function sendMessage(
     replyExcerpt = q?.body ?? (q?.content_type && q.content_type !== "text" ? `[${q.content_type}]` : null);
   }
 
+  // Prefixo "**Nome:**" quando a organização usa essa opção (B8).
+  const prefixed = withAgentPrefix({
+    content: body,
+    agentName: session.profile?.name,
+    enabled: isAgentPrefixEnabled(session.organization.settings),
+  });
+
   const { data: msg } = await supabase
     .from("messages")
     .insert({
@@ -319,7 +327,7 @@ export async function sendMessage(
       sender_type: "agent",
       sender_id: session.userId,
       content_type: "text",
-      body,
+      body: prefixed,
       reply_to_external: replyToExternal ?? null,
       reply_excerpt: replyExcerpt,
       status: "pending",
@@ -345,7 +353,7 @@ export async function sendMessage(
       .single();
     const to = recipientOf(conv);
     // Menções: no texto enviado, "@Nome" vira "@<número>" (o que o WhatsApp linka).
-    let waText = body;
+    let waText = prefixed;
     const mentionNums: string[] = [];
     for (const m of mentions ?? []) {
       const digits = m.phone.replace(/\D/g, "");
