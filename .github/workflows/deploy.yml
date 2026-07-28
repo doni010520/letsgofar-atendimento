@@ -45,7 +45,6 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             GIT_SHA=${{ github.sha }}
-            NEXT_PUBLIC_SUPABASE_URL=https://xzhzbefkxfgvwfqztqan.supabase.co
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6aHpiZWZreGZndndmcXp0cWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NjUwNjUsImV4cCI6MjA5NjM0MTA2NX0.wyqbuikHIHQaU9Vdu1dGxw6pw4wlDD1K_O1tx84TFEU
+            NEXT_PUBLIC_SUPABASE_URL=https://ikwpkmjvkjqsfefulhdz.supabase.co
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrd3BrbWp2a2pxc2ZlZnVsaGR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyNTQyMzEsImV4cCI6MjEwMDgzMDIzMX0.ABMPj54TCdbOwdP4oiWdW3Pbzv8nByTqEeig6Klgwjw
             NEXT_PUBLIC_META_GRAPH_VERSION=v23.0
-            NEXT_PUBLIC_META_APP_ID=1501308275071442
