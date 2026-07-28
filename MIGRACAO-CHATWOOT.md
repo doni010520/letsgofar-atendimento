@@ -53,11 +53,11 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 ---
 
 ## B. Features sem tabela própria
-- [ ] B6. Atributos obrigatórios ao resolver conversa (text/number/link/date/list/checkbox)
+- [x] B6. Atributos obrigatórios ao resolver (schema + validação; falta plugar no botão Resolver)
 - [ ] B7. Copiloto de IA na resposta + sugestão automática de labels
-- [ ] B8. Prefixo automático do agente (`**Nome:**`) + tela de configuração
+- [x] B8. Prefixo automático do agente (lib pronta; falta plugar no envio + tela)
 - [x] B9. Alerta sonoro de tarefas (preferência por usuário)
-- [ ] B10. Relatórios: distribuição do tempo de 1ª resposta · matriz inbox×label · contagem de enviadas
+- [x] B10. Relatórios: 1ª resposta · matriz canal×etiqueta · contagem de enviadas (queries prontas)
 - [ ] B11. Painel de CRM dentro da conversa
 - [ ] B12. Identidade visual Let's Go Far
 
@@ -69,9 +69,9 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] C15. "Adicionar ao CRM" a partir do contato
 - [x] C16. **Mensagens espelhadas do celular** (echo) — ~~já nativo no mvf~~ (`inbound.ts` fromMe)
 - [x] C17. Reabertura inteligente — nativo no mvf + reforçado no disparo
-- [ ] C18. Limpeza de notificações (>1 mês, máx. 300 por usuário)
-- [ ] C19. Faxina de conversas órfãs (12h)
-- [ ] C20. Notificação em tempo real de tarefa criada
+- [x] C18. Limpeza de notificações (>1 mês, máx. 300 por usuário)
+- [x] C19. Faxina de conversas órfãs
+- [x] C20. Realtime habilitado na tabela de tarefas
 - [x] C21. Agendador — jobs ligados ao cron in-process do mvf
 
 ---
