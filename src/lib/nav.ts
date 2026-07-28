@@ -40,6 +40,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
+      { href: "/relatorios/extras", label: "Relatórios detalhados", icon: BarChart3 },
     ],
   },
   {

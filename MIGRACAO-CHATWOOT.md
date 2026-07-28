@@ -61,7 +61,7 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] B7. Copiloto de IA (sugere resposta) + sugestão automática de etiquetas
 - [x] B8. Prefixo automático do agente (aplicado no envio real)
 - [x] B9. Alerta sonoro de tarefas (preferência por usuário)
-- [x] B10. Relatórios: 1ª resposta · matriz canal×etiqueta · contagem de enviadas (queries prontas; falta tela)
+- [x] B10. Relatórios: 1ª resposta · matriz canal×etiqueta · contagem de enviadas (tela em /relatorios/extras)
 - [x] B11. Painel de CRM dentro da conversa (estágio + valor)
 - [x] B12. Identidade visual Let's Go Far (logo, títulos, manifest)
 
