@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
 import type { TaskRow } from "@/app/(app)/tarefas/page";
 import { createTask, updateTaskStatus, deleteTask, toggleTaskItem } from "@/app/(app)/tarefas/actions";
+import { TaskKanbanView, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
 
 const PRIORITY: Record<string, { label: string; cls: string }> = {
   urgent: { label: "Urgente", cls: "bg-red-100 text-red-700" },
@@ -28,6 +29,8 @@ export function TasksClient({
   tasks: TaskRow[];
   agents: { id: string; name: string | null }[];
 }) {
+  const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
+  const [detail, setDetail] = useState<TaskRow | null>(null);
   const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("active");
   const [creating, setCreating] = useState(false);
   const [items, setItems] = useState<string[]>([]);
@@ -195,7 +198,39 @@ export function TasksClient({
         <Card><p className="text-xs text-ink-soft">Atrasadas</p><p className="text-2xl font-semibold text-red-600">{stats.overdue}</p></Card>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-lg bg-gray-100 p-1">
+          {([
+            { k: "list", l: "Lista" },
+            { k: "kanban", l: "Kanban" },
+            { k: "calendar", l: "Calendário" },
+          ] as const).map((m) => (
+            <button
+              key={m.k}
+              onClick={() => setMode(m.k)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                mode === m.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
+              }`}
+            >
+              {m.l}
+            </button>
+          ))}
+        </div>
+        <Button onClick={() => setCreating(true)}>+ Nova tarefa</Button>
+      </div>
+
+      {mode === "kanban" && <TaskKanbanView tasks={tasks} onOpen={setDetail} />}
+      {mode === "calendar" && <TaskCalendarView tasks={tasks} onOpen={setDetail} />}
+
+      {detail && (
+        <TaskDetailPanel
+          task={tasks.find((t) => t.id === detail.id) ?? detail}
+          agents={agents}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
+      <div className={`flex items-center justify-between ${mode === "list" ? "" : "hidden"}`}>
         <div className="inline-flex rounded-lg bg-gray-100 p-1">
           {VIEWS.map((v) => (
             <button
@@ -209,12 +244,11 @@ export function TasksClient({
             </button>
           ))}
         </div>
-        <Button onClick={() => setCreating(true)}>+ Nova tarefa</Button>
       </div>
 
-      {!visible.length && <EmptyState title="Nenhuma tarefa aqui" hint="Crie uma tarefa ou troque o filtro." />}
+      {mode === "list" && !visible.length && <EmptyState title="Nenhuma tarefa aqui" hint="Crie uma tarefa ou troque o filtro." />}
 
-      <div className="space-y-2">
+      <div className={`space-y-2 ${mode === "list" ? "" : "hidden"}`}>
         {visible.map((t) => {
           const p = PRIORITY[t.priority] ?? PRIORITY.medium;
           const done = t.status === "completed";
@@ -235,7 +269,7 @@ export function TasksClient({
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`font-medium text-ink ${done ? "line-through opacity-60" : ""}`}>{t.title}</span>
+                    <button onClick={() => setDetail(t)} className={`text-left font-medium text-ink hover:underline ${done ? "line-through opacity-60" : ""}`}>{t.title}</button>
                     <span className={`rounded-full px-2 py-0.5 text-xs ${p.cls}`}>{p.label}</span>
                     {t.recurrence_type !== "none" && (
                       <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">repete</span>

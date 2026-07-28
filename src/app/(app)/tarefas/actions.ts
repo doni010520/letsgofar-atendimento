@@ -106,3 +106,46 @@ export async function addTaskComment(taskId: string, content: string) {
   });
   revalidatePath("/tarefas");
 }
+
+/** Ações de ciclo de vida (paridade com o Chatwoot: start/cancel/reopen). */
+export async function startTask(id: string) {
+  await orgUpdate("tasks", id, { status: "in_progress", started_at: new Date().toISOString() });
+  revalidatePath("/tarefas");
+}
+
+export async function cancelTask(id: string) {
+  await orgUpdate("tasks", id, { status: "cancelled" });
+  revalidatePath("/tarefas");
+}
+
+export async function reopenTask(id: string) {
+  await orgUpdate("tasks", id, { status: "pending", completed_at: null, started_at: null });
+  revalidatePath("/tarefas");
+}
+
+export async function addTaskItem(taskId: string, title: string) {
+  const session = await getSession();
+  if (!session?.organization || !title.trim()) return;
+  const sb = await createClient();
+  const { count } = await sb
+    .from("task_items")
+    .select("id", { count: "exact", head: true })
+    .eq("task_id", taskId);
+  await sb.from("task_items").insert({
+    organization_id: session.organization.id,
+    task_id: taskId,
+    title: title.trim(),
+    position: count ?? 0,
+  });
+  revalidatePath("/tarefas");
+}
+
+export async function deleteTaskItem(itemId: string) {
+  await orgDelete("task_items", itemId);
+  revalidatePath("/tarefas");
+}
+
+export async function deleteTaskComment(commentId: string) {
+  await orgDelete("task_comments", commentId);
+  revalidatePath("/tarefas");
+}

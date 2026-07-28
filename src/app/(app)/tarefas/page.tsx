@@ -19,6 +19,7 @@ export type TaskRow = {
   conversation_id: string | null;
   created_at: string;
   task_items?: { id: string; title: string; completed: boolean; position: number }[];
+  task_comments?: { id: string; content: string; created_at: string; profile_id: string | null }[];
 };
 
 async function getTasks(): Promise<TaskRow[]> {
@@ -26,7 +27,7 @@ async function getTasks(): Promise<TaskRow[]> {
   const sb = await createClient();
   const { data } = await sb
     .from("tasks")
-    .select("*, task_items(id, title, completed, position)")
+    .select("*, task_items(id, title, completed, position), task_comments(id, content, created_at, profile_id)")
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
   return (data as TaskRow[]) ?? [];

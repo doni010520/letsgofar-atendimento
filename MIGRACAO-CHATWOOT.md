@@ -32,11 +32,15 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] Filtros: todos/rascunhos/aguardando/assinados/recusados/modelos
 
 ### A3. Tarefas (19 arquivos)
-- [x] Tarefa com checklist e comentários (anexos: schema pronto)
+- [x] Tarefa com checklist e comentários (UI completa)
 - [x] Recorrência (diária/semanal/mensal/custom)
-- [x] Prazo + hora, prioridade, status
+- [x] Prazo + hora, prioridade, status, ações iniciar/cancelar/reabrir
+- [x] **Visibilidade**: admin vê tudo; atendente vê o que criou ou o que é dele (igual Chatwoot)
+- [ ] Anexos: schema pronto, falta upload na tela
+- [ ] Etiquetas na tarefa: schema pronto, falta UI
+- [ ] ~~Lembrete~~: as colunas existiam no Chatwoot mas **nada as usava** — não é regressão
 - [x] Vínculo com contato/conversa/pipeline
-- [x] Views: lista + filtros + estatísticas (calendário/kanban pendentes)
+- [x] Views: lista, **calendário**, **kanban** + filtros e estatísticas
 - [x] Multi-responsável (1 tarefa → N cópias independentes)
 
 ### A4. Disparos (18 arquivos) — `campaigns` do mvf é base parcial
@@ -75,6 +79,16 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] C21. Agendador — jobs ligados ao cron in-process do mvf
 
 ---
+
+## D. Configuração e dados da operação (faltou no 1º inventário)
+Levantado direto da instância em produção — **não aparece em código**:
+- [ ] D1. **13 respostas rápidas** (PIX/CNPJ, links de Meet por pessoa, cobrança, congelamento, cancelamento, multa, boas-vindas, briefing)
+- [ ] D2. **4 times**: financeiro, comercial, experiência do aluno, equipe
+- [ ] D3. **6 agentes** (usuários + permissões)
+- [ ] D4. **Bot de triagem/direcionamento inicial** (hoje no n8n; o mvf tem motor nativo com nós menu/transferir/tag)
+- [ ] D5. **Dados**: 863 contatos e 959 conversas
+- Confirmado que NÃO há: automações do Chatwoot (0), macros (0), campanhas (0), atributos customizados (0), agent bots (0)
+- No n8n só 3 workflows ativos são do LGF: triagem, relay de saída e o vigia
 
 ## Fora do app (fluxos n8n que viram nativos aqui)
 - Triagem com botões / distribuição de leads por setor
