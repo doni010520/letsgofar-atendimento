@@ -45,7 +45,10 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
           className={cn("mb-2 flex items-center gap-2", expanded ? "px-1" : "justify-center")}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-letsgofar.png" alt="Let's Go Far" className="h-10 w-10 shrink-0 object-contain" />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand">
+            {/* A logo é branca: vai sobre a cor da marca para aparecer nos dois temas. */}
+            <img src="/logo-letsgofar.png" alt="Let's Go Far" className="h-8 w-8 object-contain" />
+          </span>
           {expanded && <span className="whitespace-nowrap text-lg font-bold tracking-tight text-ink">Let's Go Far</span>}
         </Link>
 
