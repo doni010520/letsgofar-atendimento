@@ -40,15 +40,15 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [ ] Multi-responsável (1 tarefa → N cópias independentes)
 
 ### A4. Disparos (18 arquivos) — `campaigns` do mvf é base parcial
-- [ ] Espaçamento aleatório entre envios (anti-ban)
-- [ ] Janela de horário + teto diário
-- [ ] Personalização (`{primeiro_nome}`, merges) + spintax `{a|b}`
-- [ ] Fonte: CSV ou contatos salvos
-- [ ] Rastreio por destinatário (enviado/falha/pendente) + progresso
-- [ ] Atribuição das conversas criadas
+- [x] Espaçamento aleatório entre envios (anti-ban)
+- [x] Janela de horário + teto diário
+- [x] Personalização (`{primeiro_nome}`, merges) + spintax `{a|b}`
+- [x] Fonte: CSV ou contatos salvos
+- [x] Rastreio por destinatário (enviado/falha/pendente) + progresso
+- [x] Atribuição das conversas criadas
 
 ### A5. Mensagens Agendadas (4 arquivos)
-- [ ] Agendar mensagem para data/hora futura (com anexos)
+- [x] Agendar mensagem para data/hora futura (com anexos) — motor pronto
 
 ---
 
@@ -67,12 +67,12 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [ ] C13. Conversa nova **herda** CRM do contato (pipeline/estágio/valor)
 - [ ] C14. Log automático de mudanças (estágio/valor/ganho) + dispara automações
 - [ ] C15. "Adicionar ao CRM" a partir do contato
-- [ ] C16. **Mensagens espelhadas do celular** (echo) entram no sistema e não levam prefixo
-- [ ] C17. Reabertura inteligente: reusa conversa não-resolvida em vez de criar outra
+- [x] C16. **Mensagens espelhadas do celular** (echo) — ~~já nativo no mvf~~ (`inbound.ts` fromMe)
+- [x] C17. Reabertura inteligente — nativo no mvf + reforçado no disparo
 - [ ] C18. Limpeza de notificações (>1 mês, máx. 300 por usuário)
 - [ ] C19. Faxina de conversas órfãs (12h)
 - [ ] C20. Notificação em tempo real de tarefa criada
-- [ ] C21. Agendador de 1 em 1 minuto (para o agendamento sair no minuto certo)
+- [x] C21. Agendador — jobs ligados ao cron in-process do mvf
 
 ---
 
