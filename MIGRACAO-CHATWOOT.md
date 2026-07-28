@@ -13,23 +13,23 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 ## A. Módulos completos
 
 ### A1. CRM / Kanban (67 arquivos no Chatwoot)
-- [ ] Pipelines e estágios (posição, cor, ordenação)
-- [ ] Cards = conversas/contatos no funil
-- [ ] Valor do negócio (`deal_value`), ganho/perdido, data de fechamento
-- [ ] Campos personalizados por pipeline (+ valores)
-- [ ] Motor de automações: 8 gatilhos × 10 ações + logs de execução
-- [ ] Atividades/timeline por conversa
+- [x] Pipelines e estágios (posição, cor, ordenação)
+- [x] Cards = conversas no funil (arrastar entre estágios)
+- [x] Valor do negócio, ganho/perdido, data de fechamento
+- [ ] Campos personalizados por pipeline (schema pronto, falta UI)
+- [x] Motor de automações: 8 gatilhos × 7 ações + logs de execução
+- [x] Atividades/timeline por conversa
 - [ ] Permissões de CRM por usuário (visibilidade)
 - [ ] Dashboard do Kanban + Dashboard de controle de leads
 
 ### A2. Contratos (41 arquivos)
-- [ ] Modelos de contrato com variáveis dinâmicas
-- [ ] Geração, edição, preview e PDF
-- [ ] Assinatura pública por token (sem login)
-- [ ] Múltiplos signatários, ordem, auto-assinatura da empresa, CPF
-- [ ] Evidências jurídicas: IP, user-agent, timestamp, hash
-- [ ] Recusa com motivo + timeline + e-mails
-- [ ] Filtros: todos/rascunhos/aguardando/assinados/recusados/modelos
+- [x] Modelos de contrato com variáveis dinâmicas
+- [x] Geração e preview (PDF pendente)
+- [x] Assinatura pública por token (sem login)
+- [x] Múltiplos signatários, ordem, CPF
+- [x] Evidências jurídicas: IP, user-agent, timestamp, hash
+- [x] Recusa com motivo + timeline (e-mails pendentes)
+- [x] Filtros: todos/rascunhos/aguardando/assinados/recusados/modelos
 
 ### A3. Tarefas (19 arquivos)
 - [x] Tarefa com checklist e comentários (anexos: schema pronto)
@@ -64,9 +64,9 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 ---
 
 ## C. Comportamentos de núcleo (os mais fáceis de esquecer)
-- [ ] C13. Conversa nova **herda** CRM do contato (pipeline/estágio/valor)
-- [ ] C14. Log automático de mudanças (estágio/valor/ganho) + dispara automações
-- [ ] C15. "Adicionar ao CRM" a partir do contato
+- [x] C13. Conversa nova **herda** CRM do contato (pipeline/estágio/valor)
+- [x] C14. Log automático de mudanças (estágio/valor/ganho) + dispara automações
+- [x] C15. "Adicionar ao CRM" a partir do contato
 - [x] C16. **Mensagens espelhadas do celular** (echo) — ~~já nativo no mvf~~ (`inbound.ts` fromMe)
 - [x] C17. Reabertura inteligente — nativo no mvf + reforçado no disparo
 - [ ] C18. Limpeza de notificações (>1 mês, máx. 300 por usuário)

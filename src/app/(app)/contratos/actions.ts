@@ -5,11 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { orgUpdate, orgDelete } from "@/lib/crud-helpers";
-
-/** Substitui {{variavel}} pelo valor informado. */
-export function renderTemplate(html: string, variables: Record<string, string>): string {
-  return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) => variables[key] ?? "");
-}
+import { renderTemplate } from "@/lib/contract-template";
 
 export async function createTemplate(fd: FormData) {
   const session = await getSession();

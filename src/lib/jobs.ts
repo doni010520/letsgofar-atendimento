@@ -17,6 +17,7 @@ import {
   secondsUntilWindow,
   phoneVariants,
 } from "@/lib/broadcast";
+import { runHousekeeping } from "@/lib/housekeeping";
 
 type Db = ReturnType<typeof createServiceClient>;
 
@@ -163,10 +164,7 @@ export async function runBroadcasts(db: Db): Promise<number> {
         to: recipient.phone,
         text,
       });
-      const externalId =
-        (res as { id?: string; messageid?: string } | null)?.id ??
-        (res as { messageid?: string } | null)?.messageid ??
-        null;
+      const externalId = res?.externalId ?? null;
 
       const contactId =
         recipient.contact_id ??
@@ -276,10 +274,7 @@ export async function runScheduledMessages(db: Db): Promise<number> {
         to: contact.phone,
         text: m.content,
       });
-      const externalId =
-        (res as { id?: string; messageid?: string } | null)?.id ??
-        (res as { messageid?: string } | null)?.messageid ??
-        null;
+      const externalId = res?.externalId ?? null;
 
       await db.from("messages").insert({
         organization_id: m.organization_id,
@@ -432,5 +427,6 @@ export async function runMigratedJobs() {
     scheduled: await runScheduledMessages(db),
     undelivered: await runDeliveryWatchdog(db),
     recurring: await runRecurringTasks(db),
+    housekeeping: await runHousekeeping(),
   };
 }
