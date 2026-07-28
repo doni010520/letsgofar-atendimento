@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
 import type { Pipeline, Stage, CrmCard } from "@/app/(app)/crm/page";
 import { createPipeline, moveConversationStage, updateDealValue } from "@/app/(app)/crm/actions";
+import { CrmConfig, type PipelineField, type PipelineAutomation } from "@/components/crm-config";
 
 const brl = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -13,13 +14,20 @@ export function CrmClient({
   stages,
   cards,
   agents,
+  fields = [],
+  automations = [],
+  tags = [],
 }: {
   pipelines: Pipeline[];
   stages: Stage[];
   cards: CrmCard[];
   agents: { id: string; name: string | null }[];
+  fields?: (PipelineField & { pipeline_id: string })[];
+  automations?: (PipelineAutomation & { pipeline_id: string })[];
+  tags?: { id: string; name: string }[];
 }) {
   const [pipelineId, setPipelineId] = useState(pipelines[0]?.id ?? "");
+  const [showConfig, setShowConfig] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -96,12 +104,26 @@ export function CrmClient({
             </button>
           ))}
         </div>
-        <div className="flex gap-4 text-xs text-ink-soft">
+        <div className="flex items-center gap-4 text-xs text-ink-soft">
+          <button onClick={() => setShowConfig((v) => !v)} className="underline hover:text-ink">
+            {showConfig ? "ocultar configurações" : "campos e automações"}
+          </button>
           <span><strong className="text-ink">{totals.count}</strong> negócios</span>
           <span><strong className="text-ink">{brl(totals.value)}</strong> em aberto</span>
           <span><strong className="text-green-700">{totals.won}</strong> ganhos</span>
         </div>
       </div>
+
+      {showConfig && (
+        <CrmConfig
+          pipelineId={pipelineId}
+          fields={fields.filter((f) => f.pipeline_id === pipelineId)}
+          automations={automations.filter((a) => a.pipeline_id === pipelineId)}
+          stages={pipelineStages.map((s) => ({ id: s.id, name: s.name }))}
+          agents={agents}
+          tags={tags}
+        />
+      )}
 
       {!pipelineStages.length && <EmptyState title="Este funil não tem estágios" />}
 

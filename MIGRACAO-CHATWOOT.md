@@ -16,7 +16,7 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] Pipelines e estágios (posição, cor, ordenação)
 - [x] Cards = conversas no funil (arrastar entre estágios)
 - [x] Valor do negócio, ganho/perdido, data de fechamento
-- [ ] Campos personalizados por pipeline (schema pronto, falta UI)
+- [x] Campos personalizados por pipeline (UI de criação e listagem)
 - [x] Motor de automações: 8 gatilhos × 7 ações + logs de execução
 - [x] Atividades/timeline por conversa
 - [ ] Permissões de CRM por usuário (visibilidade)
@@ -24,11 +24,11 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 
 ### A2. Contratos (41 arquivos)
 - [x] Modelos de contrato com variáveis dinâmicas
-- [x] Geração e preview (PDF pendente)
+- [x] Geração, preview e **PDF** (versão imprimível em /contratos/[id]/pdf)
 - [x] Assinatura pública por token (sem login)
 - [x] Múltiplos signatários, ordem, CPF
 - [x] Evidências jurídicas: IP, user-agent, timestamp, hash
-- [x] Recusa com motivo + timeline (e-mails pendentes)
+- [x] Recusa com motivo + timeline (e-mails: pendente)
 - [x] Filtros: todos/rascunhos/aguardando/assinados/recusados/modelos
 
 ### A3. Tarefas (19 arquivos)
@@ -58,12 +58,12 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 
 ## B. Features sem tabela própria
 - [x] B6. Atributos obrigatórios ao resolver (schema + validação; falta plugar no botão Resolver)
-- [ ] B7. Copiloto de IA na resposta + sugestão automática de labels
-- [x] B8. Prefixo automático do agente (lib pronta; falta plugar no envio + tela)
+- [x] B7. Copiloto de IA (sugere resposta) + sugestão automática de etiquetas
+- [x] B8. Prefixo automático do agente (aplicado no envio real)
 - [x] B9. Alerta sonoro de tarefas (preferência por usuário)
-- [x] B10. Relatórios: 1ª resposta · matriz canal×etiqueta · contagem de enviadas (queries prontas)
-- [ ] B11. Painel de CRM dentro da conversa
-- [ ] B12. Identidade visual Let's Go Far
+- [x] B10. Relatórios: 1ª resposta · matriz canal×etiqueta · contagem de enviadas (queries prontas; falta tela)
+- [x] B11. Painel de CRM dentro da conversa (estágio + valor)
+- [x] B12. Identidade visual Let's Go Far (logo, títulos, manifest)
 
 ---
 
@@ -82,11 +82,11 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 
 ## D. Configuração e dados da operação (faltou no 1º inventário)
 Levantado direto da instância em produção — **não aparece em código**:
-- [ ] D1. **13 respostas rápidas** (PIX/CNPJ, links de Meet por pessoa, cobrança, congelamento, cancelamento, multa, boas-vindas, briefing)
-- [ ] D2. **4 times**: financeiro, comercial, experiência do aluno, equipe
-- [ ] D3. **6 agentes** (usuários + permissões)
-- [ ] D4. **Bot de triagem/direcionamento inicial** (hoje no n8n; o mvf tem motor nativo com nós menu/transferir/tag)
-- [ ] D5. **Dados**: 863 contatos e 959 conversas
+- [x] D1. **13 respostas rápidas** (PIX/CNPJ, links de Meet por pessoa, cobrança, congelamento, cancelamento, multa, boas-vindas, briefing)
+- [x] D2. **4 times**: financeiro, comercial, experiência do aluno, equipe
+- [~] D3. **6 agentes** — recriar manualmente (convite por e-mail); o import não cria login
+- [x] D4. **Bot de triagem/direcionamento inicial** (nativo, botão em /automacoes) (hoje no n8n; o mvf tem motor nativo com nós menu/transferir/tag)
+- [x] D5. **Dados**: script de import (contatos + histórico de conversas)
 - Confirmado que NÃO há: automações do Chatwoot (0), macros (0), campanhas (0), atributos customizados (0), agent bots (0)
 - No n8n só 3 workflows ativos são do LGF: triagem, relay de saída e o vigia
 

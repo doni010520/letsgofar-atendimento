@@ -205,6 +205,14 @@ export function ContractsClient({
                       )}
                     </div>
                     <div className="flex shrink-0 gap-2">
+                      <a
+                        href={`/contratos/${c.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg border border-border px-3 py-2 text-sm text-ink-soft hover:text-ink"
+                      >
+                        PDF
+                      </a>
                       {c.status === "draft" && (
                         <Button onClick={() => startTransition(() => void sendContract(c.id))}>
                           Enviar para assinatura

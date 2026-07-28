@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 
-// Fonte da interface: humanista, amigável e nítida — próxima do espírito do Chatmix,
+// Fonte da interface: humanista, amigável e nítida — próxima do espírito da marca,
 // porém com mais caráter que system-ui. Carregada sem layout-shift via next/font.
 const sans = Hanken_Grotesk({
   subsets: ["latin"],
@@ -12,20 +12,20 @@ const sans = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://mvfchat.benitechlab.com"),
-  title: "MVF Chat — Multiatendimento WhatsApp",
+  metadataBase: new URL("https://atendimento.letsgofar.com.br"),
+  title: "Let's Go Far — Atendimento",
   description: "Sistema de multiatendimento e automações via WhatsApp.",
   openGraph: {
     type: "website",
-    siteName: "MVF Chat",
-    title: "MVF Chat — Multiatendimento WhatsApp",
+    siteName: "Let's Go Far",
+    title: "Let's Go Far — Atendimento",
     description: "Sistema de multiatendimento e automações via WhatsApp.",
-    url: "https://mvfchat.benitechlab.com",
-    images: [{ url: "/logo-mvf.png", alt: "MVF Chat" }],
+    url: "https://atendimento.letsgofar.com.br",
+    images: [{ url: "/logo-letsgofar.png", alt: "Let's Go Far" }],
   },
   manifest: "/manifest.json",
   themeColor: "#00a8ff",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "MVF Chat" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Let's Go Far" },
   viewport: { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false },
 };
 

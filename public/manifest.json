@@ -1,13 +1,21 @@
 {
-  "name": "MVF Chat — Multiatendimento",
-  "short_name": "MVF Chat",
-  "description": "Sistema de multiatendimento WhatsApp da MVF NET",
+  "name": "Let's Go Far — Atendimento",
+  "short_name": "Let's Go Far",
+  "description": "Atendimento, CRM e disparos da Let's Go Far Ensino de Idiomas",
   "start_url": "/atendimento",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#00a8ff",
   "icons": [
-    { "src": "/logo-mvf.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/logo-mvf.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/logo-letsgofar.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-letsgofar.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }
