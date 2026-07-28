@@ -56,6 +56,17 @@ export function TasksClient({
     });
   }, [tasks, view]);
 
+  // Tarefas sinalizadas pelo cron: lembrete disparado ou venceram.
+  const atencao = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          (t.status === "pending" || t.status === "in_progress") &&
+          (t.reminder_sent_at || t.overdue_notified_at),
+      ),
+    [tasks],
+  );
+
   const stats = useMemo(() => {
     const d = today();
     const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
@@ -194,6 +205,24 @@ export function TasksClient({
 
   return (
     <div className="mt-6 space-y-4">
+      {atencao.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/60">
+          <p className="text-sm font-medium text-amber-800">
+            {atencao.length} {atencao.length === 1 ? "tarefa precisa" : "tarefas precisam"} de atenção
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {atencao.slice(0, 5).map((t) => (
+              <li key={t.id} className="text-xs text-amber-900">
+                <button onClick={() => setDetail(t)} className="hover:underline">
+                  {t.title}
+                </button>
+                {t.overdue_notified_at ? " · venceu" : " · lembrete"}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       <div className="grid grid-cols-3 gap-3">
         <Card><p className="text-xs text-ink-soft">Ativas</p><p className="text-2xl font-semibold text-ink">{stats.active}</p></Card>
         <Card><p className="text-xs text-ink-soft">Para hoje</p><p className="text-2xl font-semibold text-ink">{stats.today}</p></Card>

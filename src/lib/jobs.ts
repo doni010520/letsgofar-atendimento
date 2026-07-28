@@ -416,6 +416,57 @@ export async function runRecurringTasks(db: Db): Promise<number> {
   return created;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────
+// 5. Lembretes de tarefa
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Marca as tarefas que precisam de atenção:
+ *  - chegou a hora do lembrete configurado;
+ *  - venceu e ninguém concluiu.
+ * A marcação viaja pelo realtime até a tela de quem é responsável.
+ */
+export async function runTaskReminders(db: Db): Promise<number> {
+  const agora = new Date();
+  const hoje = agora.toISOString().slice(0, 10);
+  let marcadas = 0;
+
+  const { data: comLembrete } = await db
+    .from("tasks")
+    .select("id")
+    .lte("reminder_at", agora.toISOString())
+    .is("reminder_sent_at", null)
+    .in("status", ["pending", "in_progress"])
+    .limit(200);
+
+  if (comLembrete?.length) {
+    await db
+      .from("tasks")
+      .update({ reminder_sent_at: agora.toISOString() })
+      .in("id", comLembrete.map((t: { id: string }) => t.id));
+    marcadas += comLembrete.length;
+  }
+
+  const { data: vencidas } = await db
+    .from("tasks")
+    .select("id")
+    .lt("due_date", hoje)
+    .is("overdue_notified_at", null)
+    .in("status", ["pending", "in_progress"])
+    .limit(200);
+
+  if (vencidas?.length) {
+    await db
+      .from("tasks")
+      .update({ overdue_notified_at: agora.toISOString() })
+      .in("id", vencidas.map((t: { id: string }) => t.id));
+    marcadas += vencidas.length;
+  }
+
+  return marcadas;
+}
+
 /** Roda todos os jobs migrados do Chatwoot. */
 export async function runMigratedJobs() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -427,6 +478,7 @@ export async function runMigratedJobs() {
     scheduled: await runScheduledMessages(db),
     undelivered: await runDeliveryWatchdog(db),
     recurring: await runRecurringTasks(db),
+    reminders: await runTaskReminders(db),
     housekeeping: await runHousekeeping(),
   };
 }

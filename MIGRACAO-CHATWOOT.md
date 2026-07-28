@@ -38,7 +38,7 @@ Base: `mvf-atendimento` (Next.js 16 + TypeScript + Tailwind v4 + Supabase).
 - [x] **Visibilidade**: admin vê tudo; atendente vê o que criou ou o que é dele (igual Chatwoot)
 - [x] Anexos (upload e remoção no painel de detalhe)
 - [x] Etiquetas na tarefa (no painel de detalhe)
-- [ ] ~~Lembrete~~: as colunas existiam no Chatwoot mas **nada as usava** — não é regressão
+- [x] Lembrete e aviso de vencida (o Chatwoot tinha as colunas mas nada as usava; aqui o cron marca e a tela avisa)
 - [x] Vínculo com contato/conversa/pipeline
 - [x] Views: lista, **calendário**, **kanban** + filtros e estatísticas
 - [x] Multi-responsável (1 tarefa → N cópias independentes)

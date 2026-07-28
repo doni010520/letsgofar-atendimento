@@ -13,6 +13,9 @@ export type TaskRow = {
   due_date: string | null;
   due_time: string | null;
   recurrence_type: string;
+  reminder_at: string | null;
+  reminder_sent_at: string | null;
+  overdue_notified_at: string | null;
   assigned_to: string | null;
   created_by: string | null;
   contact_id: string | null;
