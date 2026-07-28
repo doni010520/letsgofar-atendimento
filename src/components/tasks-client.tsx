@@ -25,9 +25,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function TasksClient({
   tasks,
   agents,
+  tags = [],
 }: {
   tasks: TaskRow[];
   agents: { id: string; name: string | null }[];
+  tags?: { id: string; name: string; color: string | null }[];
 }) {
   const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
   const [detail, setDetail] = useState<TaskRow | null>(null);
@@ -226,6 +228,7 @@ export function TasksClient({
         <TaskDetailPanel
           task={tasks.find((t) => t.id === detail.id) ?? detail}
           agents={agents}
+          tags={tags}
           onClose={() => setDetail(null)}
         />
       )}

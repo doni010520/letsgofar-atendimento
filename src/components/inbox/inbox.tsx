@@ -628,9 +628,14 @@ export function Inbox({
     if (!selectedId) return;
     const id = selectedId;
     setClosing(false);
-    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, status: "closed" } : c)));
     startTransition(async () => {
-      await closeConversation(id, opts);
+      const res = await closeConversation(id, opts);
+      if (res && "ok" in res && res.ok === false) {
+        // Bloqueado por campos obrigatórios: nada de marcar como encerrada.
+        await refetch(id);
+        return;
+      }
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, status: "closed" } : c)));
       await refetch(id);
     });
   }

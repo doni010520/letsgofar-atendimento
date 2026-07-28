@@ -11,6 +11,9 @@ import {
   toggleTaskItem,
   startTask,
   cancelTask,
+  uploadTaskFiles,
+  removeTaskFile,
+  setTaskTags,
 } from "@/app/(app)/tarefas/actions";
 
 const STATUS_COLUMNS = [
@@ -195,10 +198,12 @@ export function TaskCalendarView({
 export function TaskDetailPanel({
   task,
   agents,
+  tags = [],
   onClose,
 }: {
   task: TaskRow;
   agents: { id: string; name: string | null }[];
+  tags?: { id: string; name: string; color: string | null }[];
   onClose: () => void;
 }) {
   const [comment, setComment] = useState("");
@@ -291,6 +296,64 @@ export function TaskDetailPanel({
             placeholder="Novo item (Enter para adicionar)"
             className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
+        </section>
+
+        {/* Etiquetas */}
+        {tags.length > 0 && (
+          <section className="mt-5">
+            <h3 className="mb-2 text-sm font-semibold text-ink">Etiquetas</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((tg) => {
+                const marcada = (task.task_tags ?? []).some((t) => t.tag_id === tg.id);
+                return (
+                  <button
+                    key={tg.id}
+                    onClick={() => {
+                      const atuais = (task.task_tags ?? []).map((t) => t.tag_id);
+                      const novas = marcada
+                        ? atuais.filter((id) => id !== tg.id)
+                        : [...atuais, tg.id];
+                      startTransition(() => void setTaskTags(task.id, novas));
+                    }}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      marcada ? "border-transparent text-white" : "border-border text-ink-soft"
+                    }`}
+                    style={marcada ? { background: tg.color ?? "#6366F1" } : undefined}
+                  >
+                    {tg.name}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Anexos */}
+        <section className="mt-5">
+          <h3 className="mb-2 text-sm font-semibold text-ink">Anexos</h3>
+          <ul className="space-y-1">
+            {(task.task_files ?? []).map((f) => (
+              <li key={f.id} className="flex items-center justify-between rounded border border-border px-2 py-1.5 text-sm">
+                <span className="truncate text-ink">{f.filename}</span>
+                <button
+                  onClick={() => startTransition(() => void removeTaskFile(f.id))}
+                  className="ml-2 shrink-0 text-xs text-red-600"
+                >
+                  remover
+                </button>
+              </li>
+            ))}
+            {!(task.task_files ?? []).length && (
+              <li className="text-xs text-ink-soft">Nenhum anexo.</li>
+            )}
+          </ul>
+          <form
+            action={(fd) => startTransition(() => void uploadTaskFiles(task.id, fd))}
+            className="mt-2 flex items-center gap-2"
+          >
+            <input type="file" name="files" multiple className="text-xs text-ink-soft" />
+            <Button type="submit" variant="ghost" disabled={pending}>Enviar</Button>
+          </form>
         </section>
 
         {/* Comentários */}

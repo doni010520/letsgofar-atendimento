@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { withAgentPrefix, isAgentPrefixEnabled } from "@/lib/agent-prefix";
+import { validateResolution, type RequiredAttribute } from "@/lib/required-attributes";
 import { getProvider } from "@/lib/whatsapp";
 import { getMessages, getConversations } from "@/lib/data/conversations";
 import { logEvent } from "@/lib/log";
@@ -697,6 +698,8 @@ export interface CloseOptions {
   pending?: string; // Pendências (se houver)
   tagIds?: string[];
   sendSurvey?: boolean;
+  /** Valores dos atributos exigidos pela operação para encerrar (B6). */
+  resolutionAttributes?: Record<string, unknown>;
 }
 
 const DEFAULT_SURVEY =
@@ -736,6 +739,29 @@ export async function closeConversation(conversationId: string, opts: CloseOptio
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
+
+  // Atributos obrigatórios: a operação define campos que precisam estar
+  // preenchidos antes de encerrar. Bloqueia aqui, no servidor.
+  const { data: required } = await supabase
+    .from("required_attributes")
+    .select("id, key, label, attribute_type, options, required, position")
+    .eq("organization_id", session.organization.id)
+    .eq("is_active", true)
+    .order("position");
+
+  if (required?.length) {
+    const errors = validateResolution(
+      required as RequiredAttribute[],
+      opts.resolutionAttributes ?? {},
+    );
+    if (Object.keys(errors).length) {
+      return { ok: false as const, errors };
+    }
+    await supabase
+      .from("conversations")
+      .update({ resolution_attributes: opts.resolutionAttributes ?? {} })
+      .eq("id", conversationId);
+  }
 
   // Classificação do atendimento (substitui as tags atuais).
   if (opts.tagIds) {

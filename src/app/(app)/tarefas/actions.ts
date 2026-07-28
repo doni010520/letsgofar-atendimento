@@ -149,3 +149,58 @@ export async function deleteTaskComment(commentId: string) {
   await orgDelete("task_comments", commentId);
   revalidatePath("/tarefas");
 }
+
+/** Anexa arquivos à tarefa (bucket "media", pasta por organização). */
+export async function uploadTaskFiles(taskId: string, fd: FormData) {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const org = session.organization.id;
+  const sb = await createClient();
+
+  const files = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  for (const file of files) {
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${org}/tarefas/${taskId}/${Date.now()}-${safeName}`;
+    const { error } = await sb.storage
+      .from("media")
+      .upload(path, file, { contentType: file.type || undefined, upsert: false });
+    if (error) throw new Error(`Falha ao enviar ${file.name}: ${error.message}`);
+
+    await sb.from("task_files").insert({
+      organization_id: org,
+      task_id: taskId,
+      path,
+      filename: file.name,
+      content_type: file.type || null,
+      byte_size: file.size,
+    });
+  }
+  revalidatePath("/tarefas");
+  return files.length;
+}
+
+export async function removeTaskFile(fileId: string) {
+  const sb = await createClient();
+  const { data: f } = await sb.from("task_files").select("path").eq("id", fileId).maybeSingle();
+  if (f?.path) await sb.storage.from("media").remove([f.path]);
+  await orgDelete("task_files", fileId);
+  revalidatePath("/tarefas");
+}
+
+/** Etiquetas da tarefa (reusa as tags da organização). */
+export async function setTaskTags(taskId: string, tagIds: string[]) {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const sb = await createClient();
+  await sb.from("task_tags").delete().eq("task_id", taskId);
+  if (tagIds.length) {
+    await sb.from("task_tags").insert(
+      tagIds.map((tag_id) => ({
+        organization_id: session.organization!.id,
+        task_id: taskId,
+        tag_id,
+      })),
+    );
+  }
+  revalidatePath("/tarefas");
+}

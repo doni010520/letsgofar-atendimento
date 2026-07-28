@@ -239,7 +239,13 @@ export function AttendanceChatModal({
   function confirmClose(opts: { reason: string; solution: string; forwardings: string; pending: string; tagIds: string[]; sendSurvey: boolean }) {
     setClosing(false);
     startTransition(async () => {
-      await closeConversation(convId, opts);
+      const res = await closeConversation(convId, opts);
+      // A operação pode exigir campos preenchidos para encerrar (B6).
+      if (res && "ok" in res && res.ok === false) {
+        const primeiro = Object.values(res.errors ?? {})[0];
+        toast(primeiro ?? "Preencha os campos obrigatórios para encerrar.");
+        return;
+      }
       toast("Atendimento encerrado.");
       onChanged?.();
       onClose();
