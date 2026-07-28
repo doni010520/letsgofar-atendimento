@@ -14,6 +14,10 @@ import {
   Building2,
   Contact,
   Sparkles,
+  KanbanSquare,
+  CheckSquare,
+  Send,
+  FileSignature,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,6 +52,15 @@ export const NAV: NavGroup[] = [
       { href: "/automacoes", label: "Automações", icon: Bot },
       { href: "/ajustes/ia", label: "Agente de IA", icon: Sparkles, adminOnly: true },
       { href: "/campanhas", label: "Campanhas", icon: Megaphone },
+    ],
+  },
+  {
+    title: "CRM",
+    items: [
+      { href: "/crm", label: "CRM", icon: KanbanSquare },
+      { href: "/tarefas", label: "Tarefas", icon: CheckSquare },
+      { href: "/disparos", label: "Disparos", icon: Send },
+      { href: "/contratos", label: "Contratos", icon: FileSignature },
     ],
   },
   {
