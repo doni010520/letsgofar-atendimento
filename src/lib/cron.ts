@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
+import { runMigratedJobs } from "@/lib/jobs";
 import { getProvider } from "@/lib/whatsapp";
 import { logEvent } from "@/lib/log";
 import type { Channel } from "@/lib/types";
@@ -141,6 +142,10 @@ export async function runCronJobs(): Promise<{ closed: number; warned: number; t
   if (closedCount || warnedCount || transferredCount) {
     void logEvent("info", "cron", `Inatividade: ${closedCount} encerrada(s), ${warnedCount} avisada(s), ${transferredCount} transferida(s).`);
   }
+
+
+  // Jobs migrados do Chatwoot (disparos, agendadas, vigia, recorrentes).
+  await runMigratedJobs();
 
   return { closed: closedCount, warned: warnedCount, transferred: transferredCount };
 }
