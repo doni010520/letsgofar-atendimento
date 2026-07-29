@@ -127,7 +127,7 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
             <div>
               <label className={labelCls}>Mensagem de despedida</label>
               <textarea name="inactivity_goodbye_message" rows={2} defaultValue={s.inactivity_goodbye_message ?? ""}
-                placeholder="Encerrei este atendimento por inatividade. Obrigado por falar com a *MVF NET*! 👋"
+                placeholder="Encerrei este atendimento por inatividade. Obrigado por falar com a *Let's Go Far*! 👋"
                 className={`${inputCls} resize-none`} />
             </div>
           </Section>

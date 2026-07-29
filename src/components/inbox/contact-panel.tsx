@@ -18,7 +18,7 @@ import {
 } from "@/app/(app)/atendimento/actions";
 import type { ConversationOverview } from "@/lib/types";
 
-// Campos de CRM úteis para um provedor de internet (MVF NET).
+// Campos de CRM úteis no atendimento.
 const CRM_FIELDS: { key: string; label: string; type?: "text" | "select"; options?: string[] }[] = [
   { key: "cpfcnpj", label: "CPF / CNPJ" },
   { key: "contrato", label: "Nº do contrato (SGP)" },

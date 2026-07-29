@@ -31,7 +31,7 @@ function mockReport(): ReportData {
     ],
     byChannel: [
       { name: "CENTRAL MVFNET", value: 520 }, { name: "IBICUI - API Oficial", value: 410 },
-      { name: "MVF NET CANAA 1730", value: 360 }, { name: "IGUAI - API Oficial", value: 280 }, { name: "Outros", value: 128 },
+      { name: "WhatsApp", value: 360 }, { name: "Instagram", value: 280 }, { name: "Outros", value: 128 },
     ],
     byDepartment: [
       { name: "Suporte Técnico", value: 980 }, { name: "Financeiro", value: 430 }, { name: "Comercial", value: 288 },

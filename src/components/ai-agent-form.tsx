@@ -213,7 +213,7 @@ function AgentWizard({ agent, channels, defaultBasePrompt, onClose }: { agent: A
             <div className="space-y-4">
               <div className="rounded-lg border border-brand/20 bg-brand-light/30 p-3 text-[11px] text-ink-soft">
                 As <strong>Instruções personalizadas</strong> abaixo são <strong>somadas</strong> ao comportamento-base do agente
-                (o roteiro padrão da MVF: saudação → confirma se é cliente → CPF → consulta o SGP → transfere quando precisa).
+                (o roteiro padrão: saudação → entende a necessidade → transfere quando precisa).
                 Você não precisa reescrever esse roteiro — só ajuste o que quer mudar. Para <strong>ver ou substituir</strong> o
                 comportamento-base por completo, abra <em>“Avançado”</em> no fim deste passo.
               </div>
@@ -277,7 +277,7 @@ function AgentWizard({ agent, channels, defaultBasePrompt, onClose }: { agent: A
                 {advanced && (
                   <div className="space-y-2 border-t border-border p-3">
                     <p className="text-[11px] text-ink-soft">
-                      Deixe em branco para usar o comportamento padrão da MVF (fluxo + segurança). Preenchendo, você
+                      Deixe em branco para usar o comportamento padrão (fluxo + segurança). Preenchendo, você
                       <strong> substitui toda a espinha dorsal</strong> do agente — controle total, mas você assume o fluxo e as regras.
                     </p>
                     <div className="flex flex-wrap gap-2">

@@ -6,9 +6,9 @@ export const MOCK_CHANNELS: Channel[] = [
   mk("IBICUI - API Oficial", "meta_cloud", "5573818706370", "connected"),
   mk("IGUAI - API Oficial", "meta_cloud", "5573882793100", "connected"),
   mk("CENTRAL MVFNET", "uazapi", "557382481156", "connected"),
-  mk("MVF NET CANAA 1730", "uazapi", "5573988171730", "connected"),
-  mk("MVF NET Firmino Alves", "uazapi", "5573981813824", "connected"),
-  mk("MVF NET Rio do Meio", "uazapi", "5573991332104", "connected"),
+  mk("WhatsApp Principal", "uazapi", "5511900000001", "connected"),
+  mk("WhatsApp Comercial", "uazapi", "5511900000002", "connected"),
+  mk("WhatsApp Financeiro", "uazapi", "5511900000003", "connected"),
   mk("IBICUÍ 02", "uazapi", "557382287802", "disconnected"),
   mk("IGUAÍ 02", "uazapi", "557382353596", "connecting"),
 ];
