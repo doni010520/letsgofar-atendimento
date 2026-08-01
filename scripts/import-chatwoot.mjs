@@ -59,37 +59,49 @@ console.log("\n▸ Times → departamentos");
 const teams = await cw("teams");
 const deptByTeam = new Map();
 for (const t of teams) {
-  const { rows } = await run(
-    `insert into departments (organization_id, name)
-     values ($1, $2)
-     on conflict do nothing
-     returning id`,
-    [ORG_ID, t.name],
-  );
-  let id = rows[0]?.id;
-  if (!id && !DRY) {
-    const r = await db.query(
-      `select id from departments where organization_id=$1 and name=$2 limit 1`,
+  // Não há unique em departments: procura por nome (sem acento/caixa) antes
+  // de criar, senão rodar duas vezes duplicaria tudo.
+  let id = null;
+  if (!DRY) {
+    const achou = await db.query(
+      `select id from departments where organization_id=$1 and lower(name)=lower($2) limit 1`,
       [ORG_ID, t.name],
     );
-    id = r.rows[0]?.id;
+    id = achou.rows[0]?.id ?? null;
+  }
+  if (!id) {
+    const { rows } = await run(
+      `insert into departments (organization_id, name) values ($1,$2) returning id`,
+      [ORG_ID, t.name],
+    );
+    id = rows[0]?.id ?? null;
+    console.log(`  + ${t.name}`);
+    count("departamentos_criados");
+  } else {
+    console.log(`  = ${t.name} (já existia)`);
+    count("departamentos_existentes");
   }
   deptByTeam.set(t.id, id);
-  console.log(`  ✓ ${t.name}`);
-  count("departamentos");
 }
 
 // ── 2. Respostas rápidas ─────────────────────────────────────────────
 console.log("\n▸ Respostas rápidas");
 const canned = await cw("canned_responses");
 for (const c of canned) {
+  let existe = false;
+  if (!DRY) {
+    const r = await db.query(
+      `select id from quick_replies where organization_id=$1 and shortcut=$2 limit 1`,
+      [ORG_ID, c.short_code],
+    );
+    existe = r.rows.length > 0;
+  }
+  if (existe) { count("respostas_existentes"); continue; }
   await run(
-    `insert into quick_replies (organization_id, title, content, shortcut)
-     values ($1, $2, $3, $4)
-     on conflict do nothing`,
+    `insert into quick_replies (organization_id, title, content, shortcut) values ($1,$2,$3,$4)`,
     [ORG_ID, c.short_code, c.content, c.short_code],
   );
-  console.log(`  ✓ /${c.short_code}`);
+  console.log(`  + /${c.short_code}`);
   count("respostas_rapidas");
 }
 
@@ -98,12 +110,18 @@ console.log("\n▸ Etiquetas");
 const labels = await cw("labels");
 const labelList = labels.payload ?? labels;
 for (const l of labelList) {
+  if (!DRY) {
+    const r = await db.query(
+      `select id from tags where organization_id=$1 and lower(name)=lower($2) limit 1`,
+      [ORG_ID, l.title],
+    );
+    if (r.rows.length) { count("etiquetas_existentes"); continue; }
+  }
   await run(
-    `insert into tags (organization_id, name, color)
-     values ($1, $2, $3) on conflict do nothing`,
+    `insert into tags (organization_id, name, color) values ($1,$2,$3)`,
     [ORG_ID, l.title, l.color ?? "#6366F1"],
   );
-  console.log(`  ✓ ${l.title}`);
+  console.log(`  + ${l.title}`);
   count("etiquetas");
 }
 
