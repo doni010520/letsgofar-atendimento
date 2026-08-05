@@ -73,6 +73,7 @@ export function Composer({
   const taRef = useRef<HTMLTextAreaElement>(null);
   const captionRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const fotoRef = useRef<HTMLInputElement>(null);
   const stickerRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -365,6 +366,16 @@ export function Composer({
       /* ========== Composer ========== */
       <div className={`relative flex items-end gap-2 p-3 ${internalMode ? "bg-amber-50" : "bg-surface"} ${allowInternal ? "" : "border-t border-border"}`}>
         <input ref={fileRef} type="file" className="hidden" onChange={pickFile} />
+        {/* Campo separado com accept de mídia: no celular é ele que abre a
+            galeria e a câmera. Um input sem accept cai no navegador de
+            documentos, onde a foto do usuário simplesmente não aparece. */}
+        <input
+          ref={fotoRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={pickFile}
+        />
         <input ref={stickerRef} type="file" accept="image/*" className="hidden" onChange={pickStickerFile} />
 
         {/* Dropdown de menções */}
@@ -410,8 +421,11 @@ export function Composer({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setAttachMenu(false)} />
               <div className="absolute bottom-12 left-0 z-20 w-44 overflow-hidden rounded-lg border border-border bg-surface py-1 text-sm shadow-xl">
+                <button onClick={() => { setAttachMenu(false); fotoRef.current?.click(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
+                  <ImageIcon size={15} /> Foto ou vídeo
+                </button>
                 <button onClick={() => { setAttachMenu(false); fileRef.current?.click(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
-                  <FileUp size={15} /> Arquivo / mídia
+                  <FileUp size={15} /> Documento
                 </button>
                 <button onClick={() => { setAttachMenu(false); stickerRef.current?.click(); }} className="flex w-full items-center gap-2 px-3 py-2 text-ink hover:bg-gray-50">
                   <Sticker size={15} /> Figurinha
