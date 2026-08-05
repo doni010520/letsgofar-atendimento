@@ -22,6 +22,16 @@ const ORG_ID = process.env.ORG_ID;
 const DRY = process.argv.includes("--dry");
 const SKIP_CONVERSATIONS = process.argv.includes("--sem-conversas");
 
+// --limite N: traz só as N conversas mais recentes. O Chatwoot já devolve
+// ordenado da mais recente para a mais antiga, então isso permite migrar em
+// lotes ("as últimas 50", depois mais 50) sem travar o banco de uma vez.
+const limiteArg = process.argv.find((a) => a.startsWith("--limite="));
+const LIMITE = limiteArg ? Number(limiteArg.split("=")[1]) : Infinity;
+if (Number.isNaN(LIMITE) || LIMITE <= 0) {
+  console.error("--limite= precisa ser um número maior que zero.");
+  process.exit(1);
+}
+
 if (!CW_URL || !CW_TOKEN || !DB_URL || !ORG_ID) {
   console.error("Defina CHATWOOT_URL, CHATWOOT_TOKEN, SUPABASE_DB_URL e ORG_ID.");
   process.exit(1);
@@ -159,12 +169,17 @@ if (!SKIP_CONVERSATIONS) {
     : await db.query(`select id from channels where organization_id=$1 limit 1`, [ORG_ID]);
   const channelId = chRows[0]?.id ?? null;
 
-  for (let page = 1; page <= 60; page += 1) {
+  let vistas = 0;
+  for (let page = 1; page <= 60 && vistas < LIMITE; page += 1) {
     const data = await cw(`conversations?status=all&assignee_type=all&page=${page}`);
-    const list = data.data?.payload ?? [];
+    const list = (data.data?.payload ?? []).sort(
+      (a, b) => (b.last_activity_at ?? 0) - (a.last_activity_at ?? 0),
+    );
     if (!list.length) break;
 
     for (const conv of list) {
+      if (vistas >= LIMITE) break;
+      vistas += 1;
       const cwContactId = conv.meta?.sender?.id;
       const contactId = contactIdMap.get(cwContactId);
       if (!contactId) continue;
@@ -172,22 +187,50 @@ if (!SKIP_CONVERSATIONS) {
       const status =
         conv.status === "open" ? "open" : conv.status === "pending" ? "queued" : "closed";
 
-      const { rows } = await run(
-        `insert into conversations
-           (organization_id, channel_id, contact_id, status, last_message_at, created_at)
-         values ($1,$2,$3,$4,to_timestamp($5),to_timestamp($6))
-         returning id`,
-        [ORG_ID, channelId, contactId, status, conv.last_activity_at ?? 0, conv.created_at ?? 0],
-      );
-      const convId = rows[0]?.id;
-      if (!convId) continue;
-      count("conversas");
+      // Reaproveita a conversa que o app já tem para este contato. Sem isso, um
+      // contato que escreveu durante o paralelo ganharia uma segunda conversa.
+      let convId = null;
+      if (!DRY) {
+        const existente = await db.query(
+          `select id from conversations
+            where organization_id=$1 and contact_id=$2
+            order by created_at limit 1`,
+          [ORG_ID, contactId],
+        );
+        convId = existente.rows[0]?.id ?? null;
+      }
+      if (convId) {
+        count("conversas_reaproveitadas");
+      } else {
+        const { rows } = await run(
+          `insert into conversations
+             (organization_id, channel_id, contact_id, status, last_message_at, created_at)
+           values ($1,$2,$3,$4,to_timestamp($5),to_timestamp($6))
+           returning id`,
+          [ORG_ID, channelId, contactId, status, conv.last_activity_at ?? 0, conv.created_at ?? 0],
+        );
+        convId = rows[0]?.id ?? null;
+        if (!convId) continue;
+        count("conversas");
+      }
 
       // Mensagens da conversa
       try {
         const msgs = await cw(`conversations/${conv.id}/messages`);
         for (const m of msgs.payload ?? []) {
           if (m.message_type === 2) continue; // atividade interna do Chatwoot
+          // Já gravada (chegou pelo paralelo ou por uma execução anterior)?
+          // O app grava "<numero>:<id>"; o Chatwoot guarda só "<id>". Casa os dois.
+          if (!DRY && m.source_id) {
+            const j = await db.query(
+              `select 1 from messages
+                where organization_id=$1
+                  and (external_id=$2 or external_id like '%:' || $2)
+                limit 1`,
+              [ORG_ID, m.source_id],
+            );
+            if (j.rows.length) { count("mensagens_ja_existentes"); continue; }
+          }
           await run(
             `insert into messages
                (organization_id, conversation_id, direction, sender_type, content_type,
@@ -200,7 +243,9 @@ if (!SKIP_CONVERSATIONS) {
               m.message_type === 1 ? "agent" : "contact",
               m.content ?? "",
               m.status ?? "sent",
-              m.source_id ?? null,
+              // string vazia vira null: "" agruparia mensagens distintas e
+              // atrapalharia qualquer consulta por id externo
+              m.source_id || null,
               m.created_at ?? 0,
             ],
           );

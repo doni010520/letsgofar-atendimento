@@ -221,6 +221,43 @@ export class UazapiProvider implements ChannelProvider {
     return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }
 
+  /**
+   * Menu com botões. POST /send/menu — `choices` é uma lista de strings onde a
+   * primeira, entre colchetes, é o rótulo da seção, e as demais são
+   * "texto visível|id". O id é o que a UAZAPI devolve em `buttonOrListid`
+   * quando o cliente toca, e é por ele que o fluxo casa a opção.
+   *
+   * O WhatsApp aceita no máximo 3 botões; acima disso a UAZAPI degrada para
+   * lista, então mandamos o tipo conforme a quantidade.
+   */
+  async sendMenu({
+    to,
+    text,
+    options,
+    sectionLabel,
+  }: {
+    to: string;
+    text: string;
+    options: { id: string; label: string }[];
+    sectionLabel?: string;
+  }) {
+    const choices = [
+      `[${sectionLabel || "Opções"}]`,
+      // "|" é o separador do protocolo — se aparecer no rótulo, quebra o parse.
+      ...options.map((o) => `${o.label.replace(/\|/g, "/")}|${o.id}`),
+    ];
+    const r = await this.req("/send/menu", {
+      method: "POST",
+      body: JSON.stringify({
+        number: to,
+        type: options.length > 3 ? "list" : "button",
+        text,
+        choices,
+      }),
+    });
+    return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
+  }
+
   async sendMedia({ to, url, caption, kind, replyId }: SendMediaParams) {
     const r = await this.req("/send/media", {
       method: "POST",
@@ -508,6 +545,9 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
       const group = isGroupMessage(m);
       const base = {
         channelExternalId: token,
+        // Preenchido quando o cliente TOCA num botão/opção de menu que enviamos.
+        // É o casamento confiável da resposta — o texto visível pode mudar.
+        buttonId: (typeof m?.buttonOrListid === "string" && m.buttonOrListid.trim()) || undefined,
         from: group ? groupId(m) : contactNumber(m),
         isGroup: group,
         fromMe: !!m?.fromMe,

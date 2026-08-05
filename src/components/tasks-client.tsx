@@ -26,11 +26,15 @@ export function TasksClient({
   tasks,
   agents,
   tags = [],
+  meId = null,
 }: {
   tasks: TaskRow[];
   agents: { id: string; name: string | null }[];
   tags?: { id: string; name: string; color: string | null }[];
+  /** Perfil de quem está logado — habilita o filtro "Minhas". */
+  meId?: string | null;
 }) {
+  const [soMinhas, setSoMinhas] = useState(false);
   const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
   const [detail, setDetail] = useState<TaskRow | null>(null);
   const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("active");
@@ -45,16 +49,23 @@ export function TasksClient({
     [agents],
   );
 
+  // Escopo de pessoa: vale para lista, kanban e calendário — por isso é
+  // aplicado antes, e não só dentro do filtro de status da lista.
+  const escopo = useMemo(
+    () => (soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks),
+    [tasks, soMinhas, meId],
+  );
+
   const visible = useMemo(() => {
     const d = today();
-    return tasks.filter((t) => {
+    return escopo.filter((t) => {
       const active = t.status === "pending" || t.status === "in_progress";
       if (view === "active") return active;
       if (view === "today") return active && t.due_date === d;
       if (view === "overdue") return active && !!t.due_date && t.due_date < d;
       return t.status === "completed";
     });
-  }, [tasks, view]);
+  }, [escopo, view]);
 
   // Tarefas sinalizadas pelo cron: lembrete disparado ou venceram.
   const atencao = useMemo(
@@ -250,8 +261,8 @@ export function TasksClient({
         <Button onClick={() => setCreating(true)}>+ Nova tarefa</Button>
       </div>
 
-      {mode === "kanban" && <TaskKanbanView tasks={tasks} onOpen={setDetail} />}
-      {mode === "calendar" && <TaskCalendarView tasks={tasks} onOpen={setDetail} />}
+      {mode === "kanban" && <TaskKanbanView tasks={escopo} onOpen={setDetail} />}
+      {mode === "calendar" && <TaskCalendarView tasks={escopo} onOpen={setDetail} />}
 
       {detail && (
         <TaskDetailPanel
@@ -262,8 +273,8 @@ export function TasksClient({
         />
       )}
 
-      <div className={`flex items-center justify-between ${mode === "list" ? "" : "hidden"}`}>
-        <div className="inline-flex rounded-lg bg-gray-100 p-1">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className={`inline-flex rounded-lg bg-gray-100 p-1 ${mode === "list" ? "" : "hidden"}`}>
           {VIEWS.map((v) => (
             <button
               key={v.key}
@@ -276,6 +287,20 @@ export function TasksClient({
             </button>
           ))}
         </div>
+        {/* Vale para lista, kanban e calendário. */}
+        {meId && (
+          <button
+            onClick={() => setSoMinhas((v) => !v)}
+            aria-pressed={soMinhas}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+              soMinhas
+                ? "border-ink bg-ink text-white"
+                : "border-border bg-surface text-ink-soft hover:text-ink"
+            }`}
+          >
+            {soMinhas ? "Mostrando só as minhas" : "Só as minhas"}
+          </button>
+        )}
       </div>
 
       {mode === "list" && !visible.length && <EmptyState title="Nenhuma tarefa aqui" hint="Crie uma tarefa ou troque o filtro." />}

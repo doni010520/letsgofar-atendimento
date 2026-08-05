@@ -14,6 +14,8 @@ import {
   uploadTaskFiles,
   removeTaskFile,
   setTaskTags,
+  assignTask,
+  updateTask,
 } from "@/app/(app)/tarefas/actions";
 
 const STATUS_COLUMNS = [
@@ -208,6 +210,7 @@ export function TaskDetailPanel({
 }) {
   const [comment, setComment] = useState("");
   const [item, setItem] = useState("");
+  const [editando, setEditando] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const agentName = useMemo(
@@ -228,13 +231,79 @@ export function TaskDetailPanel({
       >
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold text-ink">{task.title}</h2>
-          <button onClick={onClose} className="text-sm text-ink-soft">✕</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditando((v) => !v)}
+              className="text-sm text-ink-soft hover:text-ink"
+              title="Editar tarefa"
+            >
+              {editando ? "Cancelar" : "Editar"}
+            </button>
+            <button onClick={onClose} className="text-sm text-ink-soft">✕</button>
+          </div>
         </div>
 
-        {task.description && <p className="mt-2 text-sm text-ink-soft">{task.description}</p>}
+        {editando ? (
+          <form
+            action={(fd) =>
+              startTransition(async () => {
+                await updateTask(task.id, fd);
+                setEditando(false);
+              })
+            }
+            className="mt-3 space-y-2"
+          >
+            <input
+              name="title" defaultValue={task.title} required
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              placeholder="Título"
+            />
+            <textarea
+              name="description" defaultValue={task.description ?? ""} rows={3}
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              placeholder="Descrição"
+            />
+            <div className="flex flex-wrap gap-2">
+              <select
+                name="priority" defaultValue={task.priority}
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              >
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+              </select>
+              <input
+                type="date" name="due_date" defaultValue={task.due_date ?? ""}
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+              <input
+                type="time" name="due_time" defaultValue={task.due_time?.slice(0, 5) ?? ""}
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+            </div>
+            <Button type="submit" disabled={pending}>Salvar</Button>
+          </form>
+        ) : (
+          task.description && <p className="mt-2 text-sm text-ink-soft">{task.description}</p>
+        )}
 
-        <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-soft">
-          {task.assigned_to && <span>Responsável: {agentName[task.assigned_to] ?? "—"}</span>}
+        {/* Responsável: trocar transfere a tarefa para outra pessoa. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+          <label htmlFor="resp" className="shrink-0">Responsável:</label>
+          <select
+            id="resp"
+            value={task.assigned_to ?? ""}
+            disabled={pending}
+            onChange={(e) =>
+              startTransition(() => void assignTask(task.id, e.target.value || null))
+            }
+            className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-ink"
+          >
+            <option value="">Sem responsável</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name ?? "Sem nome"}</option>
+            ))}
+          </select>
           {task.due_date && (
             <span>
               Prazo: {new Date(`${task.due_date}T12:00:00`).toLocaleDateString("pt-BR")}

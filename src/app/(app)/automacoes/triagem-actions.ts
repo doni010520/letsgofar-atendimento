@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
-import { buildTriagemFlow, DEFAULT_SECTORS, DEFAULT_GREETING } from "@/lib/triagem-template";
+import {
+  buildTriagemFlow,
+  DEFAULT_SECTORS,
+  DEFAULT_GREETING,
+  SECTOR_DEPARTMENT_ALIASES,
+} from "@/lib/triagem-template";
 
 /**
  * Cria (ou atualiza) o bot de triagem a partir dos departamentos existentes.
@@ -25,8 +30,16 @@ export async function criarBotTriagem() {
     s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   const acharDepartamento = (rotulo: string): string | null => {
-    const alvo = norm(rotulo.replace(/[^\p{L}\s]/gu, "").trim());
+    const limpo = rotulo.replace(/[^\p{L}\s]/gu, "").trim();
     const lista = (departments ?? []) as { id: string; name: string }[];
+    // Alias explícito primeiro: "Consultoria Estratégica" → "Comercial", que
+    // por nome nunca casaria.
+    const alias = SECTOR_DEPARTMENT_ALIASES[limpo];
+    if (alias) {
+      const porAlias = lista.find((d) => norm(d.name) === norm(alias));
+      if (porAlias) return porAlias.id;
+    }
+    const alvo = norm(limpo);
     const exato = lista.find((d) => norm(d.name) === alvo);
     if (exato) return exato.id;
     // "Experiência do Aluno" casa com o departamento "experiência do aluno"

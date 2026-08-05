@@ -84,6 +84,26 @@ export async function assignTask(id: string, profileId: string | null) {
   revalidatePath("/tarefas");
 }
 
+/**
+ * Edita o conteúdo da tarefa (título, descrição, prioridade, prazo).
+ * Só mexe no que veio no formulário — status, responsável e recorrência têm
+ * ações próprias e não são tocados aqui.
+ */
+export async function updateTask(id: string, fd: FormData) {
+  const titulo = String(fd.get("title") || "").trim();
+  if (!titulo) throw new Error("O título não pode ficar vazio.");
+
+  await orgUpdate("tasks", id, {
+    title: titulo,
+    description: String(fd.get("description") || "").trim() || null,
+    priority: String(fd.get("priority") || "medium"),
+    due_date: String(fd.get("due_date") || "").trim() || null,
+    due_time: String(fd.get("due_time") || "").trim() || null,
+    updated_at: new Date().toISOString(),
+  });
+  revalidatePath("/tarefas");
+}
+
 export async function deleteTask(id: string) {
   await orgDelete("tasks", id);
   revalidatePath("/tarefas");

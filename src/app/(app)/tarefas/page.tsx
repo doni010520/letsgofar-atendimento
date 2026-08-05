@@ -2,6 +2,7 @@ import { Scroll } from "@/components/scroll";
 import { PageHeader } from "@/components/ui";
 import { TasksClient } from "@/components/tasks-client";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
 import { PREVIEW_MODE } from "@/lib/mock";
 
 export type TaskRow = {
@@ -53,14 +54,20 @@ async function getTags(): Promise<{ id: string; name: string; color: string | nu
 }
 
 export default async function TarefasPage() {
-  const [tasks, agents, tags] = await Promise.all([getTasks(), getAgents(), getTags()]);
+  const [tasks, agents, tags, session] = await Promise.all([
+    getTasks(),
+    getAgents(),
+    getTags(),
+    PREVIEW_MODE ? Promise.resolve(null) : getSession(),
+  ]);
   return (
     <Scroll>
       <PageHeader
         title="Tarefas"
         subtitle="Tarefas da equipe com checklist, prazo, recorrência e vários responsáveis."
       />
-      <TasksClient tasks={tasks} agents={agents} tags={tags} />
+      {/* meId permite o filtro "Minhas" sem outra consulta no cliente. */}
+      <TasksClient tasks={tasks} agents={agents} tags={tags} meId={session?.profile?.id ?? null} />
     </Scroll>
   );
 }

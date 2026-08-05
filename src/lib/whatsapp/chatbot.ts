@@ -90,6 +90,8 @@ export async function runChatbot(
   conv: ConvState,
   automation: { id: string; flow: Flow; integration_id?: string | null },
   userText: string,
+  /** Id do botão tocado, quando o cliente respondeu por menu em vez de digitar. */
+  buttonId?: string,
 ): Promise<"bot" | "queued" | null> {
   const flow: Flow = {
     nodes: Array.isArray(automation.flow?.nodes) ? automation.flow.nodes : [],
@@ -283,8 +285,12 @@ export async function runChatbot(
       const txt = userText.trim().toLowerCase();
       const opts = cur.data?.options ?? [];
       let handle: string | undefined;
+      // 1) Tocou num botão: o id é exato, não depende do texto visível.
+      if (buttonId && opts.some((o) => o.id === buttonId)) handle = buttonId;
       const num = parseInt(txt, 10);
-      if (!Number.isNaN(num) && opts[num - 1]) handle = opts[num - 1].id;
+      if (handle) {
+        /* já resolvido pelo botão */
+      } else if (!Number.isNaN(num) && opts[num - 1]) handle = opts[num - 1].id;
       else handle = opts.find((o) => o.label.toLowerCase().includes(txt) && txt.length > 0)?.id;
       const edge = handle ? outBy(flow, cur.id, handle) : undefined;
       // Fallback legado: roteia por ordem das arestas se não houver options/handles.

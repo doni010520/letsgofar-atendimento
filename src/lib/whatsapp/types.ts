@@ -52,6 +52,16 @@ export interface ChannelProvider {
   sendContact?(to: string, contact: { fullName: string; phoneNumber: string }): Promise<{ externalId?: string }>;
   /** Envia uma mensagem de modelo (template) — Meta oficial, fora da janela de 24h. */
   sendTemplate?(params: { to: string; name: string; language: string; components?: unknown[] }): Promise<{ externalId?: string }>;
+  /** Menu com botões tocáveis. Só a UAZAPI implementa; quem não tiver cai no
+   *  menu em texto (o cliente digita o número da opção). */
+  sendMenu?(params: {
+    to: string;
+    text: string;
+    /** Cada opção vira um botão; `id` é o que volta em `buttonId` na resposta. */
+    options: { id: string; label: string }[];
+    /** Rótulo da seção — obrigatório no formato de lista da UAZAPI. */
+    sectionLabel?: string;
+  }): Promise<{ externalId?: string }>;
   /** Lista participantes de um grupo (LID + telefone real). Para resolver autor → 1:1. */
   getGroupParticipants?(groupJid: string): Promise<{ lid: string; phone: string }[]>;
   /** Informações do grupo: nome, descrição, participantes. */
@@ -90,4 +100,5 @@ export interface InboundMessage {
   fromMe?: boolean; // mensagem enviada pelo próprio número (eco do celular) → direção "out"
   chatPhoto?: string; // foto do contato/grupo (vem no objeto chat do webhook)
   chatName?: string; // nome do contato/grupo (vem no objeto chat do webhook)
+  buttonId?: string; // id do botão/opção que o cliente TOCOU (menu enviado por nós)
 }

@@ -48,7 +48,10 @@ export const DEFAULT_SECTORS: Omit<SectorOption, "departmentId">[] = [
   },
 ];
 
-export const DEFAULT_GREETING = `Olá! Seja bem-vindo(a) à LET'S GO FAR! 👋
+// Texto igual ao do menu que rodava no n8n (nó "Envia Menu UAZAPI"), para o
+// cliente não perceber troca de sistema. A única diferença é a numeração: lá
+// a escolha era por botão, aqui é digitada.
+export const DEFAULT_GREETING = `Hello! Seja bem-vindo(a) à LET'S GO FAR!
 
 Para te direcionar melhor, responda com o número da opção:
 
@@ -59,7 +62,35 @@ Ajustes de agenda, organização, dúvidas gerais e questões administrativas
 Pagamentos, notas fiscais e contratos
 
 3️⃣ 📊 *Consultoria Estratégica*
-Programas focados em inglês para carreira e oportunidades internacionais`;
+Informações sobre programas focados em inglês para carreira e oportunidades internacionais`;
+
+/**
+ * Mesma saudação, para quando o canal suporta BOTÕES: sem numeração e sem o
+ * "responda com o número", que ficariam contraditórios com botões tocáveis.
+ */
+export const DEFAULT_GREETING_MENU = `Hello! Seja bem-vindo(a) à LET'S GO FAR!
+
+Para te direcionar melhor, escolha uma opção abaixo:
+
+📚 *Experiência do Aluno*
+Ajustes de agenda, organização, dúvidas gerais e questões administrativas
+
+💰 *Financeiro*
+Pagamentos, notas fiscais e contratos
+
+📊 *Consultoria Estratégica*
+Informações sobre programas focados em inglês para carreira e oportunidades internacionais`;
+
+/**
+ * Rótulo do menu → nome do departamento, quando os dois não se parecem.
+ * "Consultoria Estratégica" é atendida pelo Comercial (era assim no n8n:
+ * o botão `📊 Consultoria Estratégica` tinha o valor `comercial`).
+ */
+export const SECTOR_DEPARTMENT_ALIASES: Record<string, string> = {
+  "Consultoria Estratégica": "Comercial",
+  "Experiência do Aluno": "Experiência do Aluno",
+  Financeiro: "Financeiro",
+};
 
 /**
  * Monta o fluxo de triagem.
@@ -67,6 +98,8 @@ Programas focados em inglês para carreira e oportunidades internacionais`;
  */
 export function buildTriagemFlow(params: {
   greeting?: string;
+  /** Saudação usada quando o canal envia botões (sem numeração). */
+  greetingMenu?: string;
   sectors: SectorOption[];
 }): Flow {
   const { greeting = DEFAULT_GREETING, sectors } = params;
@@ -81,6 +114,9 @@ export function buildTriagemFlow(params: {
         kind: "menu",
         label: "Menu de setores",
         content: greeting,
+        // Versão sem numeração, usada quando o canal envia botões tocáveis.
+        contentMenu: params.greetingMenu ?? DEFAULT_GREETING_MENU,
+        sectionLabel: "Setores",
         options: sectors.map((s, i) => ({ id: `opt${i + 1}`, label: s.label })),
       },
     },
