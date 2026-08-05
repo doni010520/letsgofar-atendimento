@@ -829,8 +829,38 @@ function kindFromMime(mime: string): { kind: "image" | "audio" | "video" | "docu
   return { kind: "document", content: "document" };
 }
 
-/** Envia um arquivo (imagem/áudio/vídeo/documento) numa conversa. */
+/**
+ * Envia um arquivo (imagem/áudio/vídeo/documento) numa conversa.
+ *
+ * O corpo real fica em `sendMediaImpl`; aqui só embrulhamos para que QUALQUER
+ * falha vire registro em `app_logs` com o nome e o tamanho do arquivo. Em
+ * produção o Next esconde a mensagem do erro ("An error occurred in the Server
+ * Components render"), então sem isto não há como saber o que quebrou.
+ */
 export async function sendMediaMessage(formData: FormData) {
+  const arquivo = formData.get("file") as File | null;
+  try {
+    return await sendMediaImpl(formData);
+  } catch (e) {
+    const erro = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    void logEvent(
+      "error",
+      "midia",
+      `Envio abortado: ${erro}`,
+      {
+        arquivo: arquivo?.name ?? null,
+        tipo: arquivo?.type ?? null,
+        bytes: arquivo?.size ?? null,
+        conversationId: String(formData.get("conversationId") || ""),
+        pilha: e instanceof Error ? String(e.stack ?? "").slice(0, 900) : null,
+      },
+    );
+    // Repassa uma mensagem legível — o Next omitiria a original em produção.
+    throw new Error(erro);
+  }
+}
+
+async function sendMediaImpl(formData: FormData) {
   if (isPreview()) return { ok: true };
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
