@@ -220,16 +220,31 @@ if (!SKIP_CONVERSATIONS) {
         for (const m of msgs.payload ?? []) {
           if (m.message_type === 2) continue; // atividade interna do Chatwoot
           // Já gravada (chegou pelo paralelo ou por uma execução anterior)?
-          // O app grava "<numero>:<id>"; o Chatwoot guarda só "<id>". Casa os dois.
-          if (!DRY && m.source_id) {
-            const j = await db.query(
-              `select 1 from messages
-                where organization_id=$1
-                  and (external_id=$2 or external_id like '%:' || $2)
-                limit 1`,
-              [ORG_ID, m.source_id],
-            );
-            if (j.rows.length) { count("mensagens_ja_existentes"); continue; }
+          if (!DRY) {
+            let ja;
+            if (m.source_id) {
+              // O app grava "<numero>:<id>"; o Chatwoot guarda só "<id>".
+              ja = await db.query(
+                `select 1 from messages
+                  where organization_id=$1
+                    and (external_id=$2 or external_id like '%:' || $2)
+                  limit 1`,
+                [ORG_ID, m.source_id],
+              );
+            } else {
+              // Mensagem que FALHOU não tem recibo. Sem esta segunda checagem,
+              // cada execução do importador a inseria de novo — foi o que gerou
+              // 63 duplicatas. Casa por conversa + texto + instante.
+              ja = await db.query(
+                `select 1 from messages
+                  where organization_id=$1 and conversation_id=$2
+                    and coalesce(body,'') = coalesce($3,'')
+                    and created_at = to_timestamp($4)
+                  limit 1`,
+                [ORG_ID, convId, m.content ?? "", m.created_at ?? 0],
+              );
+            }
+            if (ja.rows.length) { count("mensagens_ja_existentes"); continue; }
           }
           await run(
             `insert into messages

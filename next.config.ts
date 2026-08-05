@@ -42,6 +42,18 @@ const nextConfig: NextConfig = {
   // Saída standalone: imagem Docker pequena e self-contained (server.js).
   output: "standalone",
 
+  experimental: {
+    serverActions: {
+      // O padrão do Next é 1 MB, e o envio de arquivo do atendimento passa o
+      // arquivo inteiro por server action — qualquer foto de celular estourava
+      // esse teto e a mensagem simplesmente não saía.
+      // 32 MB cobre foto e vídeo curto (o WhatsApp aceita ~16 MB de vídeo) sem
+      // deixar o servidor carregar arquivos gigantes na memória, já que o
+      // upload é bufferizado antes de ir para o storage.
+      bodySizeLimit: "32mb",
+    },
+  },
+
   async headers() {
     return [
       {
