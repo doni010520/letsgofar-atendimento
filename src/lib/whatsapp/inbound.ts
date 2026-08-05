@@ -494,6 +494,7 @@ export async function persistInbound(messages: InboundMessage[]) {
           { id: conversationId, organization_id: org, channel_id: channel.id, contact_phone: msg.from, contact_name: contact?.name ?? null, is_group: isGroup, bot_node_id: cur?.bot_node_id ?? botNode },
           automation as { id: string; flow: { nodes: never[]; edges: never[] }; integration_id?: string | null },
           body ?? "",
+          msg.buttonId,
         ).catch((e) => {
           console.warn("chatbot", (e as Error)?.message);
           void logEvent("error", "chatbot", `Falha no chatbot: ${(e as Error)?.message ?? e}`, { conversationId }, org);

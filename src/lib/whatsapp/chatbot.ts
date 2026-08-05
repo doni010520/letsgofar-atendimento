@@ -16,6 +16,10 @@ interface FlowNodeData {
   mediaKind?: "image" | "audio" | "video" | "document";
   // menu
   options?: { id: string; label: string }[];
+  /** Texto do menu sem numeração, usado quando o canal envia botões. */
+  contentMenu?: string;
+  /** Rótulo da seção exigido pelo formato de menu da UAZAPI. */
+  sectionLabel?: string;
   // condição
   keywords?: string;
   // transferir
@@ -129,6 +133,40 @@ export async function runChatbot(
   };
   /** Envia texto de nó com substituição de merge fields. */
   const sendMerged = (text?: string) => send(applyVars(text ?? "", ctx()));
+
+  /**
+   * Envia um menu como BOTÕES quando o canal suporta (UAZAPI); caindo para o
+   * texto numerado quando não suporta ou quando o envio de botões falha —
+   * é preferível um menu feio a um cliente sem menu nenhum.
+   */
+  const sendMenuNode = async (n: FlowNode) => {
+    const options = (n.data?.options ?? []) as { id: string; label: string }[];
+    const texto = applyVars(String(n.data?.contentMenu ?? n.data?.content ?? ""), ctx());
+    if (!provider.sendMenu || !options.length || !texto.trim()) {
+      await sendMerged(n.data?.content);
+      return;
+    }
+    let externalId: string | undefined;
+    try {
+      const res = await provider.sendMenu({
+        to,
+        text: texto,
+        options,
+        sectionLabel: String(n.data?.sectionLabel ?? "Opções"),
+      });
+      externalId = res.externalId;
+    } catch (e) {
+      console.error("chatbot sendMenu error", e);
+      await sendMerged(n.data?.content); // reserva: menu em texto
+      return;
+    }
+    await db.from("messages").insert({
+      organization_id: conv.organization_id, conversation_id: conv.id,
+      direction: "out", sender_type: "bot", content_type: "text",
+      body: texto, external_id: externalId ?? null,
+      status: externalId ? "sent" : "failed",
+    });
+  };
 
   const sendMedia = async (url: string, kind: "image" | "audio" | "video" | "document", caption?: string) => {
     if (!url) return;
@@ -340,7 +378,7 @@ export async function runChatbot(
       continue;
     }
     if (k === "menu") {
-      await sendMerged(n.data?.content);
+      await sendMenuNode(n);
       await saveState(db, conv.id, automation.id, n.id);
       return "bot";
     }
