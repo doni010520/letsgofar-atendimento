@@ -595,8 +595,26 @@ export function Inbox({
     const caption = (file as File & { caption?: string }).caption;
     if (caption) fd.set("caption", caption);
     if (asSticker) fd.set("kind", "sticker");
+    // Limite do servidor (bodySizeLimit). Avisa ANTES de subir: sem isso o
+    // envio falhava calado e o usuário só via "não aconteceu nada".
+    const LIMITE_MB = 32;
+    if (file.size > LIMITE_MB * 1024 * 1024) {
+      toast(
+        `Arquivo de ${(file.size / 1024 / 1024).toFixed(1)} MB — o limite é ${LIMITE_MB} MB.`,
+        "error",
+      );
+      return;
+    }
     startTransition(async () => {
-      await sendMediaMessage(fd);
+      try {
+        await sendMediaMessage(fd);
+      } catch (e) {
+        toast(
+          `Não foi possível enviar "${file.name}". ${(e as Error)?.message ?? ""}`.trim(),
+          "error",
+        );
+        return;
+      }
       const msgs = await fetchMessages(convId);
       setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
       setConversations((prev) => {

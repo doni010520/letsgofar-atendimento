@@ -862,7 +862,25 @@ export async function sendMediaMessage(formData: FormData) {
   const up = await svc.storage
     .from("media")
     .upload(path, buf, { contentType: file.type || "application/octet-stream", upsert: true });
-  if (up.error) throw new Error("Falha ao subir o arquivo.");
+  if (up.error) {
+    void logEvent(
+      "error",
+      "midia",
+      `Falha ao subir arquivo: ${up.error.message}`,
+      { arquivo: file.name, tipo: file.type, bytes: buf.length, conversationId },
+      session.organization.id,
+    );
+    throw new Error("Falha ao subir o arquivo.");
+  }
+  // Deixa rastro de TODA tentativa: sem isso, uma falha de envio não aparece em
+  // lugar nenhum e só resta deduzir pelo que faltou no banco.
+  void logEvent(
+    "info",
+    "midia",
+    `Envio de ${kind}: ${file.name} (${(buf.length / 1024 / 1024).toFixed(2)} MB)`,
+    { tipo: file.type, bytes: buf.length, conversationId, autor: session.userId },
+    session.organization.id,
+  );
   const publicUrl = svc.storage.from("media").getPublicUrl(path).data.publicUrl;
 
   // Registra a mensagem (pendente) e envia pelo provedor.
@@ -889,6 +907,13 @@ export async function sendMediaMessage(formData: FormData) {
     await supabase.from("messages").update({ status: "sent", external_id: res.externalId ?? null }).eq("id", msg!.id);
   } catch (e) {
     console.error("sendMedia error", e);
+    void logEvent(
+      "error",
+      "midia",
+      `Falha ao enviar ${kind}: ${(e as Error)?.message ?? e}`,
+      { arquivo: file.name, bytes: buf.length, conversationId, url: publicUrl },
+      session.organization.id,
+    );
     await supabase.from("messages").update({ status: "failed" }).eq("id", msg!.id);
   }
 
