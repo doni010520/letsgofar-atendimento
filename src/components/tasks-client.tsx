@@ -56,9 +56,20 @@ export function TasksClient({
     [tasks, soMinhas, meId],
   );
 
+  /** Follow-ups pendentes: tarefa presa a um contato. Vêm em lista própria. */
+  const followUps = useMemo(
+    () =>
+      escopo
+        .filter((t) => t.contact_id && t.status !== "completed" && t.status !== "cancelled")
+        .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999")),
+    [escopo],
+  );
+
   const visible = useMemo(() => {
     const d = today();
     return escopo.filter((t) => {
+      // Follow-up de contato já aparece na seção de cima.
+      if (t.contact_id && t.status !== "completed" && t.status !== "cancelled") return false;
       const active = t.status === "pending" || t.status === "in_progress";
       if (view === "active") return active;
       if (view === "today") return active && t.due_date === d;
@@ -303,7 +314,61 @@ export function TasksClient({
         )}
       </div>
 
-      {mode === "list" && !visible.length && <EmptyState title="Nenhuma tarefa aqui" hint="Crie uma tarefa ou troque o filtro." />}
+      {/* Follow-ups: tarefas presas a um contato. No Chatwoot ficavam em outro
+          lugar (dentro da ficha), e misturá-las com as tarefas da equipe
+          atrapalhou a rotina de quem trabalha o funil — por isso vêm em cima e
+          separadas, cada uma abrindo a conversa daquela pessoa. */}
+      {mode === "list" && followUps.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Follow-ups de contatos <span className="text-brand">({followUps.length})</span>
+          </h2>
+          <div className="space-y-1.5">
+            {followUps.map((t) => {
+              const p = PRIORITY[t.priority] ?? PRIORITY.medium;
+              const late = !!t.due_date && t.due_date < today();
+              const quem = t.contacts?.name || t.contacts?.phone || "contato";
+              const conteudo = (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">{quem}</p>
+                    <p className="truncate text-xs text-ink-soft">{t.title}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {t.due_date && (
+                      <span className={`text-[11px] ${late ? "font-medium text-red-600" : "text-ink-soft"}`}>
+                        {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${p.cls}`}>{p.label}</span>
+                  </div>
+                </>
+              );
+              const cls = `flex items-center gap-3 rounded-lg border p-2.5 transition ${
+                late ? "border-red-200 bg-red-50" : "border-border bg-surface"
+              }`;
+              // Sem conversa não há para onde levar; mostra sem link.
+              return t.conversation_id ? (
+                <a key={t.id} href={`/atendimento?c=${t.conversation_id}`} className={`${cls} hover:border-brand`}>
+                  {conteudo}
+                </a>
+              ) : (
+                <div key={t.id} className={cls}>{conteudo}</div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {mode === "list" && !visible.length && !followUps.length && (
+        <EmptyState title="Nenhuma tarefa aqui" hint="Crie uma tarefa ou troque o filtro." />
+      )}
+
+      {mode === "list" && visible.length > 0 && followUps.length > 0 && (
+        <h2 className="pt-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          Tarefas da equipe <span className="text-ink-soft">({visible.length})</span>
+        </h2>
+      )}
 
       <div className={`space-y-2 ${mode === "list" ? "" : "hidden"}`}>
         {visible.map((t) => {

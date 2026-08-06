@@ -26,6 +26,8 @@ export type TaskRow = {
   task_comments?: { id: string; content: string; created_at: string; profile_id: string | null }[];
   task_files?: { id: string; filename: string; path: string; byte_size: number | null }[];
   task_tags?: { tag_id: string }[];
+  /** Contato do follow-up, quando a tarefa nasceu dentro de uma conversa. */
+  contacts?: { name: string | null; phone: string } | null;
 };
 
 async function getTasks(): Promise<TaskRow[]> {
@@ -33,7 +35,9 @@ async function getTasks(): Promise<TaskRow[]> {
   const sb = await createClient();
   const { data } = await sb
     .from("tasks")
-    .select("*, task_items(id, title, completed, position), task_comments(id, content, created_at, profile_id), task_files(id, filename, path, byte_size), task_tags(tag_id)")
+    // contacts(...) traz o nome de quem é o follow-up: sem ele a lista de
+    // tarefas de contato mostraria só o título, sem dizer de quem é.
+    .select("*, contacts(name, phone), task_items(id, title, completed, position), task_comments(id, content, created_at, profile_id), task_files(id, filename, path, byte_size), task_tags(tag_id)")
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
   return (data as TaskRow[]) ?? [];
