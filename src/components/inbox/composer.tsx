@@ -294,7 +294,11 @@ export function Composer({
               !internalMode ? "border-brand bg-brand text-white shadow-sm" : "border-border bg-surface text-ink-soft hover:bg-gray-50 hover:text-ink"
             }`}
           >
-            <MessageCircle size={13} /> Responder cliente
+            <MessageCircle size={13} />
+            {/* No celular o rótulo curto: a linha inteira existia só para dizer
+                duas palavras, e a altura faz falta para o campo de digitar. */}
+            <span className="hidden sm:inline">Responder cliente</span>
+            <span className="sm:hidden">Cliente</span>
           </button>
           <button
             onClick={() => { setMode("internal"); setMentionQuery(null); }}
@@ -303,7 +307,9 @@ export function Composer({
               internalMode ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-border bg-surface text-ink-soft hover:bg-gray-50 hover:text-ink"
             }`}
           >
-            <Lock size={13} /> Mensagem interna
+            <Lock size={13} />
+            <span className="hidden sm:inline">Mensagem interna</span>
+            <span className="sm:hidden">Interna</span>
           </button>
         </div>
       )}

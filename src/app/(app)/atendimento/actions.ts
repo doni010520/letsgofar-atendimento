@@ -296,7 +296,7 @@ export async function sendMessage(
 
   const { data: conv } = await supabase
     .from("conversation_overview")
-    .select("contact_phone, channel_id, status, is_group, contact_jid")
+    .select("contact_phone, channel_id, status, is_group, contact_jid, assigned_user_id")
     .eq("id", conversationId)
     .single();
   if (!conv) throw new Error("Conversa não encontrada.");
@@ -339,10 +339,19 @@ export async function sendMessage(
   // Marca atividade IMEDIATAMENTE (antes do round-trip do provedor, que leva
   // segundos) para o cron de inatividade não encerrar a conversa que o atendente
   // acabou de reativar. Também limpa o aviso pendente ("Você ainda está por aí?").
-  await supabase
-    .from("conversations")
-    .update({ last_message_at: new Date().toISOString(), inactivity_warned_at: null })
-    .eq("id", conversationId);
+  //
+  // E ASSUME a conversa: quem responde vira o responsável, se ainda não houver
+  // um. Sem isso a conversa que a pessoa está atendendo agora não aparece na
+  // aba "Minhas" dela — foi o que fez a Luana procurar clientes com quem tinha
+  // acabado de falar e não achar. Se já tem dono, não rouba de ninguém.
+  const patchConversa: Record<string, unknown> = {
+    last_message_at: new Date().toISOString(),
+    inactivity_warned_at: null,
+  };
+  if (!conv.assigned_user_id && session.profile?.id) {
+    patchConversa.assigned_user_id = session.profile.id;
+  }
+  await supabase.from("conversations").update(patchConversa).eq("id", conversationId);
 
   // Envia pelo provedor do canal.
   let deliveryError: string | null = null;

@@ -26,25 +26,28 @@ export function Topbar({
     .join("");
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
+    // `pl-16` no celular abre espaço para o botão da gaveta, que flutua no
+    // canto esquerdo — sem isso ele cobre o primeiro item da barra.
+    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface pl-16 pr-3 lg:px-6">
       <Link
         href="/atendimento"
-        className="flex items-center gap-2 text-sm font-medium text-ink-soft transition hover:text-brand"
+        className="flex h-11 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-sm font-medium text-ink-soft transition hover:text-brand lg:h-auto lg:px-0"
       >
-        <MessageCircle size={18} />
-        Acessar o chat
+        <MessageCircle size={18} className="shrink-0" />
+        {/* Numa tela de 390px o texto não cabe; o ícone já diz para onde vai. */}
+        <span className="hidden sm:inline">Acessar o chat</span>
       </Link>
 
       <div className="flex items-center gap-1">
         <span
           title="Versão do app"
-          className="mr-2 rounded-full border border-border bg-canvas px-2.5 py-1 font-mono text-[11px] font-semibold text-ink-soft"
+          className="mr-2 hidden rounded-full border border-border bg-canvas px-2.5 py-1 font-mono text-[11px] font-semibold text-ink-soft sm:inline"
         >
           {APP_VERSION}
         </span>
         <Link
           href="/ajustes"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink lg:h-9 lg:w-9"
           title="Ajustes"
         >
           <Settings size={18} />
@@ -52,7 +55,7 @@ export function Topbar({
         <MentionsBell userId={userId ?? null} />
         <button
           onClick={() => document.documentElement.classList.toggle("dark")}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-soft transition hover:bg-black/5 dark:hover:bg-white/5 hover:text-ink lg:h-9 lg:w-9"
           title="Modo escuro"
         >
           <Moon size={18} className="hidden dark:block" />

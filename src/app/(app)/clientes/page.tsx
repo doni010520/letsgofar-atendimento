@@ -99,12 +99,16 @@ export default async function ClientesPage({
         <div className="overflow-x-auto rounded-card border border-border">
           <table className="w-full text-sm">
             <thead>
+              {/* No celular ficam só nome, telefone e o botão da conversa: com
+                  seis colunas a tabela ficava mais larga que a tela e o nome
+                  saía cortado no meio. E-mail, cidade e data voltam no
+                  computador, onde há espaço. */}
               <tr className="border-b border-border bg-gray-50 text-left text-xs font-medium text-ink-soft">
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">Telefone</th>
-                <th className="px-4 py-3">E-mail</th>
-                <th className="px-4 py-3">Cidade</th>
-                <th className="px-4 py-3 text-right">Desde</th>
+                <th className="hidden px-4 py-3 md:table-cell">E-mail</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Cidade</th>
+                <th className="hidden px-4 py-3 text-right lg:table-cell">Desde</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -125,9 +129,9 @@ export default async function ClientesPage({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-ink-soft">{formatPhone(c.phone)}</td>
-                  <td className="px-4 py-3 text-ink-soft">{c.email ?? "—"}</td>
-                  <td className="px-4 py-3 text-ink-soft">{c.city ?? "—"}</td>
-                  <td className="px-4 py-3 text-right text-ink-soft">
+                  <td className="hidden px-4 py-3 text-ink-soft md:table-cell">{c.email ?? "—"}</td>
+                  <td className="hidden px-4 py-3 text-ink-soft lg:table-cell">{c.city ?? "—"}</td>
+                  <td className="hidden px-4 py-3 text-right text-ink-soft lg:table-cell">
                     {new Date(c.created_at).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="px-4 py-3 text-right">

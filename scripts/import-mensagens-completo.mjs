@@ -83,7 +83,7 @@ let contatosCriados = 0, conversasCriadas = 0;
  * mensagens seriam descartadas por falta de destino — justamente as dos
  * contatos que a importação por API nunca trouxe.
  */
-async function acharConversa(fone, nome) {
+async function acharConversa(fone, nome, dataUltima = null) {
   if (convPorFone.has(fone)) return convPorFone.get(fone);
 
   const { rows } = await db.query(
@@ -104,9 +104,14 @@ async function acharConversa(fone, nome) {
     );
     if (ct[0]?.novo) contatosCriados += 1;
     const { rows: cv } = await db.query(
+      // `now()` aqui foi um erro que custou caro: a conversa nascia carimbada
+      // com a hora do IMPORT, nao com a data da ultima mensagem. 558 conversas
+      // antigas saltaram para o topo da caixa e a equipe abria a primeira da
+      // lista para encontrar mensagem de meses atras. Agora a data vem do
+      // chamador; sem ela, cai no now() de antes.
       `insert into conversations (organization_id, channel_id, contact_id, status, last_message_at)
-       values ($1,$2,$3,'closed', now()) returning id`,
-      [ORG_ID, canalId, ct[0].id],
+       values ($1,$2,$3,'closed', coalesce($4::timestamptz, now())) returning id`,
+      [ORG_ID, canalId, ct[0].id, dataUltima ?? null],
     );
     id = cv[0]?.id ?? null;
     if (id) conversasCriadas += 1;
@@ -130,7 +135,9 @@ for await (const linha of rl) {
 
   const fone = normalizePhone(m.fone);
   if (!fone) { semDestino += 1; continue; }
-  const convId = await acharConversa(fone, m.contato);
+  // Passa a data DESTA mensagem: a conversa nasce com a data certa em vez
+  // de com a hora do import. O update no fim ainda ajusta para a mais nova.
+  const convId = await acharConversa(fone, m.contato, m.created_at ?? null);
   if (!convId) { semDestino += 1; continue; }
 
   const corpo = m.content ?? "";

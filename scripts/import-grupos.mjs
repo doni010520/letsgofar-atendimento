@@ -87,9 +87,14 @@ for (const g of JSON.parse(fs.readFileSync(path.join(PASTA, "grupos.json"), "utf
   let convId = cv[0]?.id ?? null;
   if (!convId && !DRY) {
     const { rows } = await db.query(
+      // `now()` aqui foi um erro que custou caro: a conversa nascia carimbada
+      // com a hora do IMPORT, nao com a data da ultima mensagem. 558 conversas
+      // antigas saltaram para o topo da caixa e a equipe abria a primeira da
+      // lista para encontrar mensagem de meses atras. Agora a data vem do
+      // chamador; sem ela, cai no now() de antes.
       `insert into conversations (organization_id, channel_id, contact_id, status, last_message_at)
-       values ($1,$2,$3,'open', now()) returning id`,
-      [ORG_ID, canalId, contatoId],
+       values ($1,$2,$3,'open', coalesce($4::timestamptz, now())) returning id`,
+      [ORG_ID, canalId, contatoId, g.last_activity_at ?? g.created_at ?? null],
     );
     convId = rows[0].id;
   }

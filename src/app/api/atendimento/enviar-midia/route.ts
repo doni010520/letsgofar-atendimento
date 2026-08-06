@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: conv } = await supabase
       .from("conversation_overview")
-      .select("contact_phone, channel_id, status, is_group, contact_jid")
+      .select("contact_phone, channel_id, status, is_group, contact_jid, assigned_user_id")
       .eq("id", conversationId)
       .single();
     if (!conv) {
@@ -163,11 +163,15 @@ export async function POST(request: Request) {
         { arquivo: nomeArquivo, bytes, conversationId, recibo: res.externalId ?? null },
         session.organization.id);
 
+      // Mandar arquivo também é atender: assume a conversa se ela não tiver
+      // dono, igual ao envio de texto. Do contrário o atendimento não aparece
+      // na aba "Minhas" de quem acabou de trabalhar nele.
       await supabase
         .from("conversations")
         .update({
           last_message_at: new Date().toISOString(),
           status: conv.status === "closed" ? "open" : conv.status,
+          ...(conv.assigned_user_id ? {} : { assigned_user_id: session.userId }),
         })
         .eq("id", conversationId);
 

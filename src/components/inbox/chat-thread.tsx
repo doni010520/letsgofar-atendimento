@@ -150,8 +150,11 @@ export function ChatThread({
             </div>
           </button>
         </div>
-        {/* Linha 2: ações */}
-        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+        {/* Linha 2: ações.
+            No celular vira uma faixa que ROLA para o lado em vez de quebrar em
+            duas linhas: seis botões empilhados comiam ~110px de altura de uma
+            tela de 844px, e essa altura faz falta para ler a conversa. */}
+        <div className="flex items-center gap-1.5 overflow-x-auto px-4 pb-2 [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 lg:flex-wrap lg:overflow-x-visible">
           <button onClick={onToggleMute} title={muted ? "Reativar" : "Silenciar"} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
             {muted ? <BellOff size={12} /> : <Bell size={12} />} {muted ? "Silenciado" : "Silenciar"}
           </button>

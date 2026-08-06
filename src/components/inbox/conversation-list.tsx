@@ -175,8 +175,14 @@ export function ConversationList({
       // Aba de status
       if (statusTab !== "all" && c.status !== statusTab) return false;
       // De quem é: filtro de tela, nunca permissão — "Todas" mostra mesmo tudo.
-      if (dono === "minhas" && userId && c.assigned_user_id !== userId) return false;
-      if (dono === "sem" && c.assigned_user_id) return false;
+      // BUSCA IGNORA A ABA. "Pesquisei e não encontrei" foi exatamente o que
+      // aconteceu com a Luana: a conversa existia, estava sem responsável, e a
+      // busca só olhava dentro de "Minhas". Quem digita um nome quer achar a
+      // pessoa, não filtrar a aba atual.
+      if (!query) {
+        if (dono === "minhas" && userId && c.assigned_user_id !== userId) return false;
+        if (dono === "sem" && c.assigned_user_id) return false;
+      }
       // Busca textual
       if (query) {
         const q = query.toLowerCase();
