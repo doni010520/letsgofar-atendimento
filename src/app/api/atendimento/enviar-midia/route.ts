@@ -47,11 +47,33 @@ export async function POST(request: Request) {
     nomeArquivo = String(url.searchParams.get("nome") || "arquivo");
     const mime = request.headers.get("content-type") || "application/octet-stream";
 
-    const buf = Buffer.from(await request.arrayBuffer());
+    // Lê por fluxo e CONFERE o tamanho. `arrayBuffer()` resolvia com o corpo
+    // pela metade quando a conexão engasgava: o mesmo PDF chegou três vezes
+    // com tamanhos diferentes (10.465.715 / 10.469.318 / 10.465.947) e o
+    // arquivo ia truncado para o cliente, que não conseguia abrir.
+    const esperado = Number(request.headers.get("content-length") || 0);
+    const partes: Uint8Array[] = [];
+    let lidos = 0;
+    if (request.body) {
+      const reader = request.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) { partes.push(value); lidos += value.length; }
+      }
+    }
+    const buf = Buffer.concat(partes);
     bytes = buf.length;
 
     if (!conversationId || !bytes) {
       return NextResponse.json({ ok: false, error: "Arquivo ou conversa ausente." }, { status: 400 });
+    }
+    if (esperado && bytes !== esperado) {
+      const msg = `Transferência incompleta: recebi ${bytes} de ${esperado} bytes.`;
+      void logEvent("error", "midia", msg,
+        { arquivo: nomeArquivo, esperado, recebido: bytes, conversationId }, session.organization.id);
+      // Falhar aqui é melhor que entregar um arquivo que não abre.
+      return NextResponse.json({ ok: false, error: `${msg} Tente enviar de novo.` }, { status: 400 });
     }
     const file = { name: nomeArquivo, type: mime, size: bytes };
 
