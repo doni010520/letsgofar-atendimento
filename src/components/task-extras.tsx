@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { User } from "lucide-react";
 import { Card, Button } from "@/components/ui";
 import type { TaskRow } from "@/app/(app)/tarefas/page";
 import {
@@ -84,6 +85,13 @@ export function TaskKanbanView({
                   <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gray-400"}`} />
                   <span className="truncate text-sm text-ink">{t.title}</span>
                 </div>
+                {/* De quem é o follow-up. Sem isto o cartão diz "Follow-up" e
+                    não diz com quem — foi o que a equipe relatou. */}
+                {t.contacts && (
+                  <p className="mt-1 flex items-center gap-1 truncate text-[11px] font-medium text-brand">
+                    <User size={11} /> {t.contacts.name || t.contacts.phone}
+                  </p>
+                )}
                 {t.due_date && (
                   <p className="mt-1 text-[11px] text-ink-soft">
                     {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
@@ -175,12 +183,14 @@ export function TaskCalendarView({
                   <button
                     key={t.id}
                     onClick={() => onOpen(t)}
-                    title={t.title}
+                    title={t.contacts ? `${t.contacts.name || t.contacts.phone} — ${t.title}` : t.title}
                     className="flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px] hover:bg-gray-100"
                   >
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`} />
                     <span className={`truncate ${t.status === "completed" ? "line-through opacity-60" : ""}`}>
-                      {t.title}
+                      {/* No espaço apertado do calendário, o nome do contato
+                          vale mais que o título ("Follow-up" repete sempre). */}
+                      {t.contacts ? (t.contacts.name || t.contacts.phone) : t.title}
                     </span>
                   </button>
                 ))}
@@ -285,6 +295,23 @@ export function TaskDetailPanel({
           </form>
         ) : (
           task.description && <p className="mt-2 text-sm text-ink-soft">{task.description}</p>
+        )}
+
+        {/* Contato do follow-up: leva direto à conversa, que é o próximo passo
+            de quem abre a tarefa ("preciso falar com quem?"). */}
+        {task.contacts && (
+          <a
+            href={task.conversation_id ? `/atendimento?c=${task.conversation_id}` : undefined}
+            className={`mt-3 flex items-center gap-2 rounded-lg border border-border p-2 text-sm ${
+              task.conversation_id ? "text-brand hover:border-brand" : "text-ink"
+            }`}
+          >
+            <User size={14} />
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {task.contacts.name || task.contacts.phone}
+            </span>
+            {task.conversation_id && <span className="shrink-0 text-xs">abrir conversa →</span>}
+          </a>
         )}
 
         {/* Responsável: trocar transfere a tarefa para outra pessoa. */}
