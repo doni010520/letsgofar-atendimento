@@ -54,47 +54,27 @@ try {
   await p.goto(`${APP}/atendimento`, { waitUntil: "networkidle2", timeout: 60000 });
   await new Promise((r) => setTimeout(r, 6000));
 
-  // Abre a conversa pelo TELEFONE e ABORTA se não achar. Antes eu procurava
-  // pelo nome e, sem encontrar, o clique caía na primeira conversa da lista —
-  // foi assim que um PDF de teste foi parar num cliente real.
-  const busca = await p.$('input[placeholder*="uscar" i], input[type="search"]');
-  if (busca) {
-    await busca.click({ clickCount: 3 });
-    await busca.type(ALVO.slice(-9), { delay: 30 });
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  const achou = await p.evaluate((alvo) => {
-    const fim = alvo.slice(-8);
-    const item = [...document.querySelectorAll("li,button,div[role=button],a")].find((e) =>
-      (e.textContent ?? "").replace(/\D/g, "").includes(fim),
-    );
-    if (!item) return false;
-    item.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    return true;
-  }, ALVO);
-  if (!achou) {
-    console.log(`ABORTADO: não achei a conversa de ${ALVO}. Nada foi enviado.`);
-    await p.screenshot({ path: `${SP}/app-sem-conversa.png` });
-    process.exit(1);
-  }
-  // Confere no cabeçalho para quem estamos prestes a enviar.
-  await new Promise((r) => setTimeout(r, 3000));
-  const destino = await p.evaluate(() => document.body.innerText.slice(0, 400));
-  if (!destino.replace(/\D/g, "").includes(ALVO.slice(-8))) {
-    console.log("ABORTADO: a conversa aberta não é a do número alvo. Nada foi enviado.");
+  // Link direto para a conversa: buscar por texto falhou porque o contato
+  // está sem nome, e cair na primeira da lista já mandou arquivo para o
+  // cliente errado uma vez. Aqui o destino é explícito.
+  const CONVERSA = "fbc0464f-a306-4e1d-8bdc-41d588325580";
+  await p.goto(`${APP}/atendimento?c=${CONVERSA}`, { waitUntil: "networkidle2", timeout: 60000 });
+  await new Promise((r) => setTimeout(r, 7000));
+
+  // Confere na tela que é o número certo ANTES de anexar qualquer coisa.
+  const naTela = await p.evaluate(() => document.body.innerText.slice(0, 1200));
+  if (!naTela.replace(/\D/g, "").includes(ALVO.slice(-8))) {
+    console.log("ABORTADO: a tela não mostra o número alvo. Nada foi enviado.");
+    console.log("  visível:", naTela.slice(0, 200));
     await p.screenshot({ path: `${SP}/app-conversa-errada.png` });
     process.exit(1);
   }
-  console.log("conversa aberta pelo nome:", achou);
-  await new Promise((r) => setTimeout(r, 5000));
+  console.log("conversa confirmada na tela: 71 9306-1031");
   await p.screenshot({ path: `${SP}/app-conversa.png` });
 
   // Gera um PDF de ~2,5 MB e anexa pelo campo de arquivo real.
-  const pdf = `${SP}/teste-envio.pdf`;
-  if (!fs.existsSync(pdf)) {
-    const corpo = Buffer.alloc(2_500_000, 0x20);
-    fs.writeFileSync(pdf, Buffer.concat([Buffer.from("%PDF-1.4\n% teste de envio\n"), corpo, Buffer.from("\n%%EOF\n")]));
-  }
+  const pdf = `${SP}/contrato-teste.pdf`;
+  if (!fs.existsSync(pdf)) { console.log('gere antes com gera-pdf-teste.mjs'); process.exit(1); }
   console.log("arquivo de teste:", (fs.statSync(pdf).size / 1024 / 1024).toFixed(2), "MB");
 
   const inputs = await p.$$('input[type="file"]');

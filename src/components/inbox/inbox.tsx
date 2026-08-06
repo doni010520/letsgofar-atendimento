@@ -589,15 +589,10 @@ export function Inbox({
     const convId = selectedId;
     // Legenda vinda do modal de preview (propriedade custom no File).
     const caption = (file as File & { caption?: string }).caption;
-    // Teto do lado do cliente, para não subir arquivo gigante à toa.
-    const LIMITE_MB = 32;
-    if (file.size > LIMITE_MB * 1024 * 1024) {
-      toast(
-        `Arquivo de ${(file.size / 1024 / 1024).toFixed(1)} MB — o limite é ${LIMITE_MB} MB.`,
-        "error",
-      );
-      return;
-    }
+    // Sem teto no cliente: a rota confere o tamanho recebido contra o
+    // declarado e recusa transferência incompleta, então arquivo grande falha
+    // com aviso em vez de chegar cortado. O WhatsApp tem os limites dele
+    // (vídeo ~16 MB, documento ~100 MB) e recusa o que passar.
     startTransition(async () => {
       // Arquivo cru no corpo e dados na URL: multipart quebrava ao ser lido no
       // servidor ("Failed to parse body as FormData"). Ver a rota.

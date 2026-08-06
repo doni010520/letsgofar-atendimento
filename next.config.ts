@@ -43,6 +43,13 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   experimental: {
+    // O Next bufferiza o corpo da requisição e CORTA no limite EM SILÊNCIO —
+    // a rota recebe o pedaço achando que é o arquivo inteiro, sem erro. O
+    // padrão de 10 MB truncava os contratos em PDF: chegavam sem %%EOF e não
+    // abriam, nem para quem recebia nem para quem enviava.
+    // 128 MB cobre com folga o limite do próprio WhatsApp (~100 MB p/ documento).
+    proxyClientMaxBodySize: "128mb",
+
     serverActions: {
       // O padrão do Next é 1 MB, e o envio de arquivo do atendimento passa o
       // arquivo inteiro por server action — qualquer foto de celular estourava
