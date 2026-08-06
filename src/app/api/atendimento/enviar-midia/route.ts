@@ -36,17 +36,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Sessão inválida." }, { status: 401 });
     }
 
-    const fd = await request.formData();
-    const conversationId = String(fd.get("conversationId") || "");
-    const caption = String(fd.get("caption") || "").trim();
-    const override = String(fd.get("kind") || "");
-    const file = fd.get("file") as File | null;
+    // O arquivo vem como corpo CRU e os dados na URL. Multipart foi tentado
+    // antes e quebrava com "Failed to parse body as FormData" — o corpo
+    // chegava, mas o parser não reconstruía o arquivo. Sem formulário não há
+    // fronteira a interpretar: bytes entram, bytes saem.
+    const url = new URL(request.url);
+    const conversationId = String(url.searchParams.get("conversationId") || "");
+    const caption = String(url.searchParams.get("caption") || "").trim();
+    const override = String(url.searchParams.get("kind") || "");
+    nomeArquivo = String(url.searchParams.get("nome") || "arquivo");
+    const mime = request.headers.get("content-type") || "application/octet-stream";
 
-    if (!conversationId || !file || file.size === 0) {
+    const buf = Buffer.from(await request.arrayBuffer());
+    bytes = buf.length;
+
+    if (!conversationId || !bytes) {
       return NextResponse.json({ ok: false, error: "Arquivo ou conversa ausente." }, { status: 400 });
     }
-    nomeArquivo = file.name || "arquivo";
-    bytes = file.size;
+    const file = { name: nomeArquivo, type: mime, size: bytes };
 
     const supabase = await createClient();
     const { data: conv } = await supabase
@@ -64,7 +71,6 @@ export async function POST(request: Request) {
         : kindFromMime(file.type || "");
 
     const svc = createServiceClient();
-    const buf = Buffer.from(await file.arrayBuffer());
     const ext = (file.name?.split(".").pop() || (file.type.split("/")[1] ?? "bin")).slice(0, 5);
     const caminho = `${session.organization.id}/out/${conversationId}-${Date.now()}.${ext}`;
 

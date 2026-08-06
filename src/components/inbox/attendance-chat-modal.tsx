@@ -154,17 +154,21 @@ export function AttendanceChatModal({
   }
 
   function handleSendFile(file: File, asSticker?: boolean) {
-    const fd = new FormData();
-    fd.set("conversationId", convId);
-    fd.set("file", file);
     const caption = (file as File & { caption?: string }).caption;
-    if (caption) fd.set("caption", caption);
-    if (asSticker) fd.set("kind", "sticker");
     startTransition(async () => {
-      // Mesma rota do inbox: server action recusa corpo grande antes de chegar
-      // no servidor. Ver src/app/api/atendimento/enviar-midia/route.ts.
+      // Mesma rota do inbox: arquivo cru no corpo, dados na URL.
       try {
-        const r = await fetch("/api/atendimento/enviar-midia", { method: "POST", body: fd });
+        const q = new URLSearchParams({
+          conversationId: convId,
+          nome: file.name || "arquivo",
+          ...(caption ? { caption } : {}),
+          ...(asSticker ? { kind: "sticker" } : {}),
+        });
+        const r = await fetch(`/api/atendimento/enviar-midia?${q}`, {
+          method: "POST",
+          headers: { "content-type": file.type || "application/octet-stream" },
+          body: file,
+        });
         const dados = await r.json().catch(() => ({}) as { ok?: boolean; error?: string });
         if (!r.ok || dados.ok === false) {
           toast(`Não foi possível enviar "${file.name}". ${dados.error ?? `HTTP ${r.status}`}`, "error");

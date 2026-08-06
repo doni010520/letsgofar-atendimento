@@ -587,15 +587,9 @@ export function Inbox({
   function handleSendFile(file: File, asSticker?: boolean) {
     if (!selectedId) return;
     const convId = selectedId;
-    const fd = new FormData();
-    fd.set("conversationId", convId);
-    fd.set("file", file);
     // Legenda vinda do modal de preview (propriedade custom no File).
     const caption = (file as File & { caption?: string }).caption;
-    if (caption) fd.set("caption", caption);
-    if (asSticker) fd.set("kind", "sticker");
-    // Limite do servidor (bodySizeLimit). Avisa ANTES de subir: sem isso o
-    // envio falhava calado e o usuário só via "não aconteceu nada".
+    // Teto do lado do cliente, para não subir arquivo gigante à toa.
     const LIMITE_MB = 32;
     if (file.size > LIMITE_MB * 1024 * 1024) {
       toast(
@@ -605,10 +599,20 @@ export function Inbox({
       return;
     }
     startTransition(async () => {
-      // Rota, não server action: server action recusa corpo grande antes de
-      // chegar no servidor, sem erro legível. Ver a rota para o histórico.
+      // Arquivo cru no corpo e dados na URL: multipart quebrava ao ser lido no
+      // servidor ("Failed to parse body as FormData"). Ver a rota.
       try {
-        const r = await fetch("/api/atendimento/enviar-midia", { method: "POST", body: fd });
+        const q = new URLSearchParams({
+          conversationId: convId,
+          nome: file.name || "arquivo",
+          ...(caption ? { caption } : {}),
+          ...(asSticker ? { kind: "sticker" } : {}),
+        });
+        const r = await fetch(`/api/atendimento/enviar-midia?${q}`, {
+          method: "POST",
+          headers: { "content-type": file.type || "application/octet-stream" },
+          body: file,
+        });
         const dados = await r.json().catch(() => ({}) as { error?: string });
         if (!r.ok || dados.ok === false) {
           toast(
