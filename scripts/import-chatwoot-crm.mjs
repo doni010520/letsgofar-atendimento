@@ -298,7 +298,17 @@ for (const t of lista(await cw("agent_tasks"))) {
 
 // ── 4. Contratos ─────────────────────────────────────────────────────────
 console.log("\n▸ Contratos");
-for (const c of lista(await cw("contracts"))) {
+// PAGINADO: a API devolve 20 por página. Ler só a primeira deixou 12
+// contratos para trás — o mesmo erro que escondeu 412 tarefas.
+const todosContratos = [];
+for (let p = 1; p <= 50; p += 1) {
+  const pagina = lista(await cw(`contracts?page=${p}`));
+  if (!pagina.length) break;
+  todosContratos.push(...pagina);
+}
+console.log(`  encontrados no Chatwoot: ${todosContratos.length}`);
+
+for (const c of todosContratos) {
   let det = c;
   try {
     det = (await cw(`contracts/${c.id}`))?.data ?? c;

@@ -71,33 +71,44 @@ export function TaskKanbanView({
           </div>
           <div className="flex-1 space-y-2 p-2">
             {byStatus[col.key].map((t) => (
-              <button
+              <div
                 key={t.id}
                 draggable
                 onDragStart={() => setDragging(t.id)}
                 onDragEnd={() => setDragging(null)}
-                onClick={() => onOpen(t)}
-                className={`w-full cursor-grab rounded-lg border border-border bg-surface p-3 text-left shadow-sm ${
+                className={`cursor-grab rounded-lg border border-border bg-surface p-3 shadow-sm ${
                   dragging === t.id ? "opacity-50" : ""
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gray-400"}`} />
-                  <span className="truncate text-sm text-ink">{t.title}</span>
-                </div>
-                {/* De quem é o follow-up. Sem isto o cartão diz "Follow-up" e
-                    não diz com quem — foi o que a equipe relatou. */}
+                <button onClick={() => onOpen(t)} className="w-full text-left">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gray-400"}`} />
+                    <span className="truncate text-sm text-ink">{t.title}</span>
+                  </div>
+                  {t.due_date && (
+                    <p className="mt-1 text-[11px] text-ink-soft">
+                      {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
+                    </p>
+                  )}
+                </button>
+                {/* Tarefa de lead: o nome leva direto à conversa, para escrever
+                    para a pessoa sem ter que procurá-la pelo nome depois. */}
                 {t.contacts && (
-                  <p className="mt-1 flex items-center gap-1 truncate text-[11px] font-medium text-brand">
-                    <User size={11} /> {t.contacts.name || t.contacts.phone}
-                  </p>
+                  t.conversation_id ? (
+                    <a
+                      href={`/atendimento?c=${t.conversation_id}`}
+                      className="mt-1.5 flex items-center gap-1 truncate rounded bg-brand/10 px-1.5 py-1 text-[11px] font-medium text-brand hover:bg-brand/20"
+                    >
+                      <User size={11} /> {t.contacts.name || t.contacts.phone}
+                      <span className="ml-auto shrink-0">→</span>
+                    </a>
+                  ) : (
+                    <p className="mt-1.5 flex items-center gap-1 truncate text-[11px] font-medium text-ink-soft">
+                      <User size={11} /> {t.contacts.name || t.contacts.phone}
+                    </p>
+                  )
                 )}
-                {t.due_date && (
-                  <p className="mt-1 text-[11px] text-ink-soft">
-                    {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
-                  </p>
-                )}
-              </button>
+              </div>
             ))}
             {!byStatus[col.key].length && (
               <p className="py-6 text-center text-xs text-ink-soft">vazio</p>

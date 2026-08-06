@@ -20,6 +20,18 @@ if (!DB_URL || !ORG_ID || !ARQ) {
   process.exit(1);
 }
 
+/**
+ * O Chatwoot guarda o status como número (enum do Rails); o app usa texto e
+ * tem CHECK constraint. Sem esta tradução o insert quebra na primeira linha.
+ */
+const STATUS = { 0: "sent", 1: "delivered", 2: "read", 3: "failed" };
+function traduzStatus(v) {
+  if (v === null || v === undefined) return "sent";
+  if (typeof v === "number") return STATUS[v] ?? "sent";
+  const s = String(v);
+  return ["pending", "sent", "delivered", "read", "failed"].includes(s) ? s : (STATUS[Number(s)] ?? "sent");
+}
+
 function normalizePhone(raw) {
   let d = String(raw ?? "").replace(/\D/g, "");
   if (d.length < 10) return null;
@@ -54,17 +66,52 @@ for (const m of existentes) {
 }
 console.log(`  mensagens já no app: ${existentes.length}`);
 
+// Canal para pendurar conversas novas.
+const { rows: canais } = await db.query(
+  `select id from channels where organization_id=$1 limit 1`,
+  [ORG_ID],
+);
+const canalId = canais[0]?.id ?? null;
+
 // Conversa de destino por telefone (uma consulta por contato, não por mensagem).
 const convPorFone = new Map();
-async function acharConversa(fone) {
+let contatosCriados = 0, conversasCriadas = 0;
+
+/**
+ * Acha a conversa do contato e, se ele ainda não existir no app, cria contato
+ * e conversa a partir do que a própria mensagem traz. Sem isso, 7.671
+ * mensagens seriam descartadas por falta de destino — justamente as dos
+ * contatos que a importação por API nunca trouxe.
+ */
+async function acharConversa(fone, nome) {
   if (convPorFone.has(fone)) return convPorFone.get(fone);
+
   const { rows } = await db.query(
     `select cv.id from conversations cv join contacts ct on ct.id = cv.contact_id
       where cv.organization_id=$1 and ct.phone = any($2)
       order by cv.created_at desc limit 1`,
     [ORG_ID, variantes(fone)],
   );
-  const id = rows[0]?.id ?? null;
+  let id = rows[0]?.id ?? null;
+
+  if (!id && !DRY) {
+    const { rows: ct } = await db.query(
+      `insert into contacts (organization_id, name, phone) values ($1,$2,$3)
+       on conflict (organization_id, phone) do update
+         set name = coalesce(nullif(excluded.name,''), contacts.name)
+       returning id, (xmax = 0) as novo`,
+      [ORG_ID, nome || fone, fone],
+    );
+    if (ct[0]?.novo) contatosCriados += 1;
+    const { rows: cv } = await db.query(
+      `insert into conversations (organization_id, channel_id, contact_id, status, last_message_at)
+       values ($1,$2,$3,'closed', now()) returning id`,
+      [ORG_ID, canalId, ct[0].id],
+    );
+    id = cv[0]?.id ?? null;
+    if (id) conversasCriadas += 1;
+  }
+
   convPorFone.set(fone, id);
   return id;
 }
@@ -83,7 +130,7 @@ for await (const linha of rl) {
 
   const fone = normalizePhone(m.fone);
   if (!fone) { semDestino += 1; continue; }
-  const convId = await acharConversa(fone);
+  const convId = await acharConversa(fone, m.contato);
   if (!convId) { semDestino += 1; continue; }
 
   const corpo = m.content ?? "";
@@ -102,7 +149,7 @@ for await (const linha of rl) {
         ORG_ID, convId,
         m.message_type === 1 ? "out" : "in",
         m.message_type === 1 ? "agent" : "contact",
-        corpo, m.status ?? "sent", sid, !!m.private, quando,
+        corpo, traduzStatus(m.status), sid, !!m.private, quando,
       ],
     );
   }

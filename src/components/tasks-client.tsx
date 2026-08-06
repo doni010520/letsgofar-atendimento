@@ -35,6 +35,13 @@ export function TasksClient({
   meId?: string | null;
 }) {
   const [soMinhas, setSoMinhas] = useState(false);
+  /**
+   * São dois tipos de tarefa, e a equipe trabalha com eles de formas
+   * diferentes: o follow-up de um lead (abre a conversa daquela pessoa) e a
+   * tarefa que alguém pede para outra pessoa da equipe fazer. Misturados,
+   * atrapalham os dois usos — por isso o filtro vale em todas as visões.
+   */
+  const [tipo, setTipo] = useState<"todas" | "lead" | "equipe">("todas");
   const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
   const [detail, setDetail] = useState<TaskRow | null>(null);
   const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("active");
@@ -51,10 +58,12 @@ export function TasksClient({
 
   // Escopo de pessoa: vale para lista, kanban e calendário — por isso é
   // aplicado antes, e não só dentro do filtro de status da lista.
-  const escopo = useMemo(
-    () => (soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks),
-    [tasks, soMinhas, meId],
-  );
+  const escopo = useMemo(() => {
+    let lista = soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks;
+    if (tipo === "lead") lista = lista.filter((t) => t.contact_id);
+    if (tipo === "equipe") lista = lista.filter((t) => !t.contact_id);
+    return lista;
+  }, [tasks, soMinhas, meId, tipo]);
 
   /** Follow-ups pendentes: tarefa presa a um contato. Vêm em lista própria. */
   const followUps = useMemo(
@@ -298,6 +307,25 @@ export function TasksClient({
             </button>
           ))}
         </div>
+        {/* Separa os dois tipos em qualquer visão. */}
+        <div className="inline-flex rounded-lg bg-gray-100 p-1">
+          {([
+            { k: "todas", r: "Todas" },
+            { k: "lead", r: "De leads" },
+            { k: "equipe", r: "Da equipe" },
+          ] as const).map((o) => (
+            <button
+              key={o.k}
+              onClick={() => setTipo(o.k)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                tipo === o.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
+              }`}
+            >
+              {o.r}
+            </button>
+          ))}
+        </div>
+
         {/* Vale para lista, kanban e calendário. */}
         {meId && (
           <button
