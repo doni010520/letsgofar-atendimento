@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Users, Crown, Shield, Loader2, Save, Check, Receipt, QrCode, Unlock, Wrench, Plus, Printer, UserMinus, Search } from "lucide-react";
 import { formatPhone } from "@/lib/utils";
 import { AttendanceHistory, type AttendanceHistoryItem } from "./attendance-history";
+import { ContactTasks } from "./contact-tasks";
 import {
   getContactDetails,
   updateContactDetails,
@@ -303,6 +304,10 @@ export function ContactPanel({
             )}
           </div>
         )}
+
+        {/* Tarefas do contato — o painel que a equipe usava no Chatwoot para
+            follow-up ("Entrar em contato em junho"), preso à ficha da pessoa. */}
+        {!loading && !isGroup && contact && <ContactTasks conversationId={conversation.id} />}
       </div>
     </aside>
   );

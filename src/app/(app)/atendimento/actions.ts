@@ -1475,3 +1475,106 @@ export async function removeGroupParticipant(conversationId: string, phone: stri
   const ok = await provider.removeGroupParticipant(jid, phone);
   return ok ? { ok: true } : { ok: false, error: "Falha ao remover participante." };
 }
+
+// ── Tarefas do contato ────────────────────────────────────────────────
+// Replica o painel `KanbanTasks` do Chatwoot: tarefas presas ao contato,
+// criadas de dentro da conversa. São a mesma tabela `tasks` da aba de
+// Tarefas — o que muda é o recorte (contact_id) e a tela onde aparecem.
+
+export type TarefaDoContato = {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  due_time: string | null;
+  atrasada: boolean;
+};
+
+/** Tarefas do contato desta conversa, pendentes primeiro. */
+export async function listContactTasks(conversationId: string): Promise<TarefaDoContato[]> {
+  if (isPreview()) return [];
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (!conv?.contact_id) return [];
+
+  const { data } = await supabase
+    .from("tasks")
+    .select("id, title, description, priority, status, due_date, due_time")
+    .eq("contact_id", conv.contact_id)
+    .order("status", { ascending: true })
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .limit(50);
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  return ((data ?? []) as Omit<TarefaDoContato, "atrasada">[]).map((t) => ({
+    ...t,
+    atrasada: t.status !== "completed" && !!t.due_date && t.due_date < hoje,
+  }));
+}
+
+export async function createContactTask(
+  conversationId: string,
+  dados: { title: string; description?: string; due_date?: string; priority?: string },
+) {
+  if (isPreview()) return { ok: true };
+  const session = await getSession();
+  if (!session?.organization) return { ok: false, error: "Sessão inválida." };
+  const titulo = dados.title?.trim();
+  if (!titulo) return { ok: false, error: "Informe o título da tarefa." };
+
+  const supabase = await createClient();
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (!conv?.contact_id) return { ok: false, error: "Conversa sem contato." };
+
+  const { error } = await supabase.from("tasks").insert({
+    organization_id: session.organization.id,
+    created_by: session.userId,
+    // Nasce com quem criou: sem responsável ela não aparece no painel de ninguém.
+    assigned_to: session.userId,
+    contact_id: conv.contact_id,
+    conversation_id: conversationId,
+    title: titulo,
+    description: dados.description?.trim() || null,
+    due_date: dados.due_date || null,
+    priority: dados.priority || "medium",
+    status: "pending",
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+/** Alterna entre concluída e pendente. */
+export async function toggleContactTask(taskId: string, concluir: boolean) {
+  if (isPreview()) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      status: concluir ? "completed" : "pending",
+      completed_at: concluir ? new Date().toISOString() : null,
+    })
+    .eq("id", taskId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
+
+export async function deleteContactTask(taskId: string) {
+  if (isPreview()) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/atendimento");
+  return { ok: true };
+}
