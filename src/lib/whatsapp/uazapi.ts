@@ -599,7 +599,12 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
     })
     .filter((m: InboundMessage) => !!m.from) // precisa de número/id de contato válido
     // Descarta "texto" que seja só um ID de mensagem (lixo de reação/citação) — mantém mídia e reações.
-    .filter((m: InboundMessage) => !!m.reaction || m.contentType !== "text" || (!!m.body && m.body.trim() !== "" && !isBareId(m.body)));
+    // Toque em botão/opção de menu vem com texto VAZIO e a resposta só no
+    // `buttonOrListid` — sem esta ressalva a escolha do cliente era descartada
+    // aqui e o bot nunca via que ele respondeu.
+    .filter((m: InboundMessage) =>
+      !!m.reaction || !!m.buttonId || m.contentType !== "text" ||
+      (!!m.body && m.body.trim() !== "" && !isBareId(m.body)));
 }
 
 /**

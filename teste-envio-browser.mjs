@@ -72,10 +72,11 @@ try {
   console.log("conversa confirmada na tela: 71 9306-1031");
   await p.screenshot({ path: `${SP}/app-conversa.png` });
 
-  // Gera um PDF de ~2,5 MB e anexa pelo campo de arquivo real.
-  const pdf = `${SP}/contrato-teste.pdf`;
-  if (!fs.existsSync(pdf)) { console.log('gere antes com gera-pdf-teste.mjs'); process.exit(1); }
-  console.log("arquivo de teste:", (fs.statSync(pdf).size / 1024 / 1024).toFixed(2), "MB");
+  // Arquivo a enviar: por argumento, ou o PDF de teste gerado.
+  const pdf = process.argv[2] ?? `${SP}/contrato-teste.pdf`;
+  if (!fs.existsSync(pdf)) { console.log("arquivo nao encontrado:", pdf); process.exit(1); }
+  console.log("arquivo de teste:", pdf.split(/[\/]/).pop(),
+              `(${(fs.statSync(pdf).size / 1024 / 1024).toFixed(2)} MB)`);
 
   const inputs = await p.$$('input[type="file"]');
   console.log("campos de arquivo na tela:", inputs.length);

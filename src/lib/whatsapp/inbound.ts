@@ -129,10 +129,13 @@ export async function persistInbound(messages: InboundMessage[]) {
   for (const msg of messages) {
     if (!msg.channelExternalId || !msg.from) continue;
 
-    // Conversas de GRUPO não entram na aplicação: descarta antes de criar
-    // contato/conversa/mensagem. O atendimento é 1:1 — grupo só gerava ruído
-    // na caixa de entrada. (Também cobre as reações vindas de grupo.)
-    if (msg.isGroup || String(msg.chatJid ?? "").endsWith("@g.us")) continue;
+    // GRUPO ENTRA. Esta regra veio do app que serviu de base (outro cliente,
+    // onde grupo era só ruído) e descartava a mensagem antes de gravar — a
+    // Let's Go Far atende turmas por grupo e perdeu 196 mensagens em 30h sem
+    // ninguém ver, porque nada falhava: a mensagem era jogada fora de
+    // propósito. Quem não quiser um grupo específico usa o silenciar da tela.
+    // A automação (bot/IA/encerramento) segue só para 1:1 — os guardas de
+    // `!isGroup` mais abaixo é que cuidam disso.
 
     const { data: channel } = await db
       .from("channels")
