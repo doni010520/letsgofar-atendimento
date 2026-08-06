@@ -13,6 +13,18 @@ const STATUS_TABS: { key: ConversationStatus | "all"; label: string }[] = [
   { key: "closed", label: "Encerrados" },
 ];
 
+/* ─── De quem é a conversa ─────────────────────────────────────────────
+ * O Chatwoot separava por responsável (Minhas / Não atribuídas / Todas) e era
+ * disso que a equipe sentia falta: sem isso, cada uma abria a caixa e via a
+ * lista de todo mundo misturada. Começa em "Minhas" porque é de lá que se
+ * trabalha o dia — as outras continuam a um clique. */
+type DonoKey = "minhas" | "sem" | "todas";
+const DONO_TABS: { key: DonoKey; label: string }[] = [
+  { key: "minhas", label: "Minhas" },
+  { key: "sem", label: "Sem responsável" },
+  { key: "todas", label: "Todas" },
+];
+
 /** Formata hora de forma determinística (sem toLocaleTimeString que causa hydration mismatch). */
 function fmtTime(iso: string): string {
   const d = new Date(iso);
@@ -117,6 +129,7 @@ export function ConversationList({
   userId?: string | null;
 }) {
   const [statusTab, setStatusTab] = useState<ConversationStatus | "all">("all");
+  const [dono, setDono] = useState<DonoKey>("minhas");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -161,9 +174,9 @@ export function ConversationList({
     return conversations.filter((c) => {
       // Aba de status
       if (statusTab !== "all" && c.status !== statusTab) return false;
-      // "Em andamento" = SÓ as minhas (atribuídas a mim), inclusive p/ admin —
-      // que em "Todos" vê tudo, mas em "Em andamento" quer só o que ele assumiu.
-      if (statusTab === "open" && userId && c.assigned_user_id !== userId) return false;
+      // De quem é: filtro de tela, nunca permissão — "Todas" mostra mesmo tudo.
+      if (dono === "minhas" && userId && c.assigned_user_id !== userId) return false;
+      if (dono === "sem" && c.assigned_user_id) return false;
       // Busca textual
       if (query) {
         const q = query.toLowerCase();
@@ -190,7 +203,18 @@ export function ConversationList({
         return false;
       return true;
     });
-  }, [conversations, statusTab, query, period, channelIds, departmentIds]);
+  }, [conversations, statusTab, dono, userId, query, period, channelIds, departmentIds]);
+
+  // Contadores das abas — o Chatwoot mostrava o número em cada uma, e é o que
+  // diz se vale a pena olhar "Sem responsável" antes de abrir.
+  const contagem = useMemo(() => {
+    const base = conversations.filter((c) => statusTab === "all" || c.status === statusTab);
+    return {
+      minhas: userId ? base.filter((c) => c.assigned_user_id === userId).length : 0,
+      sem: base.filter((c) => !c.assigned_user_id).length,
+      todas: base.length,
+    };
+  }, [conversations, statusTab, userId]);
 
   function openModal() {
     setDraftPeriod(period);
@@ -233,6 +257,26 @@ export function ConversationList({
               <PenSquare size={16} />
             </button>
           )}
+        </div>
+        {/* De quem é a conversa — a separação que existia no Chatwoot */}
+        <div className="mt-2 flex gap-1">
+          {DONO_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setDono(t.key)}
+              className={cn(
+                "flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium transition",
+                dono === t.key
+                  ? "bg-brand/10 text-brand ring-1 ring-brand/30"
+                  : "text-ink-soft hover:bg-gray-100",
+              )}
+            >
+              {t.label}
+              <span className={cn("ml-1 tabular-nums", dono === t.key ? "opacity-70" : "opacity-50")}>
+                {contagem[t.key]}
+              </span>
+            </button>
+          ))}
         </div>
         <div className="mt-2 flex items-center gap-1">
           <div className="flex flex-1 gap-1 overflow-x-auto">

@@ -48,6 +48,9 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/canais", label: "Canais", icon: Radio },
       { href: "/atendimento", label: "Atendimento", icon: MessageSquareText },
+      // Procurar um contato salvo e coisa do dia a dia do atendimento, nao de
+      // configuracao — ficava enterrado em "Empresa" e a equipe nao achava.
+      { href: "/clientes", label: "Contatos", icon: Contact },
       { href: "/atendimento-v2", label: "Atendimento V2", icon: LayoutGrid },
       { href: "/mensagens", label: "Mensagens", icon: Tag },
       { href: "/automacoes", label: "Automações", icon: Bot },
@@ -71,7 +74,6 @@ export const NAV: NavGroup[] = [
       { href: "/empresa", label: "Dados da empresa", icon: Building2 },
       { href: "/atendentes", label: "Atendentes", icon: Users },
       { href: "/departamentos", label: "Departamentos", icon: Layers },
-      { href: "/clientes", label: "Clientes", icon: Contact },
       { href: "/integracoes", label: "SGP", icon: Plug },
       { href: "/ajustes", label: "Ajustes", icon: Settings },
     ],

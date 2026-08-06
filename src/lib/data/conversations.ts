@@ -12,15 +12,6 @@ export async function getConversations(): Promise<ConversationOverview[]> {
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id ?? null;
 
-  // Papel do usuário: admin (ou dono) vê tudo; ATENDENTE vê só as conversas
-  // NÃO ATRIBUÍDAS (fila/bot) + as atribuídas a ELE. Nunca as de outro atendente.
-  let isAdmin = false;
-  if (userId) {
-    const { data: me } = await supabase.from("profiles").select("role, super_admin").eq("id", userId).maybeSingle();
-    const p = me as { role?: string; super_admin?: boolean } | null;
-    isAdmin = p?.role === "admin" || p?.super_admin === true;
-  }
-
   // Canais PRIVADOS: um canal com credentials.private_owner só aparece para esse
   // usuário (as conversas dele ficam ocultas para todos os demais).
   const { data: chans } = await supabase.from("channels").select("id, credentials");
@@ -35,14 +26,14 @@ export async function getConversations(): Promise<ConversationOverview[]> {
     .select("*")
     .order("last_message_at", { ascending: false, nullsFirst: false });
   let rows = (data as ConversationOverview[]) ?? [];
-  // Grupos não fazem parte do atendimento: novas mensagens de grupo já são
-  // descartadas no webhook (inbound.ts); aqui escondemos as que ficaram do
-  // período anterior, sem apagar o histórico.
-  rows = rows.filter((r) => !r.is_group);
+  // Grupo APARECE. Ficava escondido por herança do app que serviu de base, e a
+  // escola atende turmas por grupo — o histórico estava no banco e ninguém via.
   if (hidden.size) rows = rows.filter((r) => !hidden.has(r.channel_id));
-  if (!isAdmin) {
-    rows = rows.filter((r) => !r.assigned_user_id || r.assigned_user_id === userId);
-  }
+  // Quem vê o quê: TODOS veem todas as conversas, como no Chatwoot, onde os
+  // seis eram membros da mesma caixa e Minhas/Não atribuídas/Todas eram só
+  // filtros de tela. Aqui isso tinha virado permissão — atendente não enxergava
+  // a conversa de outro atendente nem procurando. A separação que a equipe
+  // pediu é a aba na lista, não uma parede.
   return rows;
 }
 

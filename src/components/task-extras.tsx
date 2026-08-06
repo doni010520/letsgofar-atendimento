@@ -6,8 +6,10 @@ import { Card, Button } from "@/components/ui";
 import type { TaskRow } from "@/app/(app)/tarefas/page";
 import {
   updateTaskStatus,
+  moveTask,
   addTaskComment,
   addTaskItem,
+  setTaskItemDue,
   deleteTaskItem,
   toggleTaskItem,
   startTask,
@@ -33,16 +35,30 @@ const PRIORITY_DOT: Record<string, string> = {
   low: "bg-gray-400",
 };
 
+/**
+ * Espaço entre posições. Arrastar para o fim soma isto à última posição, e
+ * arrastar para o meio grava a média dos vizinhos — assim dá para inserir
+ * entre dois cards muitas vezes antes de os números se aproximarem demais.
+ */
+const PASSO = 1000;
+
 /** Visão Kanban por status (paridade com o TaskKanban do Chatwoot). */
 export function TaskKanbanView({
   tasks,
   onOpen,
+  esconderFinalizadas = false,
 }: {
   tasks: TaskRow[];
   onOpen: (t: TaskRow) => void;
+  /** Esconde as colunas Concluídas e Canceladas — a tela vive cheia delas. */
+  esconderFinalizadas?: boolean;
 }) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  const colunas = esconderFinalizadas
+    ? STATUS_COLUMNS.filter((c) => c.key !== "completed" && c.key !== "cancelled")
+    : STATUS_COLUMNS;
 
   const byStatus = useMemo(() => {
     const map: Record<string, TaskRow[]> = {};
@@ -51,18 +67,35 @@ export function TaskKanbanView({
     return map;
   }, [tasks]);
 
+  /**
+   * Onde o card cai. `antesDe` é o card sobre o qual foi solto (null = fim da
+   * coluna). A posição nova é a média entre o vizinho de cima e o de baixo.
+   */
+  function soltar(colKey: string, antesDe: string | null) {
+    if (!dragging) return;
+    const id = dragging;
+    setDragging(null);
+    const lista = byStatus[colKey].filter((t) => t.id !== id);
+    const idx = antesDe ? lista.findIndex((t) => t.id === antesDe) : lista.length;
+    const anterior = idx > 0 ? lista[idx - 1]?.position : null;
+    const seguinte = idx < lista.length ? lista[idx]?.position : null;
+
+    let nova: number;
+    if (anterior == null && seguinte == null) nova = PASSO;              // coluna vazia
+    else if (anterior == null) nova = (seguinte as number) - PASSO;      // foi para o topo
+    else if (seguinte == null) nova = (anterior as number) + PASSO;      // foi para o fim
+    else nova = ((anterior as number) + (seguinte as number)) / 2;       // entre dois
+
+    startTransition(() => void moveTask(id, colKey, nova));
+  }
+
   return (
     <div className="flex gap-3 overflow-x-auto pb-4">
-      {STATUS_COLUMNS.map((col) => (
+      {colunas.map((col) => (
         <div
           key={col.key}
           onDragOver={(e) => e.preventDefault()}
-          onDrop={() => {
-            if (!dragging) return;
-            const id = dragging;
-            setDragging(null);
-            startTransition(() => void updateTaskStatus(id, col.key));
-          }}
+          onDrop={() => soltar(col.key, null)}
           className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -76,9 +109,13 @@ export function TaskKanbanView({
                 draggable
                 onDragStart={() => setDragging(t.id)}
                 onDragEnd={() => setDragging(null)}
+                // Soltar SOBRE um card insere antes dele; o `stopPropagation`
+                // impede que a coluna também receba o evento e jogue no fim.
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.stopPropagation(); soltar(col.key, t.id); }}
                 className={`cursor-grab rounded-lg border border-border bg-surface p-3 shadow-sm ${
                   dragging === t.id ? "opacity-50" : ""
-                }`}
+                } ${dragging && dragging !== t.id ? "hover:border-brand hover:border-t-2" : ""}`}
               >
                 <button onClick={() => onOpen(t)} className="w-full text-left">
                   <div className="flex items-center gap-2">
@@ -231,6 +268,8 @@ export function TaskDetailPanel({
 }) {
   const [comment, setComment] = useState("");
   const [item, setItem] = useState("");
+  const [itemData, setItemData] = useState("");
+  const [itemHora, setItemHora] = useState("");
   const [editando, setEditando] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -381,6 +420,21 @@ export function TaskDetailPanel({
                 <span className={`flex-1 ${i.completed ? "text-ink-soft line-through" : "text-ink"}`}>
                   {i.title}
                 </span>
+                {/* Prazo do item: editável na hora, sem abrir outra tela. */}
+                <input
+                  type="date"
+                  defaultValue={i.due_date ?? ""}
+                  onChange={(e) => startTransition(() => void setTaskItemDue(i.id, e.target.value || null, i.due_time ?? null))}
+                  className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-ink-soft"
+                />
+                <input
+                  type="time"
+                  defaultValue={i.due_time?.slice(0, 5) ?? ""}
+                  onChange={(e) => startTransition(() => void setTaskItemDue(i.id, i.due_date ?? null, e.target.value || null))}
+                  disabled={!i.due_date}
+                  title={i.due_date ? "Hora do item" : "Escolha o dia primeiro"}
+                  className="w-[74px] rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-ink-soft disabled:opacity-40"
+                />
                 <button
                   onClick={() => startTransition(() => void deleteTaskItem(i.id))}
                   className="text-xs text-red-600"
@@ -390,19 +444,40 @@ export function TaskDetailPanel({
               </li>
             ))}
           </ul>
-          <input
-            value={item}
-            onChange={(e) => setItem(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && item.trim()) {
-                const v = item.trim();
-                setItem("");
-                startTransition(() => void addTaskItem(task.id, v));
-              }
-            }}
-            placeholder="Novo item (Enter para adicionar)"
-            className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-          />
+          <div className="mt-2 flex gap-2">
+            <input
+              value={item}
+              onChange={(e) => setItem(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && item.trim()) {
+                  const v = item.trim();
+                  const d = itemData;
+                  const h = itemHora;
+                  setItem("");
+                  setItemData("");
+                  setItemHora("");
+                  startTransition(() => void addTaskItem(task.id, v, d || null, h || null));
+                }
+              }}
+              placeholder="Novo item (Enter para adicionar)"
+              className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            />
+            <input
+              type="date"
+              value={itemData}
+              onChange={(e) => setItemData(e.target.value)}
+              title="Dia do item (opcional)"
+              className="rounded-lg border border-border bg-surface px-2 py-2 text-xs text-ink-soft"
+            />
+            <input
+              type="time"
+              value={itemHora}
+              onChange={(e) => setItemHora(e.target.value)}
+              disabled={!itemData}
+              title={itemData ? "Hora do item (opcional)" : "Escolha o dia primeiro"}
+              className="w-[86px] rounded-lg border border-border bg-surface px-2 py-2 text-xs text-ink-soft disabled:opacity-40"
+            />
+          </div>
         </section>
 
         {/* Etiquetas */}

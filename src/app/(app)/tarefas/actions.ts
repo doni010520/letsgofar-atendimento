@@ -79,6 +79,28 @@ export async function updateTaskStatus(id: string, status: string) {
   revalidatePath("/tarefas");
 }
 
+/**
+ * Move o card no kanban: muda a coluna (status) e/ou a ordem dentro dela.
+ *
+ * `position` vem da tela como a média entre o card de cima e o de baixo — é o
+ * que evita renumerar a coluna a cada arrasto. Passar `null` deixa a tarefa na
+ * ordem automática (por prazo), como era antes de existir ordem manual.
+ */
+export async function moveTask(id: string, status: string, position: number | null) {
+  const patch: Record<string, unknown> = { position };
+  if (status) {
+    patch.status = status;
+    if (status === "completed") patch.completed_at = new Date().toISOString();
+    if (status === "in_progress") patch.started_at = new Date().toISOString();
+    if (status === "pending") {
+      patch.completed_at = null;
+      patch.started_at = null;
+    }
+  }
+  await orgUpdate("tasks", id, patch);
+  revalidatePath("/tarefas");
+}
+
 export async function assignTask(id: string, profileId: string | null) {
   await orgUpdate("tasks", id, { assigned_to: profileId });
   revalidatePath("/tarefas");
@@ -143,7 +165,12 @@ export async function reopenTask(id: string) {
   revalidatePath("/tarefas");
 }
 
-export async function addTaskItem(taskId: string, title: string) {
+export async function addTaskItem(
+  taskId: string,
+  title: string,
+  dueDate?: string | null,
+  dueTime?: string | null,
+) {
   const session = await getSession();
   if (!session?.organization || !title.trim()) return;
   const sb = await createClient();
@@ -156,6 +183,18 @@ export async function addTaskItem(taskId: string, title: string) {
     task_id: taskId,
     title: title.trim(),
     position: count ?? 0,
+    due_date: dueDate || null,
+    // Hora sem dia não diz nada — só é gravada junto com a data.
+    due_time: dueDate && dueTime ? dueTime : null,
+  });
+  revalidatePath("/tarefas");
+}
+
+/** Muda o prazo de um item já criado (o dia e a hora podem ser limpos). */
+export async function setTaskItemDue(itemId: string, dueDate: string | null, dueTime: string | null) {
+  await orgUpdate("task_items", itemId, {
+    due_date: dueDate || null,
+    due_time: dueDate && dueTime ? dueTime : null,
   });
   revalidatePath("/tarefas");
 }

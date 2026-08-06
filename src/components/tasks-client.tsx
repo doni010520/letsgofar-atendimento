@@ -43,6 +43,7 @@ export function TasksClient({
    * dois inflava a contagem e tirava a aba do uso que ela tinha.
    */
   const [tipo, setTipo] = useState<"todas" | "lead" | "equipe">("equipe");
+  const [esconderFinalizadas, setEsconderFinalizadas] = useState(false);
   const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
   const [detail, setDetail] = useState<TaskRow | null>(null);
   const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("active");
@@ -63,8 +64,11 @@ export function TasksClient({
     let lista = soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks;
     if (tipo === "lead") lista = lista.filter((t) => t.contact_id);
     if (tipo === "equipe") lista = lista.filter((t) => !t.contact_id);
+    if (esconderFinalizadas) {
+      lista = lista.filter((t) => t.status !== "completed" && t.status !== "cancelled");
+    }
     return lista;
-  }, [tasks, soMinhas, meId, tipo]);
+  }, [tasks, soMinhas, meId, tipo, esconderFinalizadas]);
 
   /** Follow-ups pendentes: tarefa presa a um contato. Vêm em lista própria. */
   const followUps = useMemo(
@@ -310,7 +314,9 @@ export function TasksClient({
         <Button onClick={() => setCreating(true)}>+ Nova tarefa</Button>
       </div>
 
-      {mode === "kanban" && <TaskKanbanView tasks={escopo} onOpen={setDetail} />}
+      {mode === "kanban" && (
+        <TaskKanbanView tasks={escopo} onOpen={setDetail} esconderFinalizadas={esconderFinalizadas} />
+      )}
       {mode === "calendar" && <TaskCalendarView tasks={escopo} onOpen={setDetail} />}
 
       {detail && (
@@ -354,6 +360,20 @@ export function TasksClient({
             </button>
           ))}
         </div>
+
+        {/* Concluída/cancelada continua feita, mas ninguém precisa olhar para
+            ela o dia inteiro — no kanban some a coluna, na lista some a linha. */}
+        <button
+          onClick={() => setEsconderFinalizadas((v) => !v)}
+          aria-pressed={esconderFinalizadas}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+            esconderFinalizadas
+              ? "border-ink bg-ink text-white"
+              : "border-border bg-surface text-ink-soft hover:text-ink"
+          }`}
+        >
+          {esconderFinalizadas ? "Concluídas escondidas" : "Esconder concluídas"}
+        </button>
 
         {/* Vale para lista, kanban e calendário. */}
         {meId && (

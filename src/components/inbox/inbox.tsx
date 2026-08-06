@@ -772,16 +772,13 @@ export function Inbox({
     });
   }
 
-  // Conversas filtradas: esconde as de canais desconectados e, para ATENDENTE
-  // (não-admin), esconde as atribuídas a OUTRO atendente — só as não-atribuídas
-  // (fila/bot) e as dele. Blindagem no client (o servidor já filtra em getConversations).
+  // Conversas filtradas: esconde só as de canais desconectados. Quem vê o quê
+  // é decidido pela aba Minhas/Sem responsável/Todas da lista — atendente
+  // deixou de ser impedido de abrir a conversa de outro, como era no Chatwoot.
   const disconnectedIds = new Set(disconnectedChannels.map((c) => c.id));
-  let visibleConversations = disconnectedIds.size > 0
+  const visibleConversations = disconnectedIds.size > 0
     ? conversations.filter((c) => !disconnectedIds.has(c.channel_id))
     : conversations;
-  if (!isAdmin) {
-    visibleConversations = visibleConversations.filter((c) => !c.assigned_user_id || c.assigned_user_id === userId);
-  }
   const allDisconnected = disconnectedChannels.length > 0 && visibleConversations.length === 0 && conversations.length > 0;
 
   return (
