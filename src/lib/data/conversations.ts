@@ -21,11 +21,24 @@ export async function getConversations(): Promise<ConversationOverview[]> {
     if (owner && owner !== userId) hidden.add(c.id);
   }
 
-  const { data } = await supabase
-    .from("conversation_overview")
-    .select("*")
-    .order("last_message_at", { ascending: false, nullsFirst: false });
-  let rows = (data as ConversationOverview[]) ?? [];
+  // PAGINA. O servidor corta em 1000 linhas por resposta e não avisa: com
+  // 1.031 conversas, 31 nunca chegavam na tela — o "Todas 1000" redondo na aba
+  // foi o que denunciou. Pedir `range(0, 9999)` NÃO resolve (testado: devolve
+  // 1000 do mesmo jeito); só buscando página por página.
+  const PAGINA = 1000;
+  let rows: ConversationOverview[] = [];
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data } = await supabase
+      .from("conversation_overview")
+      .select("*")
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .range(inicio, inicio + PAGINA - 1);
+    const lote = (data as ConversationOverview[]) ?? [];
+    rows = rows.concat(lote);
+    // Teto de segurança: a caixa não é lugar para dezenas de milhares de
+    // conversas — se chegar lá, o certo é buscar sob demanda, não crescer aqui.
+    if (lote.length < PAGINA || rows.length >= 20000) break;
+  }
   // Grupo APARECE. Ficava escondido por herança do app que serviu de base, e a
   // escola atende turmas por grupo — o histórico estava no banco e ninguém via.
   if (hidden.size) rows = rows.filter((r) => !hidden.has(r.channel_id));
