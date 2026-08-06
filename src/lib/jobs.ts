@@ -18,6 +18,7 @@ import {
   phoneVariants,
 } from "@/lib/broadcast";
 import { runHousekeeping } from "@/lib/housekeeping";
+import { logEvent } from "@/lib/log";
 
 type Db = ReturnType<typeof createServiceClient>;
 
@@ -479,6 +480,118 @@ export async function runMigratedJobs() {
     undelivered: await runDeliveryWatchdog(db),
     recurring: await runRecurringTasks(db),
     reminders: await runTaskReminders(db),
+    watchdog: await runInboundWatchdog(db),
     housekeeping: await runHousekeeping(),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 7. Vigia de entrada — o alarme que faltava
+//
+// Em 05/08 o webhook da UAZAPI ficou apontando para um host morto por 1h35 e
+// NINGUÉM percebeu: mensagens enviadas continuavam aparecendo (o app grava
+// as suas na hora), então a tela parecia normal enquanto nada entrava.
+//
+// Este job vigia o silêncio: se passar tempo demais em horário comercial sem
+// nenhuma mensagem recebida, avisa no WhatsApp de quem administra. Alerta no
+// próprio sistema não serve — se a entrada morreu, é do sistema que se
+// desconfia.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Minutos de silêncio que disparam o alerta. */
+const SILENCIO_MIN = Number(process.env.WATCHDOG_SILENCE_MIN ?? 45);
+/** Só vigia neste intervalo (hora local de Brasília), seg–sáb. */
+const HORA_INICIO = Number(process.env.WATCHDOG_START_HOUR ?? 8);
+const HORA_FIM = Number(process.env.WATCHDOG_END_HOUR ?? 20);
+/** Não repete o alerta antes disso, para não virar spam. */
+const REPETIR_APOS_MIN = 60;
+
+function dentroDoExpediente(agora: Date): boolean {
+  // -3h = Brasília. O servidor roda em UTC.
+  const brasilia = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+  const dia = brasilia.getUTCDay(); // 0 = domingo
+  const hora = brasilia.getUTCHours();
+  return dia >= 1 && dia <= 6 && hora >= HORA_INICIO && hora < HORA_FIM;
+}
+
+/**
+ * Avisa quando a entrada de mensagens fica muda em horário comercial.
+ * Devolve 1 se alertou.
+ */
+export async function runInboundWatchdog(db: Db): Promise<number> {
+  const agora = new Date();
+  if (!dentroDoExpediente(agora)) return 0;
+
+  const { data: orgs } = await db.from("organizations").select("id, settings");
+  let alertas = 0;
+
+  for (const org of orgs ?? []) {
+    const destino = String(
+      ((org.settings ?? {}) as Record<string, unknown>).watchdog_phone ?? "",
+    ).replace(/\D/g, "");
+    if (!destino) continue; // sem número configurado, não há a quem avisar
+
+    const { data: ultima } = await db
+      .from("messages")
+      .select("created_at")
+      .eq("organization_id", org.id)
+      .eq("direction", "in")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const desde = ultima?.created_at ? new Date(ultima.created_at) : null;
+    const minutos = desde ? (agora.getTime() - desde.getTime()) / 60000 : Infinity;
+    if (minutos < SILENCIO_MIN) continue;
+
+    // Já avisei há pouco? Evita repetir a cada volta do cron.
+    const { data: recente } = await db
+      .from("app_logs")
+      .select("created_at")
+      .eq("organization_id", org.id)
+      .eq("source", "vigia")
+      .gte("created_at", new Date(agora.getTime() - REPETIR_APOS_MIN * 60000).toISOString())
+      .limit(1);
+    if (recente?.length) continue;
+
+    const { data: canal } = await db
+      .from("channels")
+      .select("*")
+      .eq("organization_id", org.id)
+      .limit(1)
+      .maybeSingle();
+    if (!canal) continue;
+
+    // Se a instância caiu, o motivo já vai no aviso — poupa investigação.
+    let estado = "desconhecido";
+    try {
+      estado = await getProvider(canal as Channel).status();
+    } catch {
+      estado = "sem resposta";
+    }
+
+    const texto =
+      `⚠️ *Nenhuma mensagem recebida há ${Math.round(minutos)} minutos.*\n\n` +
+      `Conexão do WhatsApp: *${estado}*.\n\n` +
+      `Pode ser silêncio normal, mas já houve falha em que o sistema parecia ` +
+      `funcionando e nada entrava. Vale mandar uma mensagem de teste para o ` +
+      `número da escola e conferir se ela aparece no atendimento.`;
+
+    try {
+      await getProvider(canal as Channel).sendText({ to: destino, text: texto });
+      alertas += 1;
+    } catch {
+      /* se nem o aviso sai, o log abaixo ainda registra */
+    }
+
+    await logEvent(
+      "warn",
+      "vigia",
+      `Entrada muda há ${Math.round(minutos)} min (conexão: ${estado})`,
+      { minutos: Math.round(minutos), estado, ultima: ultima?.created_at ?? null },
+      org.id,
+    );
+  }
+
+  return alertas;
 }
