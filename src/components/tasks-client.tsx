@@ -36,12 +36,13 @@ export function TasksClient({
 }) {
   const [soMinhas, setSoMinhas] = useState(false);
   /**
-   * São dois tipos de tarefa, e a equipe trabalha com eles de formas
-   * diferentes: o follow-up de um lead (abre a conversa daquela pessoa) e a
-   * tarefa que alguém pede para outra pessoa da equipe fazer. Misturados,
-   * atrapalham os dois usos — por isso o filtro vale em todas as visões.
+   * São dois tipos de tarefa e o Chatwoot os mantinha em lugares separados: a
+   * aba de Tarefas listava só as da equipe (conferido na tela: "Pendente 47",
+   * que são exatamente as `agent_tasks`), enquanto o follow-up de lead vivia
+   * dentro da ficha do contato. Por isso "equipe" é o padrão — misturar os
+   * dois inflava a contagem e tirava a aba do uso que ela tinha.
    */
-  const [tipo, setTipo] = useState<"todas" | "lead" | "equipe">("todas");
+  const [tipo, setTipo] = useState<"todas" | "lead" | "equipe">("equipe");
   const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
   const [detail, setDetail] = useState<TaskRow | null>(null);
   const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("active");
@@ -310,9 +311,9 @@ export function TasksClient({
         {/* Separa os dois tipos em qualquer visão. */}
         <div className="inline-flex rounded-lg bg-gray-100 p-1">
           {([
-            { k: "todas", r: "Todas" },
-            { k: "lead", r: "De leads" },
             { k: "equipe", r: "Da equipe" },
+            { k: "lead", r: "Follow-ups de leads" },
+            { k: "todas", r: "Todas" },
           ] as const).map((o) => (
             <button
               key={o.k}
