@@ -15,7 +15,15 @@ export type ContractRow = {
   contract_signers?: { id: string; name: string; email: string; status: string; sign_token: string }[];
 };
 
-export type TemplateRow = { id: string; name: string; description: string | null; content_html: string };
+/** Campo que o modelo pede para preencher (vem dos marcadores do HTML). */
+export type CampoModelo = { key: string; label: string; type: string };
+export type TemplateRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  content_html: string;
+  variable_fields: CampoModelo[] | null;
+};
 
 async function getData() {
   if (PREVIEW_MODE) return { contracts: [], templates: [] };
@@ -25,7 +33,7 @@ async function getData() {
       .from("contracts")
       .select("id, number, title, status, plan_start_date, plan_end_date, created_at, contract_signers(id, name, email, status, sign_token)")
       .order("created_at", { ascending: false }),
-    sb.from("contract_templates").select("id, name, description, content_html").eq("is_active", true).order("name"),
+    sb.from("contract_templates").select("id, name, description, content_html, variable_fields").eq("is_active", true).order("name"),
   ]);
   return {
     contracts: (contracts as ContractRow[]) ?? [],

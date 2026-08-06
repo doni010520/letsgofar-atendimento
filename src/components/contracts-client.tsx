@@ -35,6 +35,7 @@ export function ContractsClient({
   const [tab, setTab] = useState<"contracts" | "templates">("contracts");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [creating, setCreating] = useState(false);
+  const [modeloId, setModeloId] = useState("");
   const [signers, setSigners] = useState<Signer[]>([{ name: "", email: "", document: "" }]);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -42,6 +43,12 @@ export function ContractsClient({
   const visible = useMemo(
     () => (filter === "all" ? contracts : contracts.filter((c) => c.status === filter)),
     [contracts, filter],
+  );
+
+  /** Campos que o modelo escolhido pede — mudam quando troca o modelo. */
+  const campos = useMemo(
+    () => templates.find((t) => t.id === modeloId)?.variable_fields ?? [],
+    [templates, modeloId],
   );
 
   async function onCreate(fd: FormData) {
@@ -74,16 +81,23 @@ export function ContractsClient({
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink">Modelo</label>
-            <select name="template_id" className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm">
+            <select
+              name="template_id"
+              value={modeloId}
+              onChange={(e) => setModeloId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm"
+            >
               <option value="">Sem modelo (escrever abaixo)</option>
               {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">Conteúdo (se não usar modelo)</label>
-            <textarea name="content_html" rows={6} placeholder="<p>Texto do contrato…</p>"
-              className="w-full resize-y rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-xs" />
-          </div>
+          {!modeloId && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Conteúdo (se não usar modelo)</label>
+              <textarea name="content_html" rows={6} placeholder="<p>Texto do contrato…</p>"
+                className="w-full resize-y rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-xs" />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Início do plano</label>
@@ -95,6 +109,34 @@ export function ContractsClient({
             </div>
           </div>
         </Card>
+
+        {/* Dados do contrato: cada campo é um marcador do modelo ({{...}}) e
+            entra no texto na hora de gerar. Sem isto o contrato saía com o
+            texto do modelo e os espaços em branco, sem como preencher. */}
+        {campos.length > 0 && (
+          <Card className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-ink">Dados do contrato</h3>
+              <p className="text-xs text-ink-soft">
+                {campos.length} campos deste modelo. O que ficar vazio sai em branco no documento.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {campos.map((c) => (
+                <div key={c.key}>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">{c.label}</label>
+                  <input
+                    name={`var_${c.key}`}
+                    type={c.type === "date" ? "date" : c.type === "email" ? "email" : c.type === "tel" ? "tel" : "text"}
+                    inputMode={c.type === "number" || c.type === "currency" ? "decimal" : undefined}
+                    placeholder={c.type === "currency" ? "0,00" : undefined}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Card className="space-y-3">
           <div className="flex items-center justify-between">
