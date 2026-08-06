@@ -99,15 +99,28 @@ export function TasksClient({
     [tasks],
   );
 
+  // O resumo conta o MESMO conjunto que a lista mostra. Contando tudo, ele
+  // dizia "3 para hoje" com a lista vazia — as 3 eram de leads, escondidas
+  // pelo filtro, e não havia como saber onde estavam.
   const stats = useMemo(() => {
     const d = today();
-    const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+    const active = escopo.filter((t) => t.status === "pending" || t.status === "in_progress");
     return {
       active: active.length,
       today: active.filter((t) => t.due_date === d).length,
       overdue: active.filter((t) => !!t.due_date && t.due_date < d).length,
     };
-  }, [tasks]);
+  }, [escopo]);
+
+  /** Follow-ups de lead para hoje — contados fora do filtro, para avisar que
+   *  existem mesmo quando a aba está mostrando só tarefas da equipe. */
+  const leadsHoje = useMemo(() => {
+    const d = today();
+    const base = soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks;
+    return base.filter(
+      (t) => t.contact_id && t.status !== "completed" && t.status !== "cancelled" && t.due_date === d,
+    ).length;
+  }, [tasks, soMinhas, meId]);
 
   async function onSubmit(fd: FormData) {
     setError("");
@@ -260,6 +273,21 @@ export function TasksClient({
         <Card><p className="text-xs text-ink-soft">Para hoje</p><p className="text-2xl font-semibold text-ink">{stats.today}</p></Card>
         <Card><p className="text-xs text-ink-soft">Atrasadas</p><p className="text-2xl font-semibold text-red-600">{stats.overdue}</p></Card>
       </div>
+
+      {/* Follow-up de lead não aparece na aba "Da equipe". Sem este aviso, ele
+          fica invisível justamente no dia em que precisa ser feito. */}
+      {tipo !== "lead" && leadsHoje > 0 && (
+        <button
+          onClick={() => setTipo("lead")}
+          className="flex w-full items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-left text-sm text-ink hover:bg-brand/10"
+        >
+          <span className="font-semibold text-brand">{leadsHoje}</span>
+          <span>
+            {leadsHoje === 1 ? "follow-up de lead para hoje" : "follow-ups de leads para hoje"}
+          </span>
+          <span className="ml-auto shrink-0 text-xs font-medium text-brand">ver →</span>
+        </button>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-lg bg-gray-100 p-1">
