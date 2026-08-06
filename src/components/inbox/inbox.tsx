@@ -36,7 +36,6 @@ function playPing() {
 }
 import {
   sendMessage,
-  sendMediaMessage,
   sendLocationMessage,
   sendContactMessage,
   reactToMessage,
@@ -606,8 +605,18 @@ export function Inbox({
       return;
     }
     startTransition(async () => {
+      // Rota, não server action: server action recusa corpo grande antes de
+      // chegar no servidor, sem erro legível. Ver a rota para o histórico.
       try {
-        await sendMediaMessage(fd);
+        const r = await fetch("/api/atendimento/enviar-midia", { method: "POST", body: fd });
+        const dados = await r.json().catch(() => ({}) as { error?: string });
+        if (!r.ok || dados.ok === false) {
+          toast(
+            `Não foi possível enviar "${file.name}". ${dados.error ?? `HTTP ${r.status}`}`,
+            "error",
+          );
+          return;
+        }
       } catch (e) {
         toast(
           `Não foi possível enviar "${file.name}". ${(e as Error)?.message ?? ""}`.trim(),

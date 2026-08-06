@@ -11,7 +11,6 @@ import {
   markConversationRead,
   sendMessage,
   sendInternalMessage,
-  sendMediaMessage,
   sendLocationMessage,
   sendContactMessage,
   sendTemplateMessage,
@@ -162,7 +161,19 @@ export function AttendanceChatModal({
     if (caption) fd.set("caption", caption);
     if (asSticker) fd.set("kind", "sticker");
     startTransition(async () => {
-      await sendMediaMessage(fd);
+      // Mesma rota do inbox: server action recusa corpo grande antes de chegar
+      // no servidor. Ver src/app/api/atendimento/enviar-midia/route.ts.
+      try {
+        const r = await fetch("/api/atendimento/enviar-midia", { method: "POST", body: fd });
+        const dados = await r.json().catch(() => ({}) as { ok?: boolean; error?: string });
+        if (!r.ok || dados.ok === false) {
+          toast(`Não foi possível enviar "${file.name}". ${dados.error ?? `HTTP ${r.status}`}`, "error");
+          return;
+        }
+      } catch (e) {
+        toast(`Não foi possível enviar "${file.name}". ${(e as Error)?.message ?? ""}`.trim(), "error");
+        return;
+      }
       await refetch();
     });
   }
