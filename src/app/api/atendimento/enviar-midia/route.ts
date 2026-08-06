@@ -18,6 +18,21 @@ import { logEvent } from "@/lib/log";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+/**
+ * Nome seguro para a chave do storage: sem acento, espaço nem caractere que
+ * quebre URL. O nome ORIGINAL (com acento e espaço) segue intacto para o
+ * provedor via `fileName` — é ele que aparece no WhatsApp de quem recebe.
+ */
+function nomeParaStorage(nome: string, mime: string): string {
+  const ext = (nome.split(".").pop() || mime.split("/")[1] || "bin").slice(0, 8);
+  const base = (nome.includes(".") ? nome.slice(0, nome.lastIndexOf(".")) : nome)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")   // tira acentos
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `${base || "arquivo"}.${ext.replace(/[^A-Za-z0-9]/g, "")}`;
+}
+
 function kindFromMime(mime: string): { kind: "image" | "audio" | "video" | "document"; content: string } {
   if (mime.startsWith("image")) return { kind: "image", content: "image" };
   if (mime.startsWith("audio")) return { kind: "audio", content: "audio" };
@@ -93,8 +108,12 @@ export async function POST(request: Request) {
         : kindFromMime(file.type || "");
 
     const svc = createServiceClient();
-    const ext = (file.name?.split(".").pop() || (file.type.split("/")[1] ?? "bin")).slice(0, 5);
-    const caminho = `${session.organization.id}/out/${conversationId}-${Date.now()}.${ext}`;
+    // O nome fica no ÚLTIMO pedaço do caminho, e a pasta com o timestamp
+    // garante que dois arquivos de mesmo nome não se sobrescrevam. Antes o
+    // arquivo virava `<conversa>-<timestamp>.pdf` e era esse nome que chegava
+    // no WhatsApp, em vez do nome que a pessoa salvou.
+    const caminho =
+      `${session.organization.id}/out/${conversationId}/${Date.now()}/${nomeParaStorage(file.name, file.type)}`;
 
     const up = await svc.storage
       .from("media")
@@ -117,6 +136,7 @@ export async function POST(request: Request) {
         content_type: content,
         body: caption || null,
         media_url: publicUrl,
+        media_name: file.name || null,
         status: "pending",
       })
       .select("id")
@@ -131,6 +151,7 @@ export async function POST(request: Request) {
     try {
       const res = await getProvider(channel as Channel).sendMedia({
         to, url: publicUrl, caption, kind: kind as "image" | "audio" | "video" | "document",
+        fileName: file.name || undefined,
       });
       await supabase
         .from("messages")

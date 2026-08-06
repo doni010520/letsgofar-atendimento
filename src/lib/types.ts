@@ -350,6 +350,8 @@ export interface Message {
   content_type: ContentType;
   body: string | null;
   media_url: string | null;
+  /** Nome original do arquivo. Nulo em mensagem antiga → cai no nome da URL. */
+  media_name?: string | null;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   external_id: string | null;
   author_name?: string | null;

@@ -109,12 +109,14 @@ export class MetaProvider implements ChannelProvider {
     return { externalId: r?.messages?.[0]?.id };
   }
 
-  async sendMedia({ to, url, caption, kind }: SendMediaParams) {
+  async sendMedia({ to, url, caption, kind, fileName }: SendMediaParams) {
     const r = await this.graph(`${this.phoneNumberId}/messages`, {
       messaging_product: "whatsapp",
       to,
       type: kind,
-      [kind]: { link: url, caption },
+      // `filename` só existe para documento na Graph API; nos outros tipos o
+      // campo é ignorado, mas mandar à toa polui o payload.
+      [kind]: { link: url, caption, ...(fileName && kind === "document" ? { filename: fileName } : {}) },
     });
     return { externalId: r?.messages?.[0]?.id };
   }

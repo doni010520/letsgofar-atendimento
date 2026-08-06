@@ -13,6 +13,9 @@ export interface SendMediaParams {
   caption?: string;
   kind: "image" | "audio" | "video" | "document" | "sticker";
   replyId?: string;
+  /** Nome original do arquivo. Sem isso o WhatsApp mostra o nome do caminho no
+   *  storage (`<conversa>-<timestamp>.pdf`) em vez do nome que a pessoa salvou. */
+  fileName?: string;
 }
 
 export interface ConnectResult {
@@ -87,6 +90,7 @@ export interface InboundMessage {
   contentType: "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker";
   body?: string;
   mediaUrl?: string;
+  mediaName?: string; // nome original do arquivo (documento recebido)
   mediaId?: string; // id da mídia (Meta) para download via Graph API
   externalId?: string; // id da mensagem no provedor
   timestamp?: string;

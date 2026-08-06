@@ -308,6 +308,7 @@ export async function persistInbound(messages: InboundMessage[]) {
       content_type: msg.contentType,
       body,
       media_url: mediaUrl,
+      media_name: msg.mediaName ?? null,
       external_id: msg.externalId ?? null,
       author_name: fromMe ? null : msg.authorName ?? null,
       author_phone: fromMe ? null : msg.authorPhone ?? null,

@@ -107,12 +107,23 @@ function MediaContent({ message, onImageClick }: { message: Message; onImageClic
       return <audio controls src={url} className="mb-1 h-10 w-56 max-w-full" />;
     case "video":
       return <video controls src={url} className="mb-1 max-h-72 rounded-lg" />;
-    case "document":
+    case "document": {
+      // Mostra o nome do arquivo, não "Abrir documento": é assim que se
+      // reconhece um contrato no meio da conversa. Mensagem antiga não tem
+      // `media_name` — aí o nome sai do último pedaço da URL.
+      const nome =
+        message.media_name ||
+        decodeURIComponent(url.split("?")[0].split("/").pop() || "") ||
+        "documento";
       return (
-        <a href={url} target="_blank" rel="noreferrer" download className="mb-1 flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-sm hover:bg-black/10">
-          <FileText size={18} /> <span className="underline">Abrir documento</span> <Download size={14} />
+        <a href={url} target="_blank" rel="noreferrer" download={nome} title={nome}
+           className="mb-1 flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-sm hover:bg-black/10">
+          <FileText size={18} className="shrink-0" />
+          <span className="max-w-56 truncate underline">{nome}</span>
+          <Download size={14} className="shrink-0" />
         </a>
       );
+    }
     default:
       return null;
   }

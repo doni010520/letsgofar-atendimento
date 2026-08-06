@@ -258,10 +258,19 @@ export class UazapiProvider implements ChannelProvider {
     return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }
 
-  async sendMedia({ to, url, caption, kind, replyId }: SendMediaParams) {
+  async sendMedia({ to, url, caption, kind, replyId, fileName }: SendMediaParams) {
     const r = await this.req("/send/media", {
       method: "POST",
-      body: JSON.stringify({ number: to, type: kind, file: url, text: caption, ...(replyId ? { replyid: replyId } : {}) }),
+      body: JSON.stringify({
+        number: to,
+        type: kind,
+        file: url,
+        text: caption,
+        // Sem `docName` o WhatsApp usa o último pedaço da URL como nome do
+        // documento — quem recebia via `fbc0464f-...-1786030396174.pdf`.
+        ...(fileName && kind === "document" ? { docName: fileName } : {}),
+        ...(replyId ? { replyid: replyId } : {}),
+      }),
     });
     return { externalId: r?.id ?? r?.messageId ?? r?.messageid };
   }
@@ -583,6 +592,7 @@ export function parseUazapiWebhook(payload: any): InboundMessage[] {
         contentType: mapType(m?.mediaType ?? m?.messageType ?? m?.type),
         body: m?.text ?? m?.body ?? m?.caption ?? m?.content?.text ?? m?.content?.caption,
         mediaUrl: m?.file ?? m?.mediaUrl ?? m?.fileURL,
+        mediaName: m?.fileName ?? m?.filename ?? m?.documentMessage?.fileName ?? undefined,
         externalId: m?.id ?? m?.messageId ?? m?.messageid,
         replyTo: extractReply(m),
       };
