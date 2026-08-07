@@ -10,6 +10,25 @@ import { logEvent } from "@/lib/log";
 // Cache de participantes por grupo (5 min) para resolver menções sem bater toda hora.
 const groupPartsCache = new Map<string, { at: number; parts: { phone: string; lid: string }[] }>();
 
+/**
+ * O mesmo celular brasileiro escrito das duas formas: com e sem o 9º dígito.
+ *
+ * O WhatsApp entrega ora um, ora outro, para a MESMA pessoa. Sem comparar as
+ * duas formas, o contato é criado de novo e o histórico se parte em dois.
+ */
+export function variantesTelefone(telefone: string): string[] {
+  const d = String(telefone ?? "").replace(/\D/g, "");
+  if (!d) return [];
+  const v = new Set([d]);
+  const m = d.match(/^55(\d{2})(\d{8,9})$/);
+  if (m) {
+    const [, ddd, resto] = m;
+    if (resto.length === 9 && resto.startsWith("9")) v.add(`55${ddd}${resto.slice(1)}`);
+    if (resto.length === 8) v.add(`55${ddd}9${resto}`);
+  }
+  return [...v];
+}
+
 // Mutex por conversa: serializa os turnos do bot DENTRO do processo. Sem isto,
 // mensagens do cliente em sequência ("Sim" → "internet lenta" → CPF) que escapam
 // do debounce disparam runChatbot concorrentes que atropelam bot_node_id/histórico
@@ -166,7 +185,35 @@ export async function persistInbound(messages: InboundMessage[]) {
     // Para mensagens fromMe (eco do celular) em 1:1, NÃO passamos nome —
     // o chat.name do webhook vem com o nome do DONO, não do contato.
     const contactName = (fromMe && !isGroup) ? null : (msg.contactName ?? null);
-    const { data: contact } = await db
+
+    // ANTES de criar: o mesmo número pode já estar cadastrado com o 9º dígito
+    // a mais (ou a menos). O upsert casa por igualdade exata, então
+    // `557583233925` chegando para uma `5575983233925` já existente criava um
+    // contato NOVO, uma conversa NOVA e um histórico partido em dois — e, como
+    // a conversa era "nova", o bot de triagem cumprimentava do zero um cliente
+    // que estava no meio de um atendimento. 27 pessoas já estavam duplicadas.
+    let idExistente: string | null = null;
+    if (!isGroup) {
+      const alternativos = variantesTelefone(msg.from).filter((v) => v !== msg.from);
+      if (alternativos.length) {
+        const { data: achado } = await db
+          .from("contacts")
+          .select("id")
+          .eq("organization_id", org)
+          .in("phone", alternativos)
+          .limit(1)
+          .maybeSingle();
+        idExistente = achado?.id ?? null;
+      }
+    }
+
+    const { data: contact } = idExistente
+      ? await db
+          .from("contacts")
+          .update(contactName ? { name: contactName } : {})
+          .eq("id", idExistente)
+          .select("id, name, avatar_url, avatar_src, is_group")
+      : await db
       .from("contacts")
       .upsert(
         {
