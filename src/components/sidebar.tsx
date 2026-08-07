@@ -72,7 +72,11 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
     // refluir ao lado — não ficar por baixo do menu. No modo hover (não fixado),
     // reserva só a barra fininha e o menu expande por cima temporariamente.
     // No celular NÃO reserva nada (w-0): a gaveta passa por cima.
-    <div className={cn("hidden shrink-0 transition-all duration-200 lg:block", pinned ? "lg:w-60" : "lg:w-[72px]")}>
+    // `w-0` no celular, NUNCA `hidden`: o invólucro só reserva espaço para o
+    // conteúdo refluir ao lado, e a gaveta mora DENTRO dele. Com `hidden` o
+    // display:none descia para a gaveta também — o botão virava X, o véu
+    // escurecia a tela e o menu não aparecia, deixando o celular sem navegação.
+    <div className={cn("w-0 shrink-0 transition-all duration-200", pinned ? "lg:w-60" : "lg:w-[72px]")}>
       <aside
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
