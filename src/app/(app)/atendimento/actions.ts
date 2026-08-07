@@ -418,7 +418,14 @@ export async function sendMessage(
     void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} assumiu ao responder (IA pausada)`, { conversationId, userId: session.userId, action: "assumir_ao_responder" }, session.organization.id);
   }
 
-  revalidatePath("/atendimento");
+  // SEM revalidatePath aqui, de propósito.
+  //
+  // Ele forçava o servidor a remontar a caixa inteira antes de a tela liberar o
+  // botão: 1.034 conversas, 1,34 MB de JSON, ~750 ms no servidor — e no celular,
+  // com a rede da rua, o botão de enviar ficava girando tempo demais. A Luana
+  // descreveu como "não envia": a mensagem ia, mas a tela não voltava.
+  // A caixa não precisa disso — ela já se atualiza sozinha a cada 2,5s e a
+  // mensagem aparece na hora, de forma otimista.
   return { ok: !deliveryError, error: deliveryError ?? undefined };
 }
 

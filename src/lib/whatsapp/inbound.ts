@@ -350,6 +350,42 @@ export async function persistInbound(messages: InboundMessage[]) {
       }
     }
 
+    /**
+     * ECO DA NOSSA PRÓPRIA MENSAGEM, chegando antes de guardarmos o recibo.
+     *
+     * O envio grava a linha, chama o provedor e só DEPOIS grava o external_id.
+     * O eco volta em 1,5 a 3,5 segundos — às vezes antes desse update. A
+     * checagem por external_id lá em cima não acha nada, e a mensagem aparecia
+     * DUAS VEZES para o atendente, embora o cliente tivesse recebido uma só:
+     * as duas linhas terminavam com o MESMO recibo.
+     *
+     * Aqui a conversa já está resolvida, então dá para procurar a linha órfã no
+     * lugar certo: MESMA conversa, mesmo texto, saída, ainda sem recibo, dos
+     * últimos 2 minutos. Amarrar à conversa é essencial — o mesmo texto pronto
+     * costuma ir para várias pessoas seguidas, e casar só pelo texto colaria o
+     * recibo na conversa errada.
+     */
+    if (fromMe && msg.externalId && !isGroup) {
+      const texto = (body ?? "").trim();
+      if (texto) {
+        const { data: orfa } = await db
+          .from("messages")
+          .select("id")
+          .eq("conversation_id", conversationId)
+          .eq("direction", "out")
+          .is("external_id", null)
+          .eq("body", texto)
+          .gte("created_at", new Date(Date.now() - 120_000).toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (orfa) {
+          await db.from("messages").update({ external_id: msg.externalId, status: "sent" }).eq("id", orfa.id);
+          continue;
+        }
+      }
+    }
+
     const { data: insertedMsg } = await db.from("messages").insert({
       organization_id: org,
       conversation_id: conversationId,
