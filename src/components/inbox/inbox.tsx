@@ -532,12 +532,35 @@ export function Inbox({
     });
 
     startTransition(async () => {
-      const r = await sendMessage(selectedId, finalText, finalReplyId, mentions);
-      if (r && r.ok === false) toast(r.error ?? "Mensagem não entregue.", "error");
-      if (live) {
-        const msgs = await fetchMessages(selectedId);
-        setMessagesByConv((prev) => ({ ...prev, [selectedId]: msgs }));
+      // Se a ação EXPLODE (queda de rede, servidor reiniciando, sessão
+      // expirada), o `await` rejeita e o resto nem roda: sem aviso, sem
+      // recarregar. O balão otimista ficava na tela como se tivesse ido —
+      // e a mensagem nunca saiu. Foi o que a Luana chamou de "algumas não
+      // enviam": a tela dizia que sim. Aqui ela passa a dizer a verdade.
+      const falhou = (aviso: string) => {
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [selectedId]: (prev[selectedId] ?? []).map((m) =>
+            m.id === optimistic.id ? { ...m, status: "failed" as const } : m,
+          ),
+        }));
+        toast(aviso, "error");
+      };
+      try {
+        const r = await sendMessage(selectedId, finalText, finalReplyId, mentions);
+        if (r && r.ok === false) falhou(r.error ?? "Mensagem não entregue.");
+      } catch (e) {
+        falhou(
+          e instanceof Error && /fetch|network|Failed/i.test(e.message)
+            ? "Sem conexão — a mensagem NÃO foi enviada. Tente de novo."
+            : "A mensagem NÃO foi enviada. Tente de novo.",
+        );
+        return; // não recarrega por cima: o balão vermelho precisa ficar visível
       }
+      // Recarrega SEMPRE, não só no modo ao vivo: é o que troca o balão
+      // otimista pela mensagem de verdade, com recibo.
+      const msgs = await fetchMessages(selectedId).catch(() => null);
+      if (msgs) setMessagesByConv((prev) => ({ ...prev, [selectedId]: msgs }));
     });
   }
 
