@@ -750,6 +750,51 @@ async function sendSatisfactionSurvey(
 }
 
 /** Encerra o atendimento: classificação (tags) + motivo + pesquisa opcional. */
+/**
+ * Encerra VÁRIOS atendimentos de uma vez.
+ *
+ * A Luana tem 525 conversas abertas e perguntou se dava para fechar várias
+ * juntas. Fechar uma por uma, com o formulário de resumo em cada, é meio dia de
+ * trabalho.
+ *
+ * NADA é enviado ao cliente: encerrar já era silencioso (o resumo é interno) e
+ * aqui não há pesquisa de satisfação nem resumo — é arrumação de caixa. Se um
+ * dia a operação exigir atributos no encerramento, este caminho precisa passar
+ * a respeitá-los; hoje não há nenhum configurado, e o `closeConversation`
+ * individual continua sendo o caminho completo.
+ */
+export async function closeConversationsBulk(conversationIds: string[]) {
+  if (isPreview()) return { ok: true as const, total: conversationIds.length };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const ids = [...new Set(conversationIds)].filter(Boolean);
+  if (!ids.length) return { ok: true as const, total: 0 };
+
+  // Teto por chamada: evita que um clique errado feche a caixa inteira sem
+  // possibilidade de conferir o que aconteceu.
+  if (ids.length > 200) {
+    return { ok: false as const, total: 0, error: "Selecione no máximo 200 por vez." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ status: "closed", closed_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("organization_id", session.organization.id)
+    .neq("status", "closed")
+    .select("id");
+  if (error) return { ok: false as const, total: 0, error: error.message };
+
+  const total = data?.length ?? 0;
+  void logEvent("info", "atendente",
+    `${session.profile?.name ?? "Atendente"} encerrou ${total} atendimento(s) de uma vez`,
+    { userId: session.userId, action: "encerrar_lote", total, pedidos: ids.length },
+    session.organization.id);
+  revalidatePath("/atendimento");
+  return { ok: true as const, total };
+}
+
 export async function closeConversation(conversationId: string, opts: CloseOptions = {}) {
   if (isPreview()) return { ok: true };
   const session = await getSession();

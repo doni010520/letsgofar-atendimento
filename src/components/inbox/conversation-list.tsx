@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search, Users, BellOff, BotOff, Bot, SlidersHorizontal, X, Trash2, Check, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConversationOverview, ConversationStatus } from "@/lib/types";
+import { closeConversationsBulk } from "@/app/(app)/atendimento/actions";
 
 /* ─── Abas de status (topo) ─── */
 const STATUS_TABS: { key: ConversationStatus | "all"; label: string }[] = [
@@ -119,6 +120,7 @@ export function ConversationList({
   onSelect,
   onPauseAi,
   onNewConversation,
+  onBulkClosed,
   userId = null,
 }: {
   conversations: ConversationOverview[];
@@ -126,10 +128,21 @@ export function ConversationList({
   onSelect: (id: string) => void;
   onPauseAi?: (id: string) => void;
   onNewConversation?: () => void;
+  /** Avisa a caixa para recarregar depois de um encerramento em lote. */
+  onBulkClosed?: (ids: string[]) => void;
   userId?: string | null;
 }) {
   const [statusTab, setStatusTab] = useState<ConversationStatus | "all">("all");
   const [dono, setDono] = useState<DonoKey>("minhas");
+  /**
+   * Modo seleção: marcar várias conversas e encerrar de uma vez.
+   *
+   * A Luana tem 525 atendimentos abertos e fechar um a um, com o formulário de
+   * resumo em cada, é meio dia de trabalho. Encerrar não avisa o cliente.
+   */
+  const [selecionando, setSelecionando] = useState(false);
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const [encerrando, setEncerrando] = useState(false);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -221,6 +234,37 @@ export function ConversationList({
       todas: base.length,
     };
   }, [conversations, statusTab, userId]);
+
+  function alternarMarca(id: string) {
+    setMarcadas((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  /** Encerra o que estiver marcado. Nada disso chega ao cliente. */
+  async function encerrarSelecionadas() {
+    const ids = [...marcadas];
+    if (!ids.length) return;
+    // Confirmação explícita: é uma ação em massa e o número importa.
+    if (!confirm(`Encerrar ${ids.length} atendimento(s)? O cliente NÃO recebe nenhuma mensagem.`)) return;
+    setEncerrando(true);
+    try {
+      const r = await closeConversationsBulk(ids);
+      if (r.ok) {
+        onBulkClosed?.(ids.slice(0, r.total === ids.length ? ids.length : ids.length));
+        setMarcadas(new Set());
+        setSelecionando(false);
+      } else {
+        alert(r.error ?? "Não foi possível encerrar.");
+      }
+    } catch {
+      alert("Não foi possível encerrar. Tente de novo.");
+    } finally {
+      setEncerrando(false);
+    }
+  }
 
   function openModal() {
     setDraftPeriod(period);
@@ -321,6 +365,41 @@ export function ConversationList({
         </div>
       </div>
 
+      {/* ─── Encerrar em lote ─── */}
+      {selecionando ? (
+        <div className="flex items-center gap-2 border-b border-border bg-amber-50 px-3 py-2">
+          <span className="text-xs font-medium text-amber-900">
+            {marcadas.size} selecionada{marcadas.size === 1 ? "" : "s"}
+          </span>
+          <button
+            onClick={() => setMarcadas(new Set(filtered.map((c) => c.id)))}
+            className="rounded-lg border border-amber-300 px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+          >
+            Marcar as {filtered.length} da lista
+          </button>
+          <button
+            onClick={encerrarSelecionadas}
+            disabled={!marcadas.size || encerrando}
+            className="ml-auto rounded-lg bg-danger px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
+          >
+            {encerrando ? "Encerrando..." : `Encerrar (${marcadas.size})`}
+          </button>
+          <button
+            onClick={() => { setSelecionando(false); setMarcadas(new Set()); }}
+            className="rounded-lg px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-amber-100"
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setSelecionando(true)}
+          className="border-b border-border px-3 py-1.5 text-left text-[11px] font-medium text-ink-soft hover:bg-gray-50"
+        >
+          Selecionar várias para encerrar
+        </button>
+      )}
+
       {/* ─── Lista de conversas ─── */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 && (
@@ -361,15 +440,26 @@ export function ConversationList({
               key={c.id}
               role="button"
               tabIndex={0}
-              onClick={() => onSelect(c.id)}
+              onClick={() => (selecionando ? alternarMarca(c.id) : onSelect(c.id))}
               onKeyDown={(e) =>
-                (e.key === "Enter" || e.key === " ") && onSelect(c.id)
+                (e.key === "Enter" || e.key === " ") &&
+                (selecionando ? alternarMarca(c.id) : onSelect(c.id))
               }
               className={cn(
                 "group flex w-full cursor-pointer items-center gap-3 border-b border-border px-3 py-3 text-left transition hover:bg-gray-50",
                 selectedId === c.id && "bg-brand-light hover:bg-brand-light",
               )}
             >
+              {selecionando && (
+                <input
+                  type="checkbox"
+                  checked={marcadas.has(c.id)}
+                  onChange={() => alternarMarca(c.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-5 w-5 shrink-0 rounded border-border"
+                  aria-label={`Selecionar conversa com ${title}`}
+                />
+              )}
               <div className="relative h-10 w-10 shrink-0">
                 {c.contact_avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element

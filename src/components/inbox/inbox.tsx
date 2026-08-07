@@ -96,7 +96,22 @@ export function Inbox({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  /**
+   * No CELULAR a caixa abre na LISTA, não dentro de uma conversa.
+   *
+   * O servidor escolhe a primeira conversa para já mostrar algo — o que faz
+   * sentido no computador, onde lista e conversa aparecem lado a lado. No
+   * telefone a lista some quando há conversa aberta, então a pessoa caía
+   * dentro de um atendimento aleatório e precisava voltar para trabalhar.
+   * Link direto (?c=...) continua abrindo a conversa pedida.
+   */
+  const [selectedId, setSelectedId] = useState(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      const pedida = new URLSearchParams(window.location.search).get("c");
+      return pedida ?? null;
+    }
+    return initialSelectedId;
+  });
   const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>(
     initialSelectedId ? { [initialSelectedId]: initialMessages } : {},
   );
@@ -830,6 +845,14 @@ export function Inbox({
           onSelect={selectConversation}
           onPauseAi={handlePauseAiQuick}
           onNewConversation={(channels?.length ?? 0) > 0 ? openNewConversation : undefined}
+          onBulkClosed={(ids) => {
+            // Some da lista na hora; o servidor já gravou.
+            const fechadas = new Set(ids);
+            setConversations((prev) =>
+              prev.map((c) => (fechadas.has(c.id) ? { ...c, status: "closed" as const } : c)),
+            );
+            toast(`${ids.length} atendimento(s) encerrado(s).`, "success");
+          }}
           userId={userId}
         />
       </div>

@@ -278,7 +278,10 @@ function Actions({
 }) {
   const out = message.direction === "out";
   return (
-    <div className="relative flex shrink-0 items-center self-center opacity-0 transition group-hover:opacity-100">
+    // No CELULAR ficam sempre visíveis: aparecer "ao passar o mouse" não existe
+    // no toque, e era por isso que a Luana via a opção de editar no computador
+    // e não achava no celular.
+    <div className="relative flex shrink-0 items-center self-center opacity-100 transition lg:opacity-0 lg:group-hover:opacity-100">
       <button onClick={() => { setEmoji(!emoji); setMenu(false); }} className="rounded-full p-1 text-ink-soft hover:bg-gray-100" title="Reagir">
         <SmilePlus size={15} />
       </button>
