@@ -677,10 +677,21 @@ export function Inbox({
 
   function handleAssign() {
     if (!selectedId) return;
+    const antes = conversations.find((c) => c.id === selectedId);
     setConversations((prev) =>
       prev.map((c) => (c.id === selectedId ? { ...c, status: "open", assigned_user_id: userId } : c)),
     );
-    startTransition(() => assignToMe(selectedId));
+    startTransition(async () => {
+      // Confirma de verdade em vez de "atire e esqueça": sem isto, uma falha
+      // silenciosa fazia a otimista aparecer por um instante e sumir sozinha
+      // no próximo ciclo de 2,5s — dava a sensação exata de "tentei e não
+      // consegui", sem nenhum aviso do que deu errado.
+      const r = await assignToMe(selectedId).catch(() => ({ ok: false as const, error: "Não foi possível atribuir." }));
+      if (r && "ok" in r && !r.ok) {
+        setConversations((prev) => prev.map((c) => (c.id === selectedId ? (antes ?? c) : c)));
+        toast(r.error ?? "Não foi possível atribuir.", "error");
+      }
+    });
   }
 
   function handleClose() {

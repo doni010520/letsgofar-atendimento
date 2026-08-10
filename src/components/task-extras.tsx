@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { User } from "lucide-react";
 import { Card, Button } from "@/components/ui";
+import { toast } from "@/components/toast";
 import type { TaskRow } from "@/app/(app)/tarefas/page";
 import {
   updateTaskStatus,
@@ -371,9 +372,16 @@ export function TaskDetailPanel({
             id="resp"
             value={task.assigned_to ?? ""}
             disabled={pending}
-            onChange={(e) =>
-              startTransition(() => void assignTask(task.id, e.target.value || null))
-            }
+            onChange={(e) => {
+              const novo = e.target.value || null;
+              startTransition(async () => {
+                try {
+                  await assignTask(task.id, novo);
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : "Não foi possível mudar o responsável.", "error");
+                }
+              });
+            }}
             className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-ink"
           >
             <option value="">Sem responsável</option>

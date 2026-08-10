@@ -36,6 +36,12 @@ export function TasksClient({
 }) {
   const [soMinhas, setSoMinhas] = useState(false);
   /**
+   * "Delegadas por mim": criadas por mim, mas atribuídas a outra pessoa —
+   * pedido da Ianka. Sem isto ela só tinha "Só as minhas" (o que É dela
+   * fazer); não tinha como acompanhar o que ela distribuiu para o time.
+   */
+  const [delegadas, setDelegadas] = useState(false);
+  /**
    * São dois tipos de tarefa e o Chatwoot os mantinha em lugares separados: a
    * aba de Tarefas listava só as da equipe (conferido na tela: "Pendente 47",
    * que são exatamente as `agent_tasks`), enquanto o follow-up de lead vivia
@@ -62,13 +68,14 @@ export function TasksClient({
   // aplicado antes, e não só dentro do filtro de status da lista.
   const escopo = useMemo(() => {
     let lista = soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks;
+    if (delegadas && meId) lista = lista.filter((t) => t.created_by === meId && t.assigned_to !== meId);
     if (tipo === "lead") lista = lista.filter((t) => t.contact_id);
     if (tipo === "equipe") lista = lista.filter((t) => !t.contact_id);
     if (esconderFinalizadas) {
       lista = lista.filter((t) => t.status !== "completed" && t.status !== "cancelled");
     }
     return lista;
-  }, [tasks, soMinhas, meId, tipo, esconderFinalizadas]);
+  }, [tasks, soMinhas, delegadas, meId, tipo, esconderFinalizadas]);
 
   /** Follow-ups pendentes: tarefa presa a um contato. Vêm em lista própria. */
   const followUps = useMemo(
@@ -378,7 +385,7 @@ export function TasksClient({
         {/* Vale para lista, kanban e calendário. */}
         {meId && (
           <button
-            onClick={() => setSoMinhas((v) => !v)}
+            onClick={() => { setSoMinhas((v) => !v); setDelegadas(false); }}
             aria-pressed={soMinhas}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
               soMinhas
@@ -387,6 +394,20 @@ export function TasksClient({
             }`}
           >
             {soMinhas ? "Mostrando só as minhas" : "Só as minhas"}
+          </button>
+        )}
+        {meId && (
+          <button
+            onClick={() => { setDelegadas((v) => !v); setSoMinhas(false); }}
+            aria-pressed={delegadas}
+            title="Tarefas que eu criei, mas que estão sob responsabilidade de outra pessoa"
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+              delegadas
+                ? "border-ink bg-ink text-white"
+                : "border-border bg-surface text-ink-soft hover:text-ink"
+            }`}
+          >
+            {delegadas ? "Mostrando delegadas" : "Delegadas por mim"}
           </button>
         )}
       </div>

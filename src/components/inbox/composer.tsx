@@ -196,11 +196,15 @@ export function Composer({
     e.target.value = "";
   }
 
-  async function toggleRecord() {
-    if (recording) {
-      recorderRef.current?.stop();
-      return;
-    }
+  /**
+   * Grava e cai no MESMO preview de mídia (ouvir + trocar legenda + confirmar
+   * ou cancelar) em vez de mandar assim que parar. Era isso que a Luana
+   * pedia comparando com o Chatwoot: "se começar a gravação obrigatoriamente
+   * ao parar ela é enviada... às vezes esqueço algo no meio e preciso gravar
+   * de novo" — sem preview não tinha como conferir nem desistir de um áudio
+   * já gravado.
+   */
+  async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec = new MediaRecorder(stream);
@@ -210,8 +214,7 @@ export function Composer({
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
         const ext = (rec.mimeType || "audio/webm").includes("ogg") ? "ogg" : "webm";
-        // Áudio gravado envia direto sem preview.
-        onSendFile(new File([blob], `audio-${Date.now()}.${ext}`, { type: blob.type }));
+        stageFile(new File([blob], `audio-${Date.now()}.${ext}`, { type: blob.type }));
         setRecording(false);
       };
       recorderRef.current = rec;
@@ -222,8 +225,21 @@ export function Composer({
     }
   }
 
+  function toggleRecord() {
+    if (recording) recorderRef.current?.stop();
+    else void startRecording();
+  }
+
+  /** Descarta o áudio gravado e recomeça na hora — sem fechar o preview. */
+  function regravar() {
+    setPendingFile(null);
+    setPendingCaption("");
+    void startRecording();
+  }
+
   const isImage = pendingFile?.type.startsWith("image/");
   const isVideo = pendingFile?.type.startsWith("video/");
+  const isAudio = pendingFile?.type.startsWith("audio/");
 
   return (
     <>
@@ -235,7 +251,7 @@ export function Composer({
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                 <ImageIcon size={16} className="text-brand" />
-                {isImage ? "Enviar imagem" : isVideo ? "Enviar vídeo" : "Enviar arquivo"}
+                {isImage ? "Enviar imagem" : isVideo ? "Enviar vídeo" : isAudio ? "Ouça antes de enviar" : "Enviar arquivo"}
               </div>
               <button onClick={cancelPreview} className="rounded-full p-1 text-ink-soft hover:bg-gray-100 hover:text-ink">
                 <X size={18} />
@@ -249,6 +265,13 @@ export function Composer({
                 <img src={previewUrl} alt="Preview" className="max-h-80 max-w-full rounded-lg object-contain" />
               ) : isVideo && previewUrl ? (
                 <video src={previewUrl} controls className="max-h-80 max-w-full rounded-lg" />
+              ) : isAudio && previewUrl ? (
+                <div className="flex w-full flex-col items-center gap-3">
+                  <Mic size={32} className="text-brand" />
+                  {/* autoPlay: quem acabou de gravar quer ouvir na hora, sem
+                      precisar apertar play — é a conferência que faltava. */}
+                  <audio src={previewUrl} controls autoPlay className="w-full max-w-sm" />
+                </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 text-ink-soft">
                   <FileUp size={40} />
@@ -258,19 +281,30 @@ export function Composer({
               )}
             </div>
 
-            {/* Caption + enviar */}
+            {/* Áudio: sem legenda (o WhatsApp não mostra legenda em áudio) —
+                em vez disso, o botão de regravar que faltava. Demais tipos
+                seguem com o campo de legenda de sempre. */}
             <div className="flex items-center gap-2 border-t border-border px-4 py-3">
-              <input
-                ref={captionRef}
-                value={pendingCaption}
-                onChange={(e) => setPendingCaption(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); confirmSend(); }
-                  if (e.key === "Escape") cancelPreview();
-                }}
-                placeholder="Adicionar legenda..."
-                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
-              />
+              {isAudio ? (
+                <button
+                  onClick={regravar}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-ink-soft transition hover:bg-gray-50 hover:text-ink"
+                >
+                  <Mic size={14} /> Regravar
+                </button>
+              ) : (
+                <input
+                  ref={captionRef}
+                  value={pendingCaption}
+                  onChange={(e) => setPendingCaption(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); confirmSend(); }
+                    if (e.key === "Escape") cancelPreview();
+                  }}
+                  placeholder="Adicionar legenda..."
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+              )}
               <button
                 onClick={confirmSend}
                 disabled={sending}
@@ -580,7 +614,7 @@ export function Composer({
             className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl text-white transition disabled:opacity-40 ${
               recording ? "animate-pulse bg-danger hover:bg-red-600" : "bg-brand hover:bg-brand-dark"
             }`}
-            title={recording ? "Parar e enviar" : "Gravar áudio"}
+            title={recording ? "Parar gravação" : "Gravar áudio"}
           >
             {recording ? <Square size={16} /> : <Mic size={18} />}
           </button>

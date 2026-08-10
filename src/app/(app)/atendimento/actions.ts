@@ -681,15 +681,30 @@ export async function sendTemplateMessage(
 }
 
 export async function assignToMe(conversationId: string) {
-  if (isPreview()) return;
+  if (isPreview()) return { ok: true as const };
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
   // Assumir = humano no comando → a IA para nesta conversa (não reengaja).
-  await supabase
+  //
+  // O UPDATE confirma a linha afetada. Antes disto o chamador nem sabia se
+  // funcionou: "atire e esqueça", sem await nem tratamento de erro. Quando
+  // falhava, a otimista da tela mostrava "atribuído" por um instante e a
+  // atualização automática (a cada 2,5s) devolvia ao estado real do servidor
+  // — dando a sensação exata de "tentei e não consegui", sem aviso do porquê.
+  const { data: linha, error } = await supabase
     .from("conversations")
     .update({ assigned_user_id: session.userId, status: "open", ai_enabled: false })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .select("id")
+    .maybeSingle();
+  if (error || !linha) {
+    void logEvent("error", "atendente",
+      `${session.profile?.name ?? "Atendente"} falhou ao assumir o atendimento: ${error?.message ?? "conversa não encontrada"}`,
+      { conversationId, userId: session.userId, action: "assumir" }, session.organization.id);
+    revalidatePath("/atendimento");
+    return { ok: false as const, error: "Não foi possível atribuir. Tente de novo." };
+  }
   void logEvent("info", "atendente", `${session.profile?.name ?? "Atendente"} assumiu o atendimento (IA pausada)`, { conversationId, userId: session.userId, action: "assumir" }, session.organization.id);
 
   // Mensagem de atribuição (se configurado).
@@ -705,6 +720,7 @@ export async function assignToMe(conversationId: string) {
   }
 
   revalidatePath("/atendimento");
+  return { ok: true as const };
 }
 
 export interface CloseOptions {

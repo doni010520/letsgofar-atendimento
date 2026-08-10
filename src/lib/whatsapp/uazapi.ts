@@ -35,7 +35,17 @@ export class UazapiProvider implements ChannelProvider {
     if (useAdmin) headers["admintoken"] = process.env.UAZAPI_ADMIN_TOKEN || "";
     else if (this.token) headers["token"] = this.token;
 
-    const res = await fetch(`${this.host}${path}`, { ...init, headers });
+    // Teto de 25s. SEM isto, uma trava da uazapi para um número específico
+    // travava o `await` do nosso lado para sempre — nem sucesso nem erro, só
+    // o botão girando indefinidamente. Foi assim que sumiu na Luana ("só em
+    // alguns contatos"): sem timeout, a chamada nunca terminava para deixar
+    // rastro de erro no log, e sem terminar, o catch que já existe em volta
+    // de sendMessage (marca "failed" + mostra aviso) nunca era acionado.
+    const res = await fetch(`${this.host}${path}`, {
+      ...init,
+      headers,
+      signal: init.signal ?? AbortSignal.timeout(25000),
+    });
     if (!res.ok) {
       const err = new Error(`UAZAPI ${path} -> ${res.status}`) as Error & { httpStatus?: number };
       err.httpStatus = res.status;
