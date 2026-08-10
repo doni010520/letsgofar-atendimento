@@ -8,6 +8,29 @@ import { ChatThread } from "./chat-thread";
 import { ContactPanel } from "./contact-panel";
 import { createClient } from "@/lib/supabase/client";
 
+/**
+ * Teto de espera para uma Server Action, do lado do NAVEGADOR.
+ *
+ * A trava de ontem era o SERVIDOR esperando a uazapi para sempre — corrigida
+ * com timeout lá. Esta é uma camada diferente: o CELULAR esperando o
+ * SERVIDOR para sempre, numa rede 4G que engasgou no meio do caminho. Nesse
+ * caso a mensagem nem chega a ser registrada (a linha "pending" que o
+ * servidor cria antes de tudo nunca existiu) — a conexão morreu antes da
+ * ida e volta terminar, e nada do lado do servidor resolve isso.
+ *
+ * Não cancela a chamada de verdade (ela pode até completar depois, em
+ * segundo plano) — só impede que a TELA fique presa esperando para sempre.
+ */
+function comTeto<T>(promessa: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("SEM_RESPOSTA")), ms);
+    promessa.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
 /** Toca um bip curto de notificação via Web Audio (sem precisar de arquivo). */
 let audioCtx: AudioContext | null = null;
 function playPing() {
@@ -562,13 +585,20 @@ export function Inbox({
         toast(aviso, "error");
       };
       try {
-        const r = await sendMessage(selectedId, finalText, finalReplyId, mentions);
+        // 35s: folgado acima do teto de 25s que o servidor já aplica na
+        // uazapi, para não desistir bem na hora em que o servidor ia
+        // responder. Fecha a camada que aquele teto não cobre: a ida e volta
+        // entre ESTE celular e o servidor, que pode travar numa rede ruim
+        // sem o servidor ter culpa nenhuma.
+        const r = await comTeto(sendMessage(selectedId, finalText, finalReplyId, mentions), 35000);
         if (r && r.ok === false) falhou(r.error ?? "Mensagem não entregue.");
       } catch (e) {
         falhou(
-          e instanceof Error && /fetch|network|Failed/i.test(e.message)
-            ? "Sem conexão — a mensagem NÃO foi enviada. Tente de novo."
-            : "A mensagem NÃO foi enviada. Tente de novo.",
+          e instanceof Error && e.message === "SEM_RESPOSTA"
+            ? "Sem resposta do servidor — confira se a mensagem foi enviada antes de tentar de novo."
+            : e instanceof Error && /fetch|network|Failed/i.test(e.message)
+              ? "Sem conexão — a mensagem NÃO foi enviada. Tente de novo."
+              : "A mensagem NÃO foi enviada. Tente de novo.",
         );
         return; // não recarrega por cima: o balão vermelho precisa ficar visível
       }
@@ -602,7 +632,24 @@ export function Inbox({
     };
     setMessagesByConv((prev) => ({ ...prev, [convId]: [...(prev[convId] ?? []), optimistic] }));
     startTransition(async () => {
-      await sendInternalMessage(convId, text, mentions);
+      // Mesma proteção do envio ao cliente: sem isto, uma trava aqui deixava
+      // a nota "pendurada" na tela sem nenhum aviso — pior que o envio ao
+      // cliente, que ao menos já tinha tratamento de erro.
+      try {
+        await comTeto(sendInternalMessage(convId, text, mentions), 35000);
+      } catch (e) {
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [convId]: (prev[convId] ?? []).map((m) => (m.id === optimistic.id ? { ...m, status: "failed" as const } : m)),
+        }));
+        toast(
+          e instanceof Error && e.message === "SEM_RESPOSTA"
+            ? "Sem resposta do servidor — confira se a nota foi salva."
+            : "Não foi possível salvar a nota. Tente de novo.",
+          "error",
+        );
+        return;
+      }
       if (live) {
         const msgs = await fetchMessages(convId);
         setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
@@ -645,6 +692,11 @@ export function Inbox({
           method: "POST",
           headers: { "content-type": file.type || "application/octet-stream" },
           body: file,
+          // Teto do lado do navegador — o mesmo problema do envio de texto
+          // (celular travado esperando o servidor numa rede ruim), só que
+          // aqui dá para usar o abort nativo do fetch. 90s: arquivo grande
+          // demora mais que uma mensagem de texto para subir.
+          signal: AbortSignal.timeout(90000),
         });
         const dados = await r.json().catch(() => ({}) as { error?: string });
         if (!r.ok || dados.ok === false) {
@@ -655,8 +707,11 @@ export function Inbox({
           return;
         }
       } catch (e) {
+        const semResposta = e instanceof Error && e.name === "TimeoutError";
         toast(
-          `Não foi possível enviar "${file.name}". ${(e as Error)?.message ?? ""}`.trim(),
+          semResposta
+            ? `Sem resposta do servidor ao enviar "${file.name}" — confira antes de tentar de novo.`
+            : `Não foi possível enviar "${file.name}". ${(e as Error)?.message ?? ""}`.trim(),
           "error",
         );
         return;
