@@ -61,10 +61,10 @@ jobs:
 
           mkdir -p estado
           if [ "$CODE" = "200" ] && [ -n "$VERSAO" ]; then
-            echo "app respondendo normalmente (v$VERSAO)"
+            echo "app respondendo normalmente ($VERSAO)"
             if [ "$SITUACAO_ANTERIOR" = "fora" ]; then
               MIN=$(( (AGORA - ULTIMO_ALERTA) ))
-              avisar "✅ Let's Go Far Atendimento voltou ao ar (v$VERSAO). Confirmado às ${AGORA_ISO} UTC pelo vigia externo."
+              avisar "✅ Let's Go Far Atendimento voltou ao ar ($VERSAO). Confirmado às ${AGORA_ISO} UTC pelo vigia externo."
             fi
             printf '{"situacao":"ok","ultimaChecagem":"%s","ultimoAlertaEpoch":%s}' "$AGORA_ISO" "$ULTIMO_ALERTA" > "$ARQ"
           else
