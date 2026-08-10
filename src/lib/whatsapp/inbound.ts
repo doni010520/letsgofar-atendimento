@@ -207,12 +207,30 @@ export async function persistInbound(messages: InboundMessage[]) {
       }
     }
 
+    /**
+     * BUG GRAVE, DA PRÓPRIA CORREÇÃO DO 9º DÍGITO (v1.9.1): faltava `.single()`
+     * no caminho de UPDATE. Sem ele, `.select()` depois de `.update()` devolve
+     * uma LISTA — `contact` virava `[{...}]`, um array — e todo `contact!.id`
+     * daí em diante lia `undefined` (arrays não têm `.id`). A conversa era
+     * buscada com `contact_id = undefined`, o insert de conversa nova (quando
+     * a busca não achava nada) violava a coluna obrigatória, e a exceção
+     * subia até o `catch` do webhook — que devolve HTTP 200 mesmo em erro
+     * (de propósito, pra não entrar em loop de reenvio) e só grava um
+     * `console.error` que NUNCA chega no log monitorado. Resultado: mensagem
+     * de quem tem o número salvo num formato de dígito diferente do que o
+     * WhatsApp usou naquela troca específica — CADA mensagem dessa pessoa,
+     * sempre — desaparecia sem nenhum rastro. Reproduzido e confirmado antes
+     * deste fix: 1ª mensagem de um contato novo funcionava (caminho de
+     * upsert, que tinha `.single()`); a 2ª do MESMO contato, chegando com o
+     * outro formato de dígito, falhava sempre.
+     */
     const { data: contact } = idExistente
       ? await db
           .from("contacts")
           .update(contactName ? { name: contactName } : {})
           .eq("id", idExistente)
           .select("id, name, avatar_url, avatar_src, is_group")
+          .single()
       : await db
       .from("contacts")
       .upsert(
