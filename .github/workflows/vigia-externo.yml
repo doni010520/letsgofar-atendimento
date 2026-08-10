@@ -1,0 +1,94 @@
+name: Vigia externo (uptime)
+
+# Roda em infraestrutura do GitHub — SEPARADA do servidor onde o app mora.
+# É exatamente o ponto cego que o vigia interno tem: se o app inteiro cai
+# (como na queda de 41h de 07-09/08), o vigia interno cai junto e não avisa
+# ninguém. Este continua rodando de fora, mesmo com o app inteiro fora do ar.
+on:
+  schedule:
+    - cron: "*/5 * * * *" # a cada 5 minutos
+  workflow_dispatch: {} # permite disparar na mão, pra testar
+
+permissions:
+  contents: write # precisa gravar o estado (evita alerta repetido a cada 5 min)
+
+concurrency:
+  group: vigia-externo
+  cancel-in-progress: false
+
+jobs:
+  checar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lê o estado do último alerta
+        uses: actions/checkout@v4
+        with:
+          ref: vigia-estado
+          path: estado
+        continue-on-error: true # primeira execução: a branch ainda não existe
+
+      - name: Confere o app e decide se avisa
+        id: check
+        env:
+          UAZAPI_HOST: ${{ secrets.UAZAPI_HOST }}
+          UAZAPI_TOKEN: ${{ secrets.UAZAPI_TOKEN }}
+          OWNER_PHONE: ${{ secrets.OWNER_PHONE }}
+        run: |
+          set +e
+          ARQ="estado/estado.json"
+          AGORA=$(date -u +%s)
+          AGORA_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          CODE=$(curl -s -o /tmp/resp.json -w "%{http_code}" -m 15 https://letsgofarchat.benitechlab.com/api/version)
+          VERSAO=$(grep -o '"version":"[^"]*"' /tmp/resp.json 2>/dev/null | cut -d'"' -f4)
+
+          # Estado anterior (se a branch/arquivo existir).
+          SITUACAO_ANTERIOR="ok"
+          ULTIMO_ALERTA=0
+          if [ -f "$ARQ" ]; then
+            SITUACAO_ANTERIOR=$(grep -o '"situacao":"[^"]*"' "$ARQ" | cut -d'"' -f4)
+            ULTIMO_ALERTA=$(grep -o '"ultimoAlertaEpoch":[0-9]*' "$ARQ" | grep -o '[0-9]*$')
+            [ -z "$ULTIMO_ALERTA" ] && ULTIMO_ALERTA=0
+          fi
+
+          avisar() {
+            local texto="$1"
+            curl -s -m 15 -X POST "$UAZAPI_HOST/send/text" \
+              -H "token: $UAZAPI_TOKEN" -H "Content-Type: application/json" \
+              -d "{\"number\":\"$OWNER_PHONE\",\"text\":\"$texto\"}" > /tmp/envio.json
+            echo "aviso enviado: $(cat /tmp/envio.json | head -c 200)"
+          }
+
+          mkdir -p estado
+          if [ "$CODE" = "200" ] && [ -n "$VERSAO" ]; then
+            echo "app respondendo normalmente (v$VERSAO)"
+            if [ "$SITUACAO_ANTERIOR" = "fora" ]; then
+              MIN=$(( (AGORA - ULTIMO_ALERTA) ))
+              avisar "✅ Let's Go Far Atendimento voltou ao ar (v$VERSAO). Confirmado às ${AGORA_ISO} UTC pelo vigia externo."
+            fi
+            printf '{"situacao":"ok","ultimaChecagem":"%s","ultimoAlertaEpoch":%s}' "$AGORA_ISO" "$ULTIMO_ALERTA" > "$ARQ"
+          else
+            echo "FALHA: HTTP $CODE"
+            DIFF=$(( AGORA - ULTIMO_ALERTA ))
+            # So reenvia alerta a cada 20 min (1200s) pra nao virar spam numa queda longa.
+            if [ "$SITUACAO_ANTERIOR" != "fora" ] || [ "$DIFF" -gt 1200 ]; then
+              avisar "⚠️ Let's Go Far Atendimento parece FORA DO AR (HTTP $CODE) às ${AGORA_ISO} UTC. Vigia externo — checagem independente do servidor da aplicação."
+              ULTIMO_ALERTA=$AGORA
+            fi
+            printf '{"situacao":"fora","ultimaChecagem":"%s","ultimoAlertaEpoch":%s}' "$AGORA_ISO" "$ULTIMO_ALERTA" > "$ARQ"
+          fi
+          cat "$ARQ"
+
+      - name: Salva o estado
+        if: always()
+        run: |
+          cd estado
+          git config user.name "vigia-externo"
+          git config user.email "vigia-externo@users.noreply.github.com"
+          git add estado.json
+          if git diff --cached --quiet; then
+            echo "estado sem mudanca, nada a commitar"
+          else
+            git commit -m "estado: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push origin HEAD:vigia-estado
+          fi
