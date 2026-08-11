@@ -23,7 +23,17 @@ const FILTERS = [
   { key: "refused", label: "Recusados" },
 ] as const;
 
-type Signer = { name: string; email: string; document: string };
+type Signer = { name: string; email: string; document: string; phone: string };
+type CampoNovo = { key: string; label: string; type: string };
+
+const TIPOS_CAMPO = [
+  { value: "text", label: "Texto" },
+  { value: "date", label: "Data" },
+  { value: "email", label: "E-mail" },
+  { value: "tel", label: "Telefone" },
+  { value: "number", label: "Número" },
+  { value: "currency", label: "Valor (R$)" },
+];
 
 export function ContractsClient({
   contracts,
@@ -36,9 +46,10 @@ export function ContractsClient({
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [creating, setCreating] = useState(false);
   const [modeloId, setModeloId] = useState("");
-  const [signers, setSigners] = useState<Signer[]>([{ name: "", email: "", document: "" }]);
+  const [signers, setSigners] = useState<Signer[]>([{ name: "", email: "", document: "", phone: "" }]);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const [camposNovoModelo, setCamposNovoModelo] = useState<CampoNovo[]>([]);
 
   const visible = useMemo(
     () => (filter === "all" ? contracts : contracts.filter((c) => c.status === filter)),
@@ -58,12 +69,13 @@ export function ContractsClient({
         fd.append("signer_name", s.name);
         fd.append("signer_email", s.email);
         fd.append("signer_document", s.document);
+        fd.append("signer_phone", s.phone);
       }
     });
     try {
       await createContract(fd);
       setCreating(false);
-      setSigners([{ name: "", email: "", document: "" }]);
+      setSigners([{ name: "", email: "", document: "", phone: "" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar o contrato.");
     }
@@ -142,17 +154,23 @@ export function ContractsClient({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Signatários</h3>
             <Button type="button" variant="ghost"
-              onClick={() => setSigners((s) => [...s, { name: "", email: "", document: "" }])}>
+              onClick={() => setSigners((s) => [...s, { name: "", email: "", document: "", phone: "" }])}>
               + Adicionar
             </Button>
           </div>
+          <p className="text-xs text-ink-soft">
+            O link de assinatura vai por e-mail sempre, e por WhatsApp também se o telefone for preenchido.
+          </p>
           {signers.map((s, i) => (
-            <div key={i} className="grid grid-cols-3 gap-2">
+            <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <input placeholder="Nome" value={s.name}
                 onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
                 className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
               <input placeholder="E-mail" type="email" value={s.email}
                 onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, email: e.target.value } : x))}
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+              <input placeholder="WhatsApp (opcional)" type="tel" value={s.phone}
+                onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, phone: e.target.value } : x))}
                 className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
               <input placeholder="CPF (opcional)" value={s.document}
                 onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, document: e.target.value } : x))}
@@ -188,12 +206,55 @@ export function ContractsClient({
         <div className="space-y-3">
           <Card className="space-y-3">
             <h3 className="text-sm font-semibold text-ink">Novo modelo</h3>
-            <form action={(fd) => startTransition(() => void createTemplate(fd))} className="space-y-2">
+            <form
+              action={(fd) => {
+                fd.set("variable_fields", JSON.stringify(camposNovoModelo.filter((c) => c.key.trim())));
+                startTransition(() => void createTemplate(fd));
+                setCamposNovoModelo([]);
+              }}
+              className="space-y-2"
+            >
               <input name="name" placeholder="Nome do modelo"
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
               <textarea name="content_html" rows={5}
                 placeholder="<p>Olá {{nome_aluno}}, ...</p>  — use {{variavel}} para campos dinâmicos"
                 className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs" />
+
+              {/* Cada {{variavel}} usada no texto acima precisa de um campo aqui,
+                  senão ninguém consegue preencher e o contrato sai com espaço em
+                  branco no lugar do marcador. */}
+              <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-ink">Campos que este modelo pede ao criar um contrato</p>
+                  <Button type="button" variant="ghost"
+                    onClick={() => setCamposNovoModelo((c) => [...c, { key: "", label: "", type: "text" }])}>
+                    + Campo
+                  </Button>
+                </div>
+                {camposNovoModelo.length === 0 && (
+                  <p className="text-xs text-ink-soft">
+                    Nenhum campo ainda — se o texto tem {"{{variavel}}"}, adicione um campo com essa mesma chave.
+                  </p>
+                )}
+                {camposNovoModelo.map((c, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2">
+                    <input placeholder="chave (ex.: nome_aluno)" value={c.key}
+                      onChange={(e) => setCamposNovoModelo((arr) => arr.map((x, idx) => idx === i ? { ...x, key: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") } : x))}
+                      className="rounded-lg border border-border bg-surface px-2.5 py-1.5 font-mono text-xs" />
+                    <input placeholder="rótulo (ex.: Nome do aluno)" value={c.label}
+                      onChange={(e) => setCamposNovoModelo((arr) => arr.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))}
+                      className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs" />
+                    <select value={c.type}
+                      onChange={(e) => setCamposNovoModelo((arr) => arr.map((x, idx) => idx === i ? { ...x, type: e.target.value } : x))}
+                      className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs">
+                      {TIPOS_CAMPO.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <button type="button" onClick={() => setCamposNovoModelo((arr) => arr.filter((_, idx) => idx !== i))}
+                      className="px-1.5 text-xs text-ink-soft hover:text-red-600">✕</button>
+                  </div>
+                ))}
+              </div>
+
               <Button type="submit" disabled={pending}>Salvar modelo</Button>
             </form>
           </Card>

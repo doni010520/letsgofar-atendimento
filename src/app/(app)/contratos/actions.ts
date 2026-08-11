@@ -6,17 +6,30 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { orgUpdate, orgDelete } from "@/lib/crud-helpers";
 import { renderTemplate } from "@/lib/contract-template";
+import { notifySigners } from "@/lib/contract-notify";
 
 export async function createTemplate(fd: FormData) {
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
   const sb = await createClient();
+
+  // Campos vêm serializados em JSON de um editor no formulário — sem isto o
+  // modelo nunca ganhava variable_fields, e a tela de criar contrato não
+  // tinha como mostrar onde preencher cada {{marcador}} do texto.
+  let variableFields: unknown = [];
+  try {
+    variableFields = JSON.parse(String(fd.get("variable_fields") || "[]"));
+  } catch {
+    variableFields = [];
+  }
+
   await sb.from("contract_templates").insert({
     organization_id: session.organization.id,
     created_by: session.profile?.id ?? null,
     name: String(fd.get("name") || "").trim(),
     description: String(fd.get("description") || "").trim() || null,
     content_html: String(fd.get("content_html") || ""),
+    variable_fields: variableFields,
   });
   revalidatePath("/contratos");
 }
@@ -73,9 +86,15 @@ export async function createContract(fd: FormData) {
   const names = fd.getAll("signer_name").map(String);
   const emails = fd.getAll("signer_email").map(String);
   const docs = fd.getAll("signer_document").map(String);
+  const phones = fd.getAll("signer_phone").map(String);
 
   const signers = names
-    .map((name, i) => ({ name: name.trim(), email: (emails[i] ?? "").trim(), document: (docs[i] ?? "").trim() }))
+    .map((name, i) => ({
+      name: name.trim(),
+      email: (emails[i] ?? "").trim(),
+      document: (docs[i] ?? "").trim(),
+      phone: (phones[i] ?? "").replace(/\D/g, ""),
+    }))
     .filter((s) => s.name && s.email)
     .map((s, i) => ({
       organization_id: org,
@@ -83,6 +102,7 @@ export async function createContract(fd: FormData) {
       name: s.name,
       email: s.email,
       document: s.document || null,
+      phone: s.phone || null,
       sign_token: randomUUID(),
       sign_order: i + 1,
     }));
@@ -101,17 +121,24 @@ export async function createContract(fd: FormData) {
   return contractId;
 }
 
-/** Coloca o contrato em circulação (gera os links de assinatura). */
+/** Coloca o contrato em circulação: gera os links e avisa cada signatário por e-mail e WhatsApp. */
 export async function sendContract(id: string) {
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
   const sb = await createClient();
 
-  const { count } = await sb
+  const { data: signers } = await sb
     .from("contract_signers")
-    .select("id", { count: "exact", head: true })
-    .eq("contract_id", id);
-  if (!count) throw new Error("Adicione ao menos um signatário.");
+    .select("name, email, phone, sign_token")
+    .eq("contract_id", id)
+    .eq("status", "pending");
+  if (!signers?.length) throw new Error("Adicione ao menos um signatário.");
+
+  const { data: contract } = await sb
+    .from("contracts")
+    .select("title, number")
+    .eq("id", id)
+    .single();
 
   await sb
     .from("contracts")
@@ -128,6 +155,11 @@ export async function sendContract(id: string) {
     profile_id: session.profile?.id ?? null,
     kind: "sent",
   });
+
+  await notifySigners(
+    { title: contract?.title ?? "Contrato", number: contract?.number ?? "", organization_id: session.organization.id },
+    signers,
+  );
 
   revalidatePath("/contratos");
 }

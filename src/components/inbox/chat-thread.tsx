@@ -220,16 +220,48 @@ export function ChatThread({
           for (const mm of messages) {
             if (mm.external_id) byExt.set(mm.external_id.split(":").pop()!, mm);
           }
-          return messages.map((m) => {
+
+          // Separador de data (igual ao WhatsApp: "Hoje"/"Ontem"/data por
+          // extenso entre grupos de mensagens de dias diferentes, rolando o
+          // histórico para cima). Calculado sobre as mensagens VISÍVEIS —
+          // senão uma interna oculta podia abrir um dia "vazio".
+          const diaChave = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          const rotuloDia = (iso: string): string => {
+            const d = new Date(iso);
+            const hoje = new Date();
+            const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
+            if (diaChave(d) === diaChave(hoje)) return "Hoje";
+            if (diaChave(d) === diaChave(ontem)) return "Ontem";
+            const mesmoAno = d.getFullYear() === hoje.getFullYear();
+            return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", ...(mesmoAno ? {} : { year: "numeric" }) });
+          };
+          let diaAnterior: string | null = null;
+
+          const visiveis = messages.filter((m) => !m.is_internal || showInternal);
+
+          return visiveis.map((m) => {
+            const dia = diaChave(new Date(m.created_at));
+            const mostraDivisor = dia !== diaAnterior;
+            diaAnterior = dia;
+            const divisor = mostraDivisor ? (
+              <div key={`dia-${m.id}`} className="flex justify-center py-2">
+                <span className="rounded-full bg-gray-200/80 px-3 py-1 text-[11px] font-medium text-ink-soft shadow-sm">
+                  {rotuloDia(m.created_at)}
+                </span>
+              </div>
+            ) : null;
+
             if (m.is_internal) {
-              if (!showInternal) return null;
               // Mensagem do sistema (sem autor identificado) = aviso discreto centralizado.
               const isSystem = m.sender_type === "system" || (!m.author_name && !m.sender_id);
               if (isSystem) {
                 return (
-                  <div key={m.id} className="flex justify-center px-6 py-1">
-                    <div className="max-w-md rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-800 ring-1 ring-amber-100">
-                      {m.body}
+                  <div key={m.id}>
+                    {divisor}
+                    <div className="flex justify-center px-6 py-1">
+                      <div className="max-w-md rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-800 ring-1 ring-amber-100">
+                        {m.body}
+                      </div>
                     </div>
                   </div>
                 );
@@ -240,26 +272,29 @@ export function ChatThread({
               // Destaca os "@Nome" no corpo.
               const parts = (m.body ?? "").split(/(@[^\s@]+(?:\s[^\s@]+)?)/g);
               return (
-                <div key={m.id} className={`flex px-4 py-1 ${mine ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[78%] rounded-xl border-l-4 px-3 py-2 text-sm shadow-sm ${
-                      iAmMentioned ? "border-amber-500 bg-amber-100 ring-1 ring-amber-300" : "border-amber-400 bg-amber-50"
-                    }`}
-                  >
-                    <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                      <span>🔒 Interna</span>
-                      <span className="text-amber-600/70">· {m.author_name ?? "Atendente"}</span>
+                <div key={m.id}>
+                  {divisor}
+                  <div className={`flex px-4 py-1 ${mine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[78%] rounded-xl border-l-4 px-3 py-2 text-sm shadow-sm ${
+                        iAmMentioned ? "border-amber-500 bg-amber-100 ring-1 ring-amber-300" : "border-amber-400 bg-amber-50"
+                      }`}
+                    >
+                      <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                        <span>🔒 Interna</span>
+                        <span className="text-amber-600/70">· {m.author_name ?? "Atendente"}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap break-words text-amber-900">
+                        {parts.map((p, i) =>
+                          p.startsWith("@") && (m.mentions ?? []).some((x) => p.slice(1).startsWith(x.name)) ? (
+                            <span key={i} className="rounded bg-amber-200 px-1 font-medium text-amber-900">{p}</span>
+                          ) : (
+                            <span key={i}>{p}</span>
+                          ),
+                        )}
+                      </p>
+                      <div className="mt-0.5 text-right text-[10px] text-amber-600/70">{time}</div>
                     </div>
-                    <p className="whitespace-pre-wrap break-words text-amber-900">
-                      {parts.map((p, i) =>
-                        p.startsWith("@") && (m.mentions ?? []).some((x) => p.slice(1).startsWith(x.name)) ? (
-                          <span key={i} className="rounded bg-amber-200 px-1 font-medium text-amber-900">{p}</span>
-                        ) : (
-                          <span key={i}>{p}</span>
-                        ),
-                      )}
-                    </p>
-                    <div className="mt-0.5 text-right text-[10px] text-amber-600/70">{time}</div>
                   </div>
                 </div>
               );
@@ -274,21 +309,23 @@ export function ChatThread({
               }
             }
             return (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                isAdmin={isAdmin}
-                onReply={setReplyTo}
-                onReact={onReact}
-                // Meta (API Oficial) não permite editar msg enviada → esconde o "Editar"
-                // para não dar falsa impressão (só a cópia local mudaria).
-                onEdit={isMeta ? undefined : onEdit}
-                onDelete={isMeta ? undefined : onDelete}
-                onAuthorClick={onAuthorClick}
-                onReplyPrivate={isGroup ? onReplyPrivate : undefined}
-                quotedAuthor={quotedAuthor}
-                quotedExcerpt={quotedExcerpt}
-              />
+              <div key={m.id}>
+                {divisor}
+                <MessageBubble
+                  message={m}
+                  isAdmin={isAdmin}
+                  onReply={setReplyTo}
+                  onReact={onReact}
+                  // Meta (API Oficial) não permite editar msg enviada → esconde o "Editar"
+                  // para não dar falsa impressão (só a cópia local mudaria).
+                  onEdit={isMeta ? undefined : onEdit}
+                  onDelete={isMeta ? undefined : onDelete}
+                  onAuthorClick={onAuthorClick}
+                  onReplyPrivate={isGroup ? onReplyPrivate : undefined}
+                  quotedAuthor={quotedAuthor}
+                  quotedExcerpt={quotedExcerpt}
+                />
+              </div>
             );
           });
         })()}

@@ -172,12 +172,9 @@ export async function reopenTask(id: string) {
   revalidatePath("/tarefas");
 }
 
-export async function addTaskItem(
-  taskId: string,
-  title: string,
-  dueDate?: string | null,
-  dueTime?: string | null,
-) {
+/** Dia/hora do item ficam de fora de propósito — igual ao Chatwoot, que só
+ * carimba a hora de criação (automática) e nunca pede pra preencher nada. */
+export async function addTaskItem(taskId: string, title: string) {
   const session = await getSession();
   if (!session?.organization || !title.trim()) return;
   const sb = await createClient();
@@ -190,18 +187,6 @@ export async function addTaskItem(
     task_id: taskId,
     title: title.trim(),
     position: count ?? 0,
-    due_date: dueDate || null,
-    // Hora sem dia não diz nada — só é gravada junto com a data.
-    due_time: dueDate && dueTime ? dueTime : null,
-  });
-  revalidatePath("/tarefas");
-}
-
-/** Muda o prazo de um item já criado (o dia e a hora podem ser limpos). */
-export async function setTaskItemDue(itemId: string, dueDate: string | null, dueTime: string | null) {
-  await orgUpdate("task_items", itemId, {
-    due_date: dueDate || null,
-    due_time: dueDate && dueTime ? dueTime : null,
   });
   revalidatePath("/tarefas");
 }

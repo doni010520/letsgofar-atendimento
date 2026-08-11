@@ -10,7 +10,6 @@ import {
   moveTask,
   addTaskComment,
   addTaskItem,
-  setTaskItemDue,
   deleteTaskItem,
   toggleTaskItem,
   startTask,
@@ -269,8 +268,6 @@ export function TaskDetailPanel({
 }) {
   const [comment, setComment] = useState("");
   const [item, setItem] = useState("");
-  const [itemData, setItemData] = useState("");
-  const [itemHora, setItemHora] = useState("");
   const [editando, setEditando] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -428,21 +425,10 @@ export function TaskDetailPanel({
                 <span className={`flex-1 ${i.completed ? "text-ink-soft line-through" : "text-ink"}`}>
                   {i.title}
                 </span>
-                {/* Prazo do item: editável na hora, sem abrir outra tela. */}
-                <input
-                  type="date"
-                  defaultValue={i.due_date ?? ""}
-                  onChange={(e) => startTransition(() => void setTaskItemDue(i.id, e.target.value || null, i.due_time ?? null))}
-                  className="rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-ink-soft"
-                />
-                <input
-                  type="time"
-                  defaultValue={i.due_time?.slice(0, 5) ?? ""}
-                  onChange={(e) => startTransition(() => void setTaskItemDue(i.id, i.due_date ?? null, e.target.value || null))}
-                  disabled={!i.due_date}
-                  title={i.due_date ? "Hora do item" : "Escolha o dia primeiro"}
-                  className="w-[74px] rounded border border-border bg-surface px-1.5 py-0.5 text-[11px] text-ink-soft disabled:opacity-40"
-                />
+                {/* Hora de criação, automática — igual ao Chatwoot: ninguém preenche nada. */}
+                <span className="shrink-0 text-[11px] text-ink-soft">
+                  {new Date(i.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </span>
                 <button
                   onClick={() => startTransition(() => void deleteTaskItem(i.id))}
                   className="text-xs text-red-600"
@@ -459,31 +445,12 @@ export function TaskDetailPanel({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && item.trim()) {
                   const v = item.trim();
-                  const d = itemData;
-                  const h = itemHora;
                   setItem("");
-                  setItemData("");
-                  setItemHora("");
-                  startTransition(() => void addTaskItem(task.id, v, d || null, h || null));
+                  startTransition(() => void addTaskItem(task.id, v));
                 }
               }}
               placeholder="Novo item (Enter para adicionar)"
               className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-            />
-            <input
-              type="date"
-              value={itemData}
-              onChange={(e) => setItemData(e.target.value)}
-              title="Dia do item (opcional)"
-              className="rounded-lg border border-border bg-surface px-2 py-2 text-xs text-ink-soft"
-            />
-            <input
-              type="time"
-              value={itemHora}
-              onChange={(e) => setItemHora(e.target.value)}
-              disabled={!itemData}
-              title={itemData ? "Hora do item (opcional)" : "Escolha o dia primeiro"}
-              className="w-[86px] rounded-lg border border-border bg-surface px-2 py-2 text-xs text-ink-soft disabled:opacity-40"
             />
           </div>
         </section>

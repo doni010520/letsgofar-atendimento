@@ -24,7 +24,7 @@ export type TaskRow = {
   created_at: string;
   /** Ordem manual dentro da coluna do kanban. Nulo = ordem automática. */
   position: number | null;
-  task_items?: { id: string; title: string; completed: boolean; position: number; due_date: string | null; due_time: string | null }[];
+  task_items?: { id: string; title: string; completed: boolean; position: number; created_at: string }[];
   task_comments?: { id: string; content: string; created_at: string; profile_id: string | null }[];
   task_files?: { id: string; filename: string; path: string; byte_size: number | null }[];
   task_tags?: { tag_id: string }[];
@@ -39,7 +39,7 @@ async function getTasks(): Promise<TaskRow[]> {
     .from("tasks")
     // contacts(...) traz o nome de quem é o follow-up: sem ele a lista de
     // tarefas de contato mostraria só o título, sem dizer de quem é.
-    .select("*, contacts(name, phone), task_items(id, title, completed, position, due_date, due_time), task_comments(id, content, created_at, profile_id), task_files(id, filename, path, byte_size), task_tags(tag_id)")
+    .select("*, contacts(name, phone), task_items(id, title, completed, position, created_at), task_comments(id, content, created_at, profile_id), task_files(id, filename, path, byte_size), task_tags(tag_id)")
     // A ordem manual do kanban vem primeiro; quem nunca foi arrastada cai na
     // ordem antiga, por prazo. Sem `nullsFirst: false` as não-arrastadas
     // subiriam para o topo e a ordem escolhida na mão se perderia.
