@@ -412,9 +412,23 @@ export async function runChatbot(
     }
     if (k === "transfer") {
       await sendMerged(n.data?.content);
+      // Setor com um responsável só: cai direto atribuído pra essa pessoa
+      // (status "open", como se ela tivesse assumido na mão) em vez de
+      // só marcar o departamento e deixar em "Sem responsável" esperando
+      // alguém ir procurar na fila.
+      let dono: string | null = null;
+      if (n.data?.departmentId) {
+        const { data: dep } = await db
+          .from("departments")
+          .select("default_assignee_id")
+          .eq("id", n.data.departmentId)
+          .maybeSingle();
+        dono = dep?.default_assignee_id ?? null;
+      }
       await db.from("conversations").update({
-        status: "queued",
+        status: dono ? "open" : "queued",
         ...(n.data?.departmentId ? { department_id: n.data.departmentId } : {}),
+        ...(dono ? { assigned_user_id: dono, ai_enabled: false } : {}),
       }).eq("id", conv.id);
       await clearState(db, conv.id);
       return "queued";
