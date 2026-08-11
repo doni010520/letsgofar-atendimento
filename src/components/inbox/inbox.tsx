@@ -745,6 +745,10 @@ export function Inbox({
       if (r && "ok" in r && !r.ok) {
         setConversations((prev) => prev.map((c) => (c.id === selectedId ? (antes ?? c) : c)));
         toast(r.error ?? "Não foi possível atribuir.", "error");
+      } else {
+        // Confirmação explícita — sem isto a tela mudava (ou nem mudava, se o
+        // pai ainda não tinha revalidado) sem nenhum aviso de que funcionou.
+        toast("Atendimento atribuído a você.", "success");
       }
     });
   }

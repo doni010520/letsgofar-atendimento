@@ -182,9 +182,19 @@ export function ChatThread({
                   </button>
                 )
               )}
-              <button onClick={onAssign} title="Atribuir este atendimento a mim" className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
-                <UserCheck size={12} /> Atribuir
-              </button>
+              {/* Sem isto, depois de atribuir com sucesso a tela ficava exatamente
+                  igual — nenhum retorno visual — e quem clicou não tinha como saber
+                  que funcionou (chegou a acontecer 14 cliques seguidos na mesma
+                  conversa, todos bem-sucedidos no servidor, achando que tinha falhado). */}
+              {currentUserId && conversation.assigned_user_id === currentUserId ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
+                  <UserCheck size={12} /> Atribuído a você
+                </span>
+              ) : (
+                <button onClick={onAssign} title="Atribuir este atendimento a mim" className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
+                  <UserCheck size={12} /> Atribuir
+                </button>
+              )}
               <button onClick={onTransfer} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
                 <ArrowRightLeft size={12} /> Transferir
               </button>
