@@ -605,7 +605,12 @@ export async function persistInbound(messages: InboundMessage[]) {
           void logEvent("error", "chatbot", `Falha no chatbot: ${(e as Error)?.message ?? e}`, { conversationId }, org);
           return null;
         });
-        if (r === "queued") await db.from("conversations").update({ status: "queued" }).eq("id", conversationId);
+        // Só força "queued" se ninguém já decidiu outra coisa: o nó de
+        // transferência (chatbot.ts) pode ter atribuído a conversa direto a
+        // um responsável (status "open") — sem o `.eq("status","bot")` esse
+        // update genérico sobrescrevia isso de volta pra "queued" sempre,
+        // mesmo já tendo dono certo.
+        if (r === "queued") await db.from("conversations").update({ status: "queued" }).eq("id", conversationId).eq("status", "bot");
       });
     }
   }
