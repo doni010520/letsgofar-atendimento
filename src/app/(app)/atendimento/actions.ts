@@ -1316,9 +1316,23 @@ export async function transferConversation(conversationId: string, opts: Transfe
     update.assigned_user_id = opts.toUserId;
     update.status = "open";
   } else if (opts.toDepartmentId) {
-    // Volta para a fila do departamento, sem atendente específico.
-    update.assigned_user_id = null;
-    update.status = "queued";
+    // Setor com um responsável só: cai direto atribuído a essa pessoa, igual
+    // já acontece na transferência automática do bot — sem isto a conversa
+    // ficava em "Sem responsável" sem avisar ninguém, e só chegava a quem
+    // devia se essa pessoa fosse checar a fila por conta própria (caso real:
+    // 10 minutos "sumida" entre a Luana transferir e a Iasmim achar sozinha).
+    const { data: dep } = await supabase
+      .from("departments")
+      .select("default_assignee_id")
+      .eq("id", opts.toDepartmentId)
+      .maybeSingle();
+    if (dep?.default_assignee_id) {
+      update.assigned_user_id = dep.default_assignee_id;
+      update.status = "open";
+    } else {
+      update.assigned_user_id = null;
+      update.status = "queued";
+    }
   }
   if (Object.keys(update).length) {
     await supabase.from("conversations").update(update).eq("id", conversationId);
