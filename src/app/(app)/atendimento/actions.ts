@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
-import { withAgentPrefix, isAgentPrefixEnabled } from "@/lib/agent-prefix";
 import { validateResolution, type RequiredAttribute } from "@/lib/required-attributes";
 import { getProvider } from "@/lib/whatsapp";
 import { getMessages, getConversations } from "@/lib/data/conversations";
@@ -339,12 +338,7 @@ export async function sendMessage(
     replyExcerpt = q?.body ?? (q?.content_type && q.content_type !== "text" ? `[${q.content_type}]` : null);
   }
 
-  // Prefixo "**Nome:**" quando a organização usa essa opção (B8).
-  const prefixed = withAgentPrefix({
-    content: body,
-    agentName: session.profile?.name,
-    enabled: isAgentPrefixEnabled(session.organization.settings),
-  });
+  const prefixed = body;
 
   const { data: msg } = await supabase
     .from("messages")
