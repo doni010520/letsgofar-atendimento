@@ -6,28 +6,10 @@ import { rehostImageUrl } from "./avatar";
 import { runChatbot } from "./chatbot";
 import { getProvider } from "./index";
 import { logEvent } from "@/lib/log";
+import { variantesTelefone } from "@/lib/phone";
 
 // Cache de participantes por grupo (5 min) para resolver menções sem bater toda hora.
 const groupPartsCache = new Map<string, { at: number; parts: { phone: string; lid: string }[] }>();
-
-/**
- * O mesmo celular brasileiro escrito das duas formas: com e sem o 9º dígito.
- *
- * O WhatsApp entrega ora um, ora outro, para a MESMA pessoa. Sem comparar as
- * duas formas, o contato é criado de novo e o histórico se parte em dois.
- */
-export function variantesTelefone(telefone: string): string[] {
-  const d = String(telefone ?? "").replace(/\D/g, "");
-  if (!d) return [];
-  const v = new Set([d]);
-  const m = d.match(/^55(\d{2})(\d{8,9})$/);
-  if (m) {
-    const [, ddd, resto] = m;
-    if (resto.length === 9 && resto.startsWith("9")) v.add(`55${ddd}${resto.slice(1)}`);
-    if (resto.length === 8) v.add(`55${ddd}9${resto}`);
-  }
-  return [...v];
-}
 
 // Mutex por conversa: serializa os turnos do bot DENTRO do processo. Sem isto,
 // mensagens do cliente em sequência ("Sim" → "internet lenta" → CPF) que escapam

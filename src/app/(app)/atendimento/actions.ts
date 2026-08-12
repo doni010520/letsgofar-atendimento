@@ -8,6 +8,7 @@ import { validateResolution, type RequiredAttribute } from "@/lib/required-attri
 import { getProvider } from "@/lib/whatsapp";
 import { getMessages, getConversations } from "@/lib/data/conversations";
 import { logEvent } from "@/lib/log";
+import { normalizarTelefoneBR, variantesTelefone } from "@/lib/phone";
 import type { Channel, ContentType, InternalMention } from "@/lib/types";
 
 const isPreview = () => !process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,16 +54,40 @@ export async function openDirectConversation(
     digits = (parts ?? []).find((p) => p.lid === lidDigits)?.phone ?? "";
   }
   if (!digits) return { id: null };
+  // Sem o "55" na frente, o número digitado à mão (formato local, como
+  // qualquer brasileiro digita) nunca bate com o que o WhatsApp manda de
+  // verdade na resposta ("553189056632") — criava um contato órfão que
+  // nenhuma resposta futura conseguia achar. Caso real: Luana + Matheus Mello.
+  digits = normalizarTelefoneBR(digits);
   const name = opts.name;
 
-  const { data: contact } = await supabase
+  // Antes de criar, procura por QUALQUER variante do número (com/sem o 9º
+  // dígito) — sem isto, dois atendentes (ou o mesmo, duas vezes) que digitam
+  // o número em formatos diferentes criam contatos duplicados.
+  const variantes = variantesTelefone(digits);
+  const { data: achado } = await supabase
     .from("contacts")
-    .upsert(
-      { organization_id: session.organization.id, phone: digits, name: name ?? null, is_group: false },
-      { onConflict: "organization_id,phone", ignoreDuplicates: false },
-    )
     .select("id")
-    .single();
+    .eq("organization_id", session.organization.id)
+    .in("phone", variantes)
+    .limit(1)
+    .maybeSingle();
+
+  const { data: contact } = achado
+    ? await supabase
+        .from("contacts")
+        .update(name ? { name } : {})
+        .eq("id", achado.id)
+        .select("id")
+        .single()
+    : await supabase
+        .from("contacts")
+        .upsert(
+          { organization_id: session.organization.id, phone: digits, name: name ?? null, is_group: false },
+          { onConflict: "organization_id,phone", ignoreDuplicates: false },
+        )
+        .select("id")
+        .single();
   if (!contact) return { id: null };
 
   const { data: existing } = await supabase
@@ -117,12 +142,14 @@ export async function resolveDirectContact(
     digits = (parts ?? []).find((p) => p.lid === lidDigits)?.phone ?? "";
   }
   if (!digits) return { phone: null, name: null, existingId: null };
+  digits = normalizarTelefoneBR(digits);
 
   const { data: contact } = await supabase
     .from("contacts")
     .select("id, name")
     .eq("organization_id", session.organization.id)
-    .eq("phone", digits)
+    .in("phone", variantesTelefone(digits))
+    .limit(1)
     .maybeSingle();
 
   let existingId: string | null = null;
