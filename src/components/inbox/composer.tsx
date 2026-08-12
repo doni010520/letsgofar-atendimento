@@ -571,8 +571,9 @@ export function Composer({
               pickMention(filtered[0]);
               return;
             }
-            if (e.key === "Enter" && (e.ctrlKey || e.shiftKey)) return;
-            if (e.key === "Enter") {
+            // Enter sozinho quebra linha (comportamento padrão do textarea,
+            // por isso não faz nada aqui). Ctrl+Enter envia.
+            if (e.key === "Enter" && e.ctrlKey) {
               e.preventDefault();
               submit();
             }
