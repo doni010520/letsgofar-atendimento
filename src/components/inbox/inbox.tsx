@@ -1061,7 +1061,7 @@ export function Inbox({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-ink-soft">Telefone (com DDI+DDD, só números)</label>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">Telefone (com código do país)</label>
                 <input
                   value={ncPhone}
                   onChange={(e) => setNcPhone(e.target.value)}
@@ -1069,6 +1069,16 @@ export function Inbox({
                   inputMode="numeric"
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
+                {/* Sem completar sozinho o "55" de um número sem código de país
+                    já causou entrega falhando sempre pra quem foi cadastrado
+                    assim (número digitado sem o 55 nunca bate com o que o
+                    WhatsApp manda de verdade). Só completa quando são 10-11
+                    dígitos — por isso o aviso pra sempre incluir o código de
+                    quem é de fora, senão o sistema entende como Brasil. */}
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  Brasil: DDD + número, com ou sem o 55 (completa sozinho) — ex.: 73999998888.
+                  De outro país: sempre com o código do país na frente — ex.: 1212… (EUA), 351934… (Portugal).
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">Nome (opcional)</label>

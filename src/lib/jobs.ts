@@ -16,6 +16,7 @@ import {
   isWithinWindow,
   secondsUntilWindow,
   phoneVariants,
+  normalizePhone,
 } from "@/lib/broadcast";
 import { runHousekeeping } from "@/lib/housekeeping";
 import { logEvent } from "@/lib/log";
@@ -47,9 +48,14 @@ async function resolveContact(
     .maybeSingle();
   if (found?.id) return found.id;
 
+  // Sem isto, um número digitado sem o "55" (planilha de disparo, agendamento
+  // pra alguém que ainda não é contato) criava um contato novo já quebrado —
+  // toda mensagem pra essa pessoa falhava, sempre, sem ninguém perceber
+  // (caso real: 15 contatos assim achados numa varredura).
+  const phoneNormalizado = normalizePhone(phone) ?? phone;
   const { data: created } = await db
     .from("contacts")
-    .insert({ organization_id: org, phone, name: name || phone })
+    .insert({ organization_id: org, phone: phoneNormalizado, name: name || phoneNormalizado })
     .select("id")
     .single();
   return created?.id ?? null;
