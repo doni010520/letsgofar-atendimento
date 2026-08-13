@@ -51,6 +51,7 @@ export function KanbanBoard({
   userId = null,
   hideAi = false,
   isAdmin = false,
+  identifyAgentEnabled = false,
 }: {
   conversations: ConversationOverview[];
   tagMap: Record<string, string[]>;
@@ -63,6 +64,7 @@ export function KanbanBoard({
   userId?: string | null;
   hideAi?: boolean;
   isAdmin?: boolean;
+  identifyAgentEnabled?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"board" | "closed" | "analytics">("board");
@@ -246,6 +248,7 @@ export function KanbanBoard({
           userId={userId}
           hideAi={hideAi}
           isAdmin={isAdmin}
+          identifyAgentEnabled={identifyAgentEnabled}
           onClose={() => setOpenConv(null)}
           onChanged={() => router.refresh()}
         />

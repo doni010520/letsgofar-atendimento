@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { X, UserCheck, ArrowRightLeft, CheckCircle2, Hash, Clock, PanelRight, RotateCcw } from "lucide-react";
+import { X, UserCheck, ArrowRightLeft, CheckCircle2, Hash, Clock, PanelRight, RotateCcw, Signature } from "lucide-react";
 import { ChatThread } from "./chat-thread";
 import { AttendancePanel } from "./attendance-panel";
 import { CloseModal, TransferModal } from "./attendance-modals";
@@ -23,6 +23,7 @@ import {
   transferConversation,
   toggleMute,
   setConversationAi,
+  toggleIdentifyAgent,
 } from "@/app/(app)/atendimento/actions";
 import type { ConversationOverview, Message, Tag, Profile, Department } from "@/lib/types";
 
@@ -54,6 +55,7 @@ export function AttendanceChatModal({
   userId,
   hideAi = false,
   isAdmin = false,
+  identifyAgentEnabled: identifyAgentEnabledInitial = false,
   onClose,
   onChanged,
 }: {
@@ -66,6 +68,7 @@ export function AttendanceChatModal({
   userId: string | null;
   hideAi?: boolean;
   isAdmin?: boolean;
+  identifyAgentEnabled?: boolean;
   onClose: () => void;
   /** Chamado quando algo muda (assumir/encerrar/transferir) para o Kanban recarregar. */
   onChanged?: () => void;
@@ -75,6 +78,9 @@ export function AttendanceChatModal({
   const [conv, setConv] = useState<ConversationOverview>(conversation);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isPending, startTransition] = useTransition();
+  // Vale pra organização inteira, não só esta conversa — por isso é estado
+  // próprio, fora do objeto `conv`.
+  const [identifyAgentEnabled, setIdentifyAgentEnabled] = useState(identifyAgentEnabledInitial);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [closing, setClosing] = useState(false);
@@ -309,6 +315,20 @@ export function AttendanceChatModal({
     });
   }
 
+  function handleToggleIdentifyAgent() {
+    const next = !identifyAgentEnabled;
+    setIdentifyAgentEnabled(next);
+    startTransition(async () => {
+      const r = await toggleIdentifyAgent(next).catch(() => ({ enabled: !next, error: "Não foi possível salvar." }));
+      if ("error" in r && r.error) {
+        setIdentifyAgentEnabled(!next);
+        toast(r.error, "error");
+      } else {
+        toast(next ? "Assinatura ativada — vale para toda a equipe." : "Assinatura desativada — vale para toda a equipe.");
+      }
+    });
+  }
+
   const protocol = conv.protocol;
 
   return (
@@ -355,6 +375,19 @@ export function AttendanceChatModal({
                 <RotateCcw size={14} /> Reabrir
               </button>
             )}
+            <button
+              onClick={handleToggleIdentifyAgent}
+              title={
+                identifyAgentEnabled
+                  ? 'Desligar: mensagens deixam de sair com "*Seu nome:*" na frente (vale pra toda a equipe)'
+                  : 'Ligar: mensagens passam a sair com "*Seu nome:*" na frente, pro cliente saber quem fala (vale pra toda a equipe)'
+              }
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium shadow-sm ${
+                identifyAgentEnabled ? "bg-violet-100 text-violet-700 hover:bg-violet-200" : "bg-surface text-ink hover:bg-gray-100"
+              }`}
+            >
+              <Signature size={14} /> {identifyAgentEnabled ? "Assinatura ativa" : "Assinatura"}
+            </button>
             <button onClick={() => setShowPanelMobile(true)} title="Dados do contato" className="rounded-md p-1.5 text-ink-soft hover:bg-gray-100 hover:text-ink lg:hidden">
               <PanelRight size={18} />
             </button>

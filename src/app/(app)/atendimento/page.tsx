@@ -32,9 +32,11 @@ export default async function AtendimentoPage({
   let userId: string | null = null;
   let hideAi = false;
   let isAdmin = false;
+  let identifyAgentEnabled = false;
   if (!PREVIEW_MODE) {
     const session = await getSession();
     userId = session?.userId ?? null;
+    identifyAgentEnabled = (session?.organization?.settings as Record<string, unknown> | undefined)?.identify_agent === true;
     if (userId) {
       const sb = await createClient();
       const { data: me } = await sb
@@ -57,6 +59,7 @@ export default async function AtendimentoPage({
       userId={userId}
       hideAi={hideAi}
       isAdmin={isAdmin}
+      identifyAgentEnabled={identifyAgentEnabled}
       tags={tags}
       agents={agents}
       departments={departments}

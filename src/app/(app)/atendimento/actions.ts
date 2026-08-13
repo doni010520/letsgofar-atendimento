@@ -1278,6 +1278,43 @@ export async function setConversationAi(conversationId: string, enabled: boolean
   return { enabled };
 }
 
+/**
+ * Liga/desliga o prefixo "*Nome:*" nas mensagens de saída — vale pra toda a
+ * organização (é `settings.identify_agent`, o mesmo campo que a tela de
+ * Ajustes → Configurações usa). Fica também aqui, direto na conversa, pra
+ * não precisar navegar até lá pra mudar algo que a equipe inteira sente.
+ */
+export async function toggleIdentifyAgent(enabled: boolean) {
+  if (isPreview()) return { enabled };
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const supabase = await createClient();
+
+  // Lê fresco do banco antes de mesclar — `session.organization.settings`
+  // pode estar em cache da sessão e sobrescrever de volta qualquer mudança
+  // feita depois do login (foi o que aconteceu no teste: gravava, mas a
+  // leitura seguinte devolvia o valor antigo).
+  const { data: atual } = await supabase.from("organizations").select("settings").eq("id", session.organization.id).single();
+  const settings = { ...((atual?.settings as Record<string, unknown>) ?? {}), identify_agent: enabled };
+  const { data: linha, error } = await supabase
+    .from("organizations")
+    .update({ settings })
+    .eq("id", session.organization.id)
+    .select("id")
+    .maybeSingle();
+  if (error || !linha) return { enabled: !enabled, error: "Não foi possível salvar." };
+
+  void logEvent(
+    "info",
+    "atendente",
+    `${session.profile?.name ?? "Atendente"} ${enabled ? "ativou" : "desativou"} a identificação do atendente nas mensagens`,
+    { action: "identificar_atendente", userId: session.userId },
+    session.organization.id,
+  );
+  revalidatePath("/atendimento");
+  return { enabled };
+}
+
 /** Silencia/dessilencia uma conversa (grupo ou contato). */
 export async function toggleMute(conversationId: string, muted: boolean) {
   if (isPreview()) return { muted };

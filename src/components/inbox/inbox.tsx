@@ -73,6 +73,7 @@ import {
   transferConversation,
   toggleMute,
   setConversationAi,
+  toggleIdentifyAgent,
   fetchMessages,
   fetchConversations,
   fetchChannelStatuses,
@@ -94,6 +95,7 @@ export function Inbox({
   userId,
   hideAi = false,
   isAdmin = false,
+  identifyAgentEnabled: identifyAgentEnabledInitial = false,
   tags,
   agents,
   departments,
@@ -108,6 +110,7 @@ export function Inbox({
   userId: string | null;
   hideAi?: boolean;
   isAdmin?: boolean;
+  identifyAgentEnabled?: boolean;
   tags: Tag[];
   agents: Profile[];
   departments: Department[];
@@ -139,6 +142,9 @@ export function Inbox({
     initialSelectedId ? { [initialSelectedId]: initialMessages } : {},
   );
   const [isPending, startTransition] = useTransition();
+  // Vale pra organização inteira, não só a conversa aberta — por isso não vive
+  // no objeto `conversation` como os outros toggles (mudo, IA etc.).
+  const [identifyAgentEnabled, setIdentifyAgentEnabled] = useState(identifyAgentEnabledInitial);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   // Conversa-rascunho transitória (ao clicar num participante): só persiste ao digitar/enviar.
@@ -868,6 +874,20 @@ export function Inbox({
     });
   }
 
+  function handleToggleIdentifyAgent() {
+    const next = !identifyAgentEnabled;
+    setIdentifyAgentEnabled(next);
+    startTransition(async () => {
+      const r = await toggleIdentifyAgent(next).catch(() => ({ enabled: !next, error: "Não foi possível salvar." }));
+      if ("error" in r && r.error) {
+        setIdentifyAgentEnabled(!next);
+        toast(r.error, "error");
+      } else {
+        toast(next ? 'Assinatura ativada — vale para toda a equipe.' : "Assinatura desativada — vale para toda a equipe.");
+      }
+    });
+  }
+
   // Atalho da lista: pausa a IA de uma conversa sem precisar abri-la.
   function handlePauseAiQuick(id: string) {
     if (id === DRAFT_ID) return;
@@ -938,6 +958,8 @@ export function Inbox({
           currentUserId={userId}
           hideAi={hideAi}
           isAdmin={isAdmin}
+          identifyAgentEnabled={identifyAgentEnabled}
+          onToggleIdentifyAgent={handleToggleIdentifyAgent}
           onSendFile={handleSendFile}
           onSendLocation={handleSendLocation}
           onSendContact={handleSendContact}

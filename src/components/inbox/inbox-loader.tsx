@@ -14,6 +14,7 @@ export function InboxLoader(props: {
   userId: string | null;
   hideAi?: boolean;
   isAdmin?: boolean;
+  identifyAgentEnabled?: boolean;
   tags: Tag[];
   agents: Profile[];
   departments: Department[];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote, Eye, EyeOff, RotateCcw, Signature } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
 import type { ConversationOverview, Message } from "@/lib/types";
@@ -36,6 +36,8 @@ export function ChatThread({
   onAddNote,
   onToggleMute,
   onToggleAi,
+  identifyAgentEnabled = false,
+  onToggleIdentifyAgent,
   initialReplyTo,
   onType,
   quickReplies,
@@ -74,6 +76,9 @@ export function ChatThread({
   onAddNote?: () => void;
   onToggleMute: () => void;
   onToggleAi: () => void;
+  /** Liga/desliga o prefixo "*Nome:*" nas mensagens — vale pra organização inteira, não só esta conversa. */
+  identifyAgentEnabled?: boolean;
+  onToggleIdentifyAgent?: () => void;
   initialReplyTo?: Message | null;
   pending?: boolean;
 }) {
@@ -158,6 +163,21 @@ export function ChatThread({
           <button onClick={onToggleMute} title={muted ? "Reativar" : "Silenciar"} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-ink hover:bg-gray-200">
             {muted ? <BellOff size={12} /> : <Bell size={12} />} {muted ? "Silenciado" : "Silenciar"}
           </button>
+          {onToggleIdentifyAgent && (
+            <button
+              onClick={onToggleIdentifyAgent}
+              title={
+                identifyAgentEnabled
+                  ? 'Desligar: mensagens deixam de sair com "*Seu nome:*" na frente (vale pra toda a equipe)'
+                  : 'Ligar: mensagens passam a sair com "*Seu nome:*" na frente, pro cliente saber quem fala (vale pra toda a equipe)'
+              }
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ${
+                identifyAgentEnabled ? "bg-violet-100 text-violet-700 hover:bg-violet-200" : "bg-gray-100 text-ink hover:bg-gray-200"
+              }`}
+            >
+              <Signature size={12} /> {identifyAgentEnabled ? "Assinatura ativa" : "Assinatura"}
+            </button>
+          )}
           {internalCount > 0 && (
             <button
               onClick={() => setShowInternal((v) => !v)}
