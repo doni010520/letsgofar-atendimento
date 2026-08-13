@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
 import type { ContractRow, TemplateRow } from "@/app/(app)/contratos/page";
 import { createContract, sendContract, cancelContract, createTemplate } from "@/app/(app)/contratos/actions";
@@ -26,6 +26,32 @@ const FILTERS = [
 type Signer = { name: string; email: string; document: string; phone: string };
 type CampoNovo = { key: string; label: string; type: string };
 
+/**
+ * Rascunho do contrato que está sendo criado, salvo no navegador.
+ *
+ * Preencher um contrato tem campo que só está em outro lugar (data de
+ * nascimento, número de parcelas...) — quem preenche precisa sair da tela
+ * pra buscar, e sem isto voltava com o formulário inteiro vazio, tinha que
+ * digitar tudo de novo. Como não é dado sensível de cliente (só o que a
+ * própria pessoa está digitando, ainda não salvo), localStorage resolve sem
+ * precisar de tabela nova no banco.
+ */
+type Rascunho = {
+  title: string;
+  modeloId: string;
+  contentHtml: string;
+  planStart: string;
+  planEnd: string;
+  vars: Record<string, string>;
+  signers: Signer[];
+};
+
+const RASCUNHO_KEY = "lgf_contrato_rascunho";
+const SIGNER_VAZIO: Signer = { name: "", email: "", document: "", phone: "" };
+const rascunhoVazio = (): Rascunho => ({
+  title: "", modeloId: "", contentHtml: "", planStart: "", planEnd: "", vars: {}, signers: [{ ...SIGNER_VAZIO }],
+});
+
 const TIPOS_CAMPO = [
   { value: "text", label: "Texto" },
   { value: "date", label: "Data" },
@@ -45,11 +71,45 @@ export function ContractsClient({
   const [tab, setTab] = useState<"contracts" | "templates">("contracts");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [creating, setCreating] = useState(false);
-  const [modeloId, setModeloId] = useState("");
-  const [signers, setSigners] = useState<Signer[]>([{ name: "", email: "", document: "", phone: "" }]);
+  const [rascunho, setRascunho] = useState<Rascunho>(rascunhoVazio);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [camposNovoModelo, setCamposNovoModelo] = useState<CampoNovo[]>([]);
+
+  // Restaura o rascunho salvo (se existir) assim que a tela abre — antes
+  // disso o usuário via a lista, não o formulário, mesmo com um rascunho
+  // esperando.
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem(RASCUNHO_KEY);
+      if (!salvo) return;
+      const r = JSON.parse(salvo) as Rascunho;
+      setRascunho(r);
+      setCreating(true);
+    } catch {
+      /* rascunho corrompido — ignora e segue com um em branco */
+    }
+  }, []);
+
+  // Salva a cada mudança, só enquanto o formulário está aberto.
+  useEffect(() => {
+    if (!creating) return;
+    try {
+      localStorage.setItem(RASCUNHO_KEY, JSON.stringify(rascunho));
+    } catch {
+      /* localStorage cheio/bloqueado — pior caso é voltar ao comportamento antigo */
+    }
+  }, [rascunho, creating]);
+
+  function limparRascunho() {
+    localStorage.removeItem(RASCUNHO_KEY);
+    setRascunho(rascunhoVazio());
+    setCreating(false);
+  }
+
+  const modeloId = rascunho.modeloId;
+  const signers = rascunho.signers;
+  const setSigners = (fn: (s: Signer[]) => Signer[]) => setRascunho((r) => ({ ...r, signers: fn(r.signers) }));
 
   const visible = useMemo(
     () => (filter === "all" ? contracts : contracts.filter((c) => c.status === filter)),
@@ -74,8 +134,7 @@ export function ContractsClient({
     });
     try {
       await createContract(fd);
-      setCreating(false);
-      setSigners([{ name: "", email: "", document: "", phone: "" }]);
+      limparRascunho();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar o contrato.");
     }
@@ -88,7 +147,8 @@ export function ContractsClient({
           <h3 className="text-sm font-semibold text-ink">Contrato</h3>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink">Título</label>
-            <input name="title" placeholder="Ex.: Contrato de prestação de serviços"
+            <input name="title" placeholder="Ex.: Contrato de prestação de serviços" value={rascunho.title}
+              onChange={(e) => setRascunho((r) => ({ ...r, title: e.target.value }))}
               className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm" />
           </div>
           <div>
@@ -96,7 +156,7 @@ export function ContractsClient({
             <select
               name="template_id"
               value={modeloId}
-              onChange={(e) => setModeloId(e.target.value)}
+              onChange={(e) => setRascunho((r) => ({ ...r, modeloId: e.target.value }))}
               className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm"
             >
               <option value="">Sem modelo (escrever abaixo)</option>
@@ -106,18 +166,23 @@ export function ContractsClient({
           {!modeloId && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-ink">Conteúdo (se não usar modelo)</label>
-              <textarea name="content_html" rows={6} placeholder="<p>Texto do contrato…</p>"
+              <textarea name="content_html" rows={6} placeholder="<p>Texto do contrato…</p>" value={rascunho.contentHtml}
+                onChange={(e) => setRascunho((r) => ({ ...r, contentHtml: e.target.value }))}
                 className="w-full resize-y rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-xs" />
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Início do plano</label>
-              <input name="plan_start_date" type="date" className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+              <input name="plan_start_date" type="date" value={rascunho.planStart}
+                onChange={(e) => setRascunho((r) => ({ ...r, planStart: e.target.value }))}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Fim do plano</label>
-              <input name="plan_end_date" type="date" className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+              <input name="plan_end_date" type="date" value={rascunho.planEnd}
+                onChange={(e) => setRascunho((r) => ({ ...r, planEnd: e.target.value }))}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             </div>
           </div>
         </Card>
@@ -142,6 +207,8 @@ export function ContractsClient({
                     type={c.type === "date" ? "date" : c.type === "email" ? "email" : c.type === "tel" ? "tel" : "text"}
                     inputMode={c.type === "number" || c.type === "currency" ? "decimal" : undefined}
                     placeholder={c.type === "currency" ? "0,00" : undefined}
+                    value={rascunho.vars[c.key] ?? ""}
+                    onChange={(e) => setRascunho((r) => ({ ...r, vars: { ...r.vars, [c.key]: e.target.value } }))}
                     className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                   />
                 </div>
@@ -154,7 +221,7 @@ export function ContractsClient({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Signatários</h3>
             <Button type="button" variant="ghost"
-              onClick={() => setSigners((s) => [...s, { name: "", email: "", document: "", phone: "" }])}>
+              onClick={() => setSigners((s) => [...s, { ...SIGNER_VAZIO }])}>
               + Adicionar
             </Button>
           </div>
@@ -181,7 +248,7 @@ export function ContractsClient({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => setCreating(false)}>Cancelar</Button>
+          <Button type="button" variant="ghost" onClick={limparRascunho}>Cancelar</Button>
           <Button type="submit" disabled={pending}>{pending ? "Salvando..." : "Criar contrato"}</Button>
         </div>
       </form>
