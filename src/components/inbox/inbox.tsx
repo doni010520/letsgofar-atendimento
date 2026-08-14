@@ -40,10 +40,10 @@ function comTeto<T>(promessa: Promise<T>, ms: number): Promise<T> {
  * prendia o `isPending` pra sempre — e o usuário via isso como "o botão de
  * enviar girando eternamente", mesmo sem ter apertado enviar.
  */
-function startTransitionComTeto(startTransition: (fn: () => void | Promise<void>) => void, fn: () => Promise<void>) {
+function startTransitionComTeto(startTransition: (fn: () => void | Promise<void>) => void, fn: () => Promise<void>, ms = 35000) {
   startTransition(async () => {
     try {
-      await comTeto(fn(), 35000);
+      await comTeto(fn(), ms);
     } catch (e) {
       if (e instanceof Error && e.message === "SEM_RESPOSTA") {
         toast("Sem resposta do servidor — confira antes de tentar de novo.", "error");
@@ -701,11 +701,16 @@ export function Inbox({
     const convId = selectedId;
     // Legenda vinda do modal de preview (propriedade custom no File).
     const caption = (file as File & { caption?: string }).caption;
-    // Sem teto no cliente: a rota confere o tamanho recebido contra o
-    // declarado e recusa transferência incompleta, então arquivo grande falha
-    // com aviso em vez de chegar cortado. O WhatsApp tem os limites dele
-    // (vídeo ~16 MB, documento ~100 MB) e recusa o que passar.
-    startTransition(async () => {
+    // O upload em si já tem o próprio teto (AbortSignal 90s, logo abaixo).
+    // Mas o botão de gravar/enviar fica preso no MESMO isPending até a
+    // função toda terminar — inclusive o fetchMessages() de recarregar a
+    // tela DEPOIS do upload já ter dado certo. Sem este teto aqui, uma
+    // trava nesse recarregamento (áudio já enviado, mas a tela não volta a
+    // liberar o microfone) obrigava a sair e voltar da conversa pra
+    // destravar — era exatamente a queixa "o botão de gravar fica cinza
+    // mesmo o áudio já tendo sido enviado". 95s: um pouco acima do teto do
+    // upload, pra deixar o aviso mais específico dele aparecer primeiro.
+    startTransitionComTeto(startTransition, async () => {
       // Arquivo cru no corpo e dados na URL: multipart quebrava ao ser lido no
       // servidor ("Failed to parse body as FormData"). Ver a rota.
       try {
@@ -754,7 +759,7 @@ export function Inbox({
         const updated = { ...prev[idx], last_message_body: cap || mediaPreview, last_message_at: new Date().toISOString(), last_message_direction: "out" as const };
         return [updated, ...prev.filter((_, i) => i !== idx)];
       });
-    });
+    }, 95000);
   }
 
   function handleAssign() {
