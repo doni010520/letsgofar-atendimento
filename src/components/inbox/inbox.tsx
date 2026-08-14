@@ -31,6 +31,27 @@ function comTeto<T>(promessa: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/**
+ * Mesma ideia do `comTeto` acima, mas para o `startTransition` inteiro — não
+ * só o envio de mensagem. O botão de enviar mostra o MESMO `isPending`
+ * (compartilhado, único `useTransition` do componente) que qualquer outra
+ * ação: atribuir, transferir, reagir, editar, encerrar, enviar modelo etc.
+ * Sem este teto aqui também, uma dessas ações travando numa rede ruim
+ * prendia o `isPending` pra sempre — e o usuário via isso como "o botão de
+ * enviar girando eternamente", mesmo sem ter apertado enviar.
+ */
+function startTransitionComTeto(startTransition: (fn: () => void | Promise<void>) => void, fn: () => Promise<void>) {
+  startTransition(async () => {
+    try {
+      await comTeto(fn(), 35000);
+    } catch (e) {
+      if (e instanceof Error && e.message === "SEM_RESPOSTA") {
+        toast("Sem resposta do servidor — confira antes de tentar de novo.", "error");
+      }
+    }
+  });
+}
+
 /** Toca um bip curto de notificação via Web Audio (sem precisar de arquivo). */
 let audioCtx: AudioContext | null = null;
 function playPing() {
@@ -371,7 +392,7 @@ export function Inbox({
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        startTransition(async () => {
+        startTransitionComTeto(startTransition, async () => {
           await sendLocationMessage(convId, { latitude: pos.coords.latitude, longitude: pos.coords.longitude });
           await refetch(convId);
         });
@@ -387,7 +408,7 @@ export function Inbox({
     if (!name) return;
     const phone = window.prompt("Telefone (com DDI+DDD, só números):");
     if (!phone) return;
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await sendContactMessage(convId, name, phone);
       await refetch(convId);
     });
@@ -411,7 +432,7 @@ export function Inbox({
   }
 
   function startDirect(grp: ConversationOverview, opts: { phone?: string; lid?: string; name?: string }) {
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       const r = await resolveDirectContact(grp.channel_id, {
         ...opts,
         groupJid: grp.contact_jid ?? undefined,
@@ -469,7 +490,7 @@ export function Inbox({
 
   function handleDraftType() {
     if (selectedId === DRAFT_ID && !draftRealId) {
-      startTransition(async () => {
+      startTransitionComTeto(startTransition, async () => {
         await materializeDraft();
       });
     }
@@ -478,7 +499,7 @@ export function Inbox({
   function handleReact(m: Message, emoji: string) {
     if (!selectedId) return;
     const convId = selectedId;
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await reactToMessage(convId, m.id, emoji);
       const msgs = await fetchMessages(convId);
       setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
@@ -494,7 +515,7 @@ export function Inbox({
     const convId = selectedId;
     const { id, text } = editing;
     setEditing(null);
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await editMessageAction(convId, id, text);
       const msgs = await fetchMessages(convId);
       setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
@@ -512,7 +533,7 @@ export function Inbox({
     setDeleteTarget(null);
     if (!m || !selectedId) return;
     const convId = selectedId;
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await deleteMessageAction(convId, m.id, scope);
       const msgs = await fetchMessages(convId);
       setMessagesByConv((prev) => ({ ...prev, [convId]: msgs }));
@@ -536,7 +557,7 @@ export function Inbox({
 
     // Rascunho: cria a conversa de verdade agora e envia nela.
     if (selectedId === DRAFT_ID) {
-      startTransition(async () => {
+      startTransitionComTeto(startTransition, async () => {
         const realId = await materializeDraft();
         if (!realId) return;
         await sendMessage(realId, finalText, finalReplyId, mentions);
@@ -666,7 +687,7 @@ export function Inbox({
   function handleSendTemplate(name: string, language: string, params: string[]) {
     if (!selectedId || selectedId === DRAFT_ID) return;
     const convId = selectedId;
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       const r = await sendTemplateMessage(convId, name, language, params);
       if (r?.ok) toast("Modelo enviado.");
       else toast(r?.error ?? "Falha ao enviar o modelo.", "error");
@@ -742,7 +763,7 @@ export function Inbox({
     setConversations((prev) =>
       prev.map((c) => (c.id === selectedId ? { ...c, status: "open", assigned_user_id: userId } : c)),
     );
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       // Confirma de verdade em vez de "atire e esqueça": sem isto, uma falha
       // silenciosa fazia a otimista aparecer por um instante e sumir sozinha
       // no próximo ciclo de 2,5s — dava a sensação exata de "tentei e não
@@ -768,7 +789,7 @@ export function Inbox({
     if (!selectedId) return;
     const id = selectedId;
     setClosing(false);
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       const res = await closeConversation(id, opts);
       if (res && "ok" in res && res.ok === false) {
         // Bloqueado por campos obrigatórios: nada de marcar como encerrada.
@@ -803,7 +824,7 @@ export function Inbox({
     const phone = ncPhone.replace(/\D/g, "");
     if (!ncChannel || !phone) return;
     setNewConvOpen(false);
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       const { id } = await openDirectConversation(ncChannel, { phone, name: ncName.trim() || undefined });
       if (!id) {
         alert("Não foi possível abrir o atendimento.");
@@ -823,7 +844,7 @@ export function Inbox({
     const text = noteText.trim();
     if (!text) return;
     setNoting(false);
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await addInternalNote(id, text);
       await refetch(id);
     });
@@ -838,7 +859,7 @@ export function Inbox({
     if (!selectedId) return;
     const id = selectedId;
     setTransferring(false);
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await transferConversation(id, opts);
       const convs = await fetchConversations();
       setConversations(convs);
@@ -852,7 +873,7 @@ export function Inbox({
     setConversations((prev) =>
       prev.map((c) => (c.id === selectedId ? { ...c, is_muted: next } : c)),
     );
-    startTransition(() => toggleMute(selectedId, next).then(() => undefined));
+    startTransitionComTeto(startTransition, () => toggleMute(selectedId, next).then(() => undefined));
   }
 
   function handleToggleAi() {
@@ -868,7 +889,7 @@ export function Inbox({
           : c,
       ),
     );
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await setConversationAi(selectedId, next);
       await refetch(selectedId);
     });
@@ -877,7 +898,7 @@ export function Inbox({
   function handleToggleIdentifyAgent() {
     const next = !identifyAgentEnabled;
     setIdentifyAgentEnabled(next);
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       const r = await toggleIdentifyAgent(next).catch(() => ({ enabled: !next, error: "Não foi possível salvar." }));
       if ("error" in r && r.error) {
         setIdentifyAgentEnabled(!next);
@@ -894,7 +915,7 @@ export function Inbox({
     setConversations((prev) =>
       prev.map((c) => (c.id === id ? { ...c, ai_enabled: false, status: "open", assigned_user_id: userId } : c)),
     );
-    startTransition(async () => {
+    startTransitionComTeto(startTransition, async () => {
       await setConversationAi(id, false);
       if (id === selectedId) await refetch(id);
     });
