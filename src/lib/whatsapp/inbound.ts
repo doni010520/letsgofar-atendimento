@@ -292,11 +292,49 @@ export async function persistInbound(messages: InboundMessage[]) {
       .limit(1)
       .maybeSingle();
 
+    // Cliente que já teve atendimento humano (conversa ENCERRADA, com
+    // responsável) e escreve de novo: retoma com o MESMO atendente, sem
+    // passar pelo bot de triagem. Sem isto, meses de histórico com um
+    // atendente reabriam do zero como se fosse a 1ª mensagem — caso real do
+    // José Vitor, que respondeu "Confesso que não me recordo quantas sessões
+    // ainda tenho" e levou o cumprimento de boas-vindas de um cliente novo.
+    const { data: reabrivel } = !existing && !fromMe && !isGroup
+      ? await db
+          .from("conversations")
+          .select("id, assigned_user_id")
+          .eq("channel_id", channel.id)
+          .eq("contact_id", contact!.id)
+          .eq("status", "closed")
+          .not("assigned_user_id", "is", null)
+          .order("closed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
+
     if (existing) {
       conversationId = existing.id;
       convStatus = existing.status;
       convBotNode = existing.bot_node_id;
       convAiEnabled = (existing as { ai_enabled?: boolean }).ai_enabled !== false;
+    } else if (reabrivel) {
+      convStatus = "open";
+      convAiEnabled = false;
+      await db
+        .from("conversations")
+        .update({
+          status: "open",
+          closed_at: null,
+          ai_enabled: false,
+          bot_automation_id: null,
+          last_message_at: new Date().toISOString(),
+        })
+        .eq("id", reabrivel.id);
+      conversationId = reabrivel.id;
+      void logEvent(
+        "info", "bot",
+        "Conversa encerrada reaberta com o atendente anterior, sem passar pelo bot de triagem",
+        { conversationId, assignedUserId: reabrivel.assigned_user_id }, org,
+      );
     } else {
       isNew = true;
       convStatus = fromMe ? "open" : automationActive ? "bot" : "queued";
