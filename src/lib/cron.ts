@@ -69,6 +69,14 @@ export async function runCronJobs(): Promise<{ closed: number; warned: number; t
     const s = (org.settings ?? {}) as Record<string, unknown>;
     const transferCompanyMin = Number(s.auto_transfer_company_min) || 0;
     const transferDeptId = String(s.auto_transfer_dept_id ?? "");
+    const fallbackDeptId = String(s.bot_fallback_dept_id ?? "");
+    // Responsável padrão do departamento de fallback (se tiver um configurado)
+    // — sem isto a conversa ganhava departamento mas continuava "sem responsável".
+    let fallbackAssigneeId: string | null = null;
+    if (fallbackDeptId) {
+      const { data: dep } = await db.from("departments").select("default_assignee_id").eq("id", fallbackDeptId).maybeSingle();
+      fallbackAssigneeId = dep?.default_assignee_id ?? null;
+    }
 
     // ── Inatividade: sem resposta do cliente → NÃO encerra. Encaminha para um
     //    atendente humano (fila) e avisa sobre o horário comercial. (padrão 15min) ──
@@ -105,7 +113,11 @@ export async function runCronJobs(): Promise<{ closed: number; warned: number; t
         const conv = shape(c);
         if (conv.contact_phone) await sendBotMessage(db, channelsById, conv, forwardMsg);
         await db.from("conversations")
-          .update({ status: "queued", ai_enabled: false, bot_node_id: null, inactivity_warned_at: null })
+          .update({
+            status: "queued", ai_enabled: false, bot_node_id: null, inactivity_warned_at: null,
+            ...(fallbackDeptId ? { department_id: fallbackDeptId } : {}),
+            ...(fallbackAssigneeId ? { assigned_user_id: fallbackAssigneeId, status: "open" } : {}),
+          })
           .eq("id", c.id);
         // Nota interna para o atendente saber o contexto.
         await db.from("messages").insert({

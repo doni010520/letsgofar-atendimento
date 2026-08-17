@@ -970,6 +970,8 @@ export function Inbox({
             toast(`${ids.length} atendimento(s) encerrado(s).`, "success");
           }}
           userId={userId}
+          isAdmin={isAdmin}
+          departments={departments}
         />
       </div>
       {selected ? (

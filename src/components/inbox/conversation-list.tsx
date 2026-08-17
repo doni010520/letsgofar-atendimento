@@ -3,27 +3,23 @@
 import { useMemo, useState } from "react";
 import { Search, Users, BellOff, BotOff, Bot, SlidersHorizontal, X, Trash2, Check, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ConversationOverview, ConversationStatus } from "@/lib/types";
+import type { ConversationOverview, ConversationStatus, Department } from "@/lib/types";
 import { closeConversationsBulk } from "@/app/(app)/atendimento/actions";
 
-/* ─── Abas de status (topo) ─── */
-const STATUS_TABS: { key: ConversationStatus | "all"; label: string }[] = [
-  { key: "all", label: "Todos" },
-  { key: "queued", label: "Em espera" },
-  { key: "open", label: "Em andamento" },
-  { key: "closed", label: "Encerrados" },
-];
-
-/* ─── De quem é a conversa ─────────────────────────────────────────────
- * O Chatwoot separava por responsável (Minhas / Não atribuídas / Todas) e era
- * disso que a equipe sentia falta: sem isso, cada uma abria a caixa e via a
- * lista de todo mundo misturada. Começa em "Minhas" porque é de lá que se
- * trabalha o dia — as outras continuam a um clique. */
-type DonoKey = "minhas" | "sem" | "todas";
-const DONO_TABS: { key: DonoKey; label: string }[] = [
+/* ─── Abas principais (topo) ──────────────────────────────────────────
+ * Substitui o antigo cruzamento "de quem é" (Minhas/Sem responsável/Todas)
+ * × "status" (Em espera/Em andamento/Encerrados) — 12 combinações possíveis
+ * e ninguém sabia onde olhar. Volta ao modelo do Chatwoot que a equipe já
+ * conhecia: Minhas / Em andamento / Encerradas, só isso. "Sem responsável"
+ * deixa de ser uma aba — com o roteamento automático fechando o buraco, isso
+ * devia ser raro, e quando acontece aparece como etiqueta discreta dentro do
+ * próprio departamento (ver renderização da linha), não como categoria à
+ * parte pra ninguém checar. */
+type MainTab = "minhas" | "andamento" | "encerradas";
+const MAIN_TABS: { key: MainTab; label: string }[] = [
   { key: "minhas", label: "Minhas" },
-  { key: "sem", label: "Sem responsável" },
-  { key: "todas", label: "Todas" },
+  { key: "andamento", label: "Em andamento" },
+  { key: "encerradas", label: "Encerradas" },
 ];
 
 /** Formata hora de forma determinística (sem toLocaleTimeString que causa hydration mismatch). */
@@ -122,6 +118,8 @@ export function ConversationList({
   onNewConversation,
   onBulkClosed,
   userId = null,
+  isAdmin = false,
+  departments = [],
 }: {
   conversations: ConversationOverview[];
   selectedId: string | null;
@@ -131,9 +129,13 @@ export function ConversationList({
   /** Avisa a caixa para recarregar depois de um encerramento em lote. */
   onBulkClosed?: (ids: string[]) => void;
   userId?: string | null;
+  /** Só o admin vê o filtro de departamento — pra equipe, o time inteiro já é "Em andamento". */
+  isAdmin?: boolean;
+  departments?: Department[];
 }) {
-  const [statusTab, setStatusTab] = useState<ConversationStatus | "all">("all");
-  const [dono, setDono] = useState<DonoKey>("minhas");
+  const [tab, setTab] = useState<MainTab>("minhas");
+  /** Filtro de departamento (só admin) — "" = todos. */
+  const [dept, setDept] = useState<string>("");
   /**
    * Modo seleção: marcar várias conversas e encerrar de uma vez.
    *
@@ -149,30 +151,18 @@ export function ConversationList({
   // Filtros do modal (estado aplicado)
   const [period, setPeriod] = useState<PeriodKey>("all");
   const [channelIds, setChannelIds] = useState<string[]>([]);
-  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
 
   // Filtros pendentes (dentro do modal, antes de "Aplicar")
   const [draftPeriod, setDraftPeriod] = useState<PeriodKey>("all");
   const [draftChannels, setDraftChannels] = useState<string[]>([]);
-  const [draftDepts, setDraftDepts] = useState<string[]>([]);
 
-  const hasActiveFilters = period !== "all" || channelIds.length > 0 || departmentIds.length > 0;
+  const hasActiveFilters = period !== "all" || channelIds.length > 0;
 
-  // Extrair opções únicas de canal e departamento
+  // Extrair opções únicas de canal
   const channelOptions = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of conversations) {
       if (c.channel_id && c.channel_name) map.set(c.channel_id, c.channel_name);
-    }
-    return [...map.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [conversations]);
-
-  const deptOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of conversations) {
-      if (c.department_id && c.department_name) map.set(c.department_id, c.department_name);
     }
     return [...map.entries()]
       .map(([value, label]) => ({ value, label }))
@@ -185,17 +175,17 @@ export function ConversationList({
     const todayStart = startOfDay(now);
     const yesterdayStart = startOfDay(new Date(now.getTime() - 86400000));
     return conversations.filter((c) => {
-      // Aba de status
-      if (statusTab !== "all" && c.status !== statusTab) return false;
-      // De quem é: filtro de tela, nunca permissão — "Todas" mostra mesmo tudo.
+      // Aba principal
+      if (tab === "encerradas" && c.status !== "closed") return false;
+      if (tab !== "encerradas" && c.status === "closed") return false;
       // BUSCA IGNORA A ABA. "Pesquisei e não encontrei" foi exatamente o que
-      // aconteceu com a Luana: a conversa existia, estava sem responsável, e a
-      // busca só olhava dentro de "Minhas". Quem digita um nome quer achar a
-      // pessoa, não filtrar a aba atual.
+      // aconteceu com a Luana: a conversa existia noutra aba e a busca só
+      // olhava dentro da atual. Quem digita um nome quer achar a pessoa.
       if (!query) {
-        if (dono === "minhas" && userId && c.assigned_user_id !== userId) return false;
-        if (dono === "sem" && c.assigned_user_id) return false;
+        if (tab === "minhas" && userId && c.assigned_user_id !== userId) return false;
       }
+      // Departamento (só admin filtra por aqui)
+      if (isAdmin && dept && c.department_id !== dept) return false;
       // Busca textual
       if (query) {
         const q = query.toLowerCase();
@@ -217,23 +207,20 @@ export function ConversationList({
       }
       // Canal
       if (channelIds.length > 0 && !channelIds.includes(c.channel_id)) return false;
-      // Departamento
-      if (departmentIds.length > 0 && (!c.department_id || !departmentIds.includes(c.department_id)))
-        return false;
       return true;
     });
-  }, [conversations, statusTab, dono, userId, query, period, channelIds, departmentIds]);
+  }, [conversations, tab, userId, isAdmin, dept, query, period, channelIds]);
 
-  // Contadores das abas — o Chatwoot mostrava o número em cada uma, e é o que
-  // diz se vale a pena olhar "Sem responsável" antes de abrir.
+  // Contagens das 3 abas, respeitando o filtro de departamento do admin —
+  // é o que diz de cara se vale a pena olhar cada uma antes de clicar.
   const contagem = useMemo(() => {
-    const base = conversations.filter((c) => statusTab === "all" || c.status === statusTab);
+    const base = isAdmin && dept ? conversations.filter((c) => c.department_id === dept) : conversations;
     return {
-      minhas: userId ? base.filter((c) => c.assigned_user_id === userId).length : 0,
-      sem: base.filter((c) => !c.assigned_user_id).length,
-      todas: base.length,
+      minhas: userId ? base.filter((c) => c.status !== "closed" && c.assigned_user_id === userId).length : 0,
+      andamento: base.filter((c) => c.status !== "closed").length,
+      encerradas: base.filter((c) => c.status === "closed").length,
     };
-  }, [conversations, statusTab, userId]);
+  }, [conversations, isAdmin, dept, userId]);
 
   function alternarMarca(id: string) {
     setMarcadas((prev) => {
@@ -269,19 +256,16 @@ export function ConversationList({
   function openModal() {
     setDraftPeriod(period);
     setDraftChannels([...channelIds]);
-    setDraftDepts([...departmentIds]);
     setModalOpen(true);
   }
   function applyFilters() {
     setPeriod(draftPeriod);
     setChannelIds(draftChannels);
-    setDepartmentIds(draftDepts);
     setModalOpen(false);
   }
   function clearFilters() {
     setDraftPeriod("all");
     setDraftChannels([]);
-    setDraftDepts([]);
   }
 
   return (
@@ -308,40 +292,25 @@ export function ConversationList({
             </button>
           )}
         </div>
-        {/* De quem é a conversa — a separação que existia no Chatwoot */}
-        <div className="mt-2 flex gap-1">
-          {DONO_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setDono(t.key)}
-              className={cn(
-                "flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium transition",
-                dono === t.key
-                  ? "bg-brand/10 text-brand ring-1 ring-brand/30"
-                  : "text-ink-soft hover:bg-gray-100",
-              )}
-            >
-              {t.label}
-              <span className={cn("ml-1 tabular-nums", dono === t.key ? "opacity-70" : "opacity-50")}>
-                {contagem[t.key]}
-              </span>
-            </button>
-          ))}
-        </div>
+
+        {/* Minhas / Em andamento / Encerradas — as três únicas abas. */}
         <div className="mt-2 flex items-center gap-1">
-          <div className="flex flex-1 gap-1 overflow-x-auto">
-            {STATUS_TABS.map((f) => (
+          <div className="flex flex-1 gap-1">
+            {MAIN_TABS.map((t) => (
               <button
-                key={f.key}
-                onClick={() => setStatusTab(f.key)}
+                key={t.key}
+                onClick={() => setTab(t.key)}
                 className={cn(
-                  "whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition",
-                  statusTab === f.key
+                  "flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium transition",
+                  tab === t.key
                     ? "bg-brand text-white"
-                    : "bg-gray-100 text-ink-soft hover:bg-gray-200",
+                    : "text-ink-soft hover:bg-gray-100",
                 )}
               >
-                {f.label}
+                {t.label}
+                <span className={cn("ml-1 tabular-nums", tab === t.key ? "opacity-70" : "opacity-50")}>
+                  {contagem[t.key]}
+                </span>
               </button>
             ))}
           </div>
@@ -363,6 +332,35 @@ export function ConversationList({
             )}
           </button>
         </div>
+
+        {/* Departamento — só o admin vê. É a visão de dono de negócio, pra
+            checar a fila de uma equipe específica sem se misturar no "Minhas"
+            de ninguém. */}
+        {isAdmin && departments.length > 0 && (
+          <div className="mt-2 flex gap-1 overflow-x-auto">
+            <button
+              onClick={() => setDept("")}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition",
+                dept === "" ? "bg-brand/10 text-brand ring-1 ring-brand/30" : "bg-gray-100 text-ink-soft hover:bg-gray-200",
+              )}
+            >
+              Todos
+            </button>
+            {departments.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setDept(d.id)}
+                className={cn(
+                  "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition",
+                  dept === d.id ? "bg-brand/10 text-brand ring-1 ring-brand/30" : "bg-gray-100 text-ink-soft hover:bg-gray-200",
+                )}
+              >
+                {d.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ─── Encerrar em lote ─── */}
@@ -435,6 +433,9 @@ export function ConversationList({
               : bodyOrMedia;
           const unread = (c.unread_count ?? 0) > 0;
           const aiActive = c.status === "bot" && c.ai_enabled !== false;
+          // Transferida há pouco e ninguém abriu ainda — destaca pra quem
+          // recebeu não perder, já que o "lido" sozinho não avisava nada.
+          const transferida = !!c.transferred_at;
           return (
             <div
               key={c.id}
@@ -448,6 +449,7 @@ export function ConversationList({
               className={cn(
                 "group flex w-full cursor-pointer items-center gap-3 border-b border-border px-3 py-3 text-left transition hover:bg-gray-50",
                 selectedId === c.id && "bg-brand-light hover:bg-brand-light",
+                transferida && selectedId !== c.id && "bg-amber-50 hover:bg-amber-100",
               )}
             >
               {selecionando && (
@@ -547,9 +549,34 @@ export function ConversationList({
                     </span>
                   )}
                 </div>
-                <p className="truncate text-[10px] text-ink-soft/70">
-                  {c.channel_name}
-                </p>
+                {/* Dono e departamento sempre visíveis — sem isto ninguém sabia
+                    com quem tava a conversa sem abrir uma por uma. */}
+                <div className="mt-0.5 flex items-center gap-1 overflow-hidden">
+                  {transferida && (
+                    <span className="shrink-0 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-950">
+                      transferida agora
+                    </span>
+                  )}
+                  {c.assigned_name ? (
+                    tab !== "minhas" && (
+                      <span className="shrink-0 truncate rounded-full bg-brand-light px-1.5 py-0.5 text-[9px] font-medium text-brand">
+                        com {c.assigned_name.split(" ")[0]}
+                      </span>
+                    )
+                  ) : c.status !== "closed" ? (
+                    <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-ink-soft">
+                      sem atendente
+                    </span>
+                  ) : null}
+                  {c.department_name && (
+                    <span className="shrink-0 truncate text-[9px] text-ink-soft/70">
+                      {c.department_name}
+                    </span>
+                  )}
+                  <span className="truncate text-[9px] text-ink-soft/50">
+                    {c.department_name ? "· " : ""}{c.channel_name}
+                  </span>
+                </div>
               </div>
             </div>
           );
@@ -600,24 +627,13 @@ export function ConversationList({
             </div>
 
             {/* Canais */}
-            <div className="mb-4">
+            <div className="mb-6">
               <MultiSelect
                 label="Canais"
                 placeholder="Filtre por canais"
                 options={channelOptions}
                 selected={draftChannels}
                 onChange={setDraftChannels}
-              />
-            </div>
-
-            {/* Departamentos */}
-            <div className="mb-6">
-              <MultiSelect
-                label="Departamentos"
-                placeholder="Filtre por departamentos"
-                options={deptOptions}
-                selected={draftDepts}
-                onChange={setDraftDepts}
               />
             </div>
 

@@ -48,6 +48,7 @@ export async function saveSettings(fd: FormData) {
     inactivity_close_min: num("inactivity_close_min"),
     inactivity_warn_message: str("inactivity_warn_message"),
     inactivity_goodbye_message: str("inactivity_goodbye_message"),
+    bot_fallback_dept_id: str("bot_fallback_dept_id"),
     require_classification: (str("require_classification") as OrgSettings["require_classification"]) ?? "never",
     require_close_reason: bool("require_close_reason"),
     csat_policy: (str("csat_policy") as OrgSettings["csat_policy"]) ?? "optional_on",

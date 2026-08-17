@@ -41,6 +41,9 @@ export interface OrgSettings {
   inactivity_close_min?: number;
   inactivity_warn_message?: string;
   inactivity_goodbye_message?: string;
+  /** Departamento pra onde vai quem some no bot sem escolher opção nenhuma —
+   * sem isto a conversa ficava sem departamento E sem atendente pra sempre. */
+  bot_fallback_dept_id?: string;
   require_classification?: "never" | "always" | "company" | "client";
   require_close_reason?: boolean;
   csat_policy?: "optional_on" | "optional_off" | "always" | "admin_only";
@@ -338,6 +341,7 @@ export interface ConversationOverview {
   survey_id?: string | null;
   awaiting_satisfaction?: boolean;
   closed_by?: string | null;
+  transferred_at?: string | null;
 }
 
 export interface Message {

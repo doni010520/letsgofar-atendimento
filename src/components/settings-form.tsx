@@ -104,8 +104,8 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
             <Toggle name="auto_close_queue" label="Fechar também os atendimentos em espera" defaultChecked={s.auto_close_queue} />
           </Section>
 
-          <Section title="Encerramento por inatividade (bot/IA)" hint="Avisa o cliente e, se continuar sem responder, despede-se e encerra. O próximo contato recomeça o atendimento do zero.">
-            <Toggle name="inactivity_enabled" label="Ativar encerramento por inatividade" defaultChecked={s.inactivity_enabled !== false} />
+          <Section title="Encaminhamento por inatividade (bot/IA)" hint="Se o cliente some no meio do bot (sem escolher opção nenhuma), avisa e encaminha para um atendente humano — não encerra.">
+            <Toggle name="inactivity_enabled" label="Ativar encaminhamento por inatividade" defaultChecked={s.inactivity_enabled !== false} />
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelCls}>Avisar após (minutos)</label>
@@ -113,22 +113,30 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
                 <p className="mt-1 text-[11px] text-ink-soft">Manda “ainda está aí?”. Deixe 0 para não avisar.</p>
               </div>
               <div>
-                <label className={labelCls}>Encerrar após (minutos)</label>
+                <label className={labelCls}>Encaminhar após (minutos)</label>
                 <input type="number" name="inactivity_close_min" defaultValue={s.inactivity_close_min ?? 15} placeholder="15" className={inputCls} />
-                <p className="mt-1 text-[11px] text-ink-soft">Despede-se e fecha. Deve ser maior que o tempo de aviso.</p>
+                <p className="mt-1 text-[11px] text-ink-soft">Passa para a fila humana. Deve ser maior que o tempo de aviso.</p>
               </div>
             </div>
             <div>
               <label className={labelCls}>Mensagem de aviso</label>
               <textarea name="inactivity_warn_message" rows={2} defaultValue={s.inactivity_warn_message ?? ""}
-                placeholder="Você ainda está por aí? 😊 Se não responder, vou encerrar este atendimento em alguns minutos."
+                placeholder="Você ainda está por aí? 😊 Se não responder, vou encaminhar este atendimento em alguns minutos."
                 className={`${inputCls} resize-none`} />
             </div>
             <div>
-              <label className={labelCls}>Mensagem de despedida</label>
+              <label className={labelCls}>Mensagem de encaminhamento</label>
               <textarea name="inactivity_goodbye_message" rows={2} defaultValue={s.inactivity_goodbye_message ?? ""}
-                placeholder="Encerrei este atendimento por inatividade. Obrigado por falar com a *Let's Go Far*! 👋"
+                placeholder="Como não tivemos retorno por aqui, vou encaminhar seu atendimento para um de nossos atendentes. 😊"
                 className={`${inputCls} resize-none`} />
+            </div>
+            <div>
+              <label className={labelCls}>Departamento de destino</label>
+              <select name="bot_fallback_dept_id" defaultValue={s.bot_fallback_dept_id ?? ""} className={inputCls}>
+                <option value="">Nenhum (fica sem responsável — não recomendado)</option>
+                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+              <p className="mt-1 text-[11px] text-ink-soft">Pra onde vai quem some sem escolher opção no menu do bot. Se o departamento tiver um responsável padrão, a conversa já nasce atribuída a ele.</p>
             </div>
           </Section>
 

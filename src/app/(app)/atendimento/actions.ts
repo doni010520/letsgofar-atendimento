@@ -1163,6 +1163,8 @@ export async function markConversationRead(conversationId: string) {
     console.warn("markRead", (e as Error)?.message);
   }
   await supabase.from("messages").update({ status: "read" }).eq("conversation_id", conversationId).eq("direction", "in");
+  // Alguém abriu a conversa: o destaque de "transferido agora" cumpriu o papel dele.
+  await supabase.from("conversations").update({ transferred_at: null }).eq("id", conversationId).not("transferred_at", "is", null);
   return { ok: true };
 }
 
@@ -1341,7 +1343,11 @@ export async function transferConversation(conversationId: string, opts: Transfe
   if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
 
-  const update: Record<string, unknown> = {};
+  // Marca "transferido agora" pra quem recebe — sem isto a conversa chegava
+  // com as mensagens já lidas (quem transferiu já tinha aberto), sem NENHUM
+  // sinal de que era nova pra quem recebeu. Limpa sozinho quando alguém abre
+  // a conversa (markConversationRead).
+  const update: Record<string, unknown> = { transferred_at: new Date().toISOString() };
   if (opts.toDepartmentId !== undefined) update.department_id = opts.toDepartmentId || null;
   if (opts.toUserId) {
     update.assigned_user_id = opts.toUserId;
