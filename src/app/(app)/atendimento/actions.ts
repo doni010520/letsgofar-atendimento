@@ -17,8 +17,8 @@ export async function fetchMessages(conversationId: string) {
 }
 
 /** Lista atualizada de conversas (usada pelo polling da inbox). */
-export async function fetchConversations() {
-  return getConversations();
+export async function fetchConversations(opts: { includeClosed?: boolean } = {}) {
+  return getConversations(opts);
 }
 
 /** Retorna status dos canais (para mostrar banner de desconectado). */

@@ -241,16 +241,21 @@ export function Inbox({
   }, [searchParams]);
 
   // Polling rápido: lista de conversas a cada 2.5s + status dos canais a cada 15s.
+  //
+  // Só busca as NÃO encerradas aqui — ver o comentário em getConversations().
+  // Encerrada não muda mais sozinha, então mantém as que já estavam no estado
+  // (carregadas na abertura da página, ou na última vez que uma ação destas
+  // trouxe a lista inteira) em vez de buscar de novo 24×/min.
   useEffect(() => {
     if (!live) return;
     let cancel = false;
     let channelTick = 0;
     const tick = async () => {
       try {
-        const convs = await fetchConversations();
-        if (!cancel && Array.isArray(convs)) {
-          setConversations(convs);
-          maybePing(convs);
+        const ativas = await fetchConversations({ includeClosed: false });
+        if (!cancel && Array.isArray(ativas)) {
+          maybePing(ativas); // encerrada não recebe mensagem nova, não precisa entrar aqui
+          setConversations((prev) => [...ativas, ...prev.filter((c) => c.status === "closed")]);
         }
       } catch { /* silencioso */ }
       // Checa canais a cada ~15s (6 ticks × 2.5s)

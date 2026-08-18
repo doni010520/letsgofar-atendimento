@@ -3,9 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { MOCK_CONVERSATIONS, MOCK_MESSAGES, PREVIEW_MODE } from "@/lib/mock";
 import type { ConversationOverview, Message } from "@/lib/types";
 
-export async function getConversations(): Promise<ConversationOverview[]> {
+export async function getConversations(opts: { includeClosed?: boolean } = {}): Promise<ConversationOverview[]> {
   if (PREVIEW_MODE) return MOCK_CONVERSATIONS;
   noStore(); // sempre dados frescos (polling da inbox)
+  const includeClosed = opts.includeClosed !== false;
 
   const supabase = await createClient();
 
@@ -25,14 +26,26 @@ export async function getConversations(): Promise<ConversationOverview[]> {
   // 1.031 conversas, 31 nunca chegavam na tela — o "Todas 1000" redondo na aba
   // foi o que denunciou. Pedir `range(0, 9999)` NÃO resolve (testado: devolve
   // 1000 do mesmo jeito); só buscando página por página.
+  //
+  // includeClosed=false: usado pelo polling de 2.5s da caixa. Buscar as ~1000
+  // conversas (877 delas encerradas e paradas há meses) inteiras, com os dois
+  // LATERAL JOIN da view, TODA vez que o relógio bate — 24×/min, pra sempre,
+  // enquanto a aba estiver aberta — é o que a Luana sentia como "trava",
+  // "15 segundos pra abrir", "o botão começa a carregar sozinho": o servidor
+  // faz esse trabalho pesado o tempo todo, competindo com o clique/a digitação
+  // dela pelo mesmo pool de conexão. Excluir "closed" desse caminho quente
+  // corta o de ~1000 linhas para ~150 — encerrada não muda mais, não precisa
+  // de dado fresco a cada 2,5s.
   const PAGINA = 1000;
   let rows: ConversationOverview[] = [];
   for (let inicio = 0; ; inicio += PAGINA) {
-    const { data } = await supabase
+    let query = supabase
       .from("conversation_overview")
       .select("*")
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .range(inicio, inicio + PAGINA - 1);
+    if (!includeClosed) query = query.neq("status", "closed");
+    const { data } = await query;
     const lote = (data as ConversationOverview[]) ?? [];
     rows = rows.concat(lote);
     // Teto de segurança: a caixa não é lugar para dezenas de milhares de
