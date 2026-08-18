@@ -206,13 +206,32 @@ export async function persistInbound(messages: InboundMessage[]) {
      * upsert, que tinha `.single()`); a 2ª do MESMO contato, chegando com o
      * outro formato de dígito, falhava sempre.
      */
+    /**
+     * REGRESSÃO DO MESMO BUG (agora sem faltar `.single()`): quando não há
+     * `contactName` pra gravar (eco fromMe, ou grupo — `contactName` só vem
+     * preenchido fora desses casos), o UPDATE virava `.update({})` — objeto
+     * vazio. PostgREST não aceita um PATCH sem nenhum campo: devolve 0 linhas
+     * e `error: PGRST116`, que ninguém checava. `contact` saía `null`, e
+     * `contact!.id` mais adiante quebrava com "Cannot read properties of
+     * null (reading 'id')" — confirmado reproduzindo direto no banco. Mesmo
+     * efeito do bug original (mensagem de quem já tem contato salvo, mas
+     * chegando fromMe, some sem entrar na conversa), causa raiz diferente:
+     * agora só faz UPDATE quando tem o que atualizar; sem nome novo, é um
+     * SELECT simples do que já existe.
+     */
     const { data: contact } = idExistente
-      ? await db
-          .from("contacts")
-          .update(contactName ? { name: contactName } : {})
-          .eq("id", idExistente)
-          .select("id, name, avatar_url, avatar_src, is_group")
-          .single()
+      ? contactName
+        ? await db
+            .from("contacts")
+            .update({ name: contactName })
+            .eq("id", idExistente)
+            .select("id, name, avatar_url, avatar_src, is_group")
+            .single()
+        : await db
+            .from("contacts")
+            .select("id, name, avatar_url, avatar_src, is_group")
+            .eq("id", idExistente)
+            .single()
       : await db
       .from("contacts")
       .upsert(
