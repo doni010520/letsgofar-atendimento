@@ -133,6 +133,17 @@ export function Composer({
     setMentionQuery(candidates.length && m ? m[1] : null);
   }
 
+  // Atalho "/": digitar "/" logo no início da mensagem abre o mesmo painel de
+  // modelos/macros do botão, já filtrando pelo que vem depois — o jeito que a
+  // equipe usava no Chatwoot ("é possível colocar o atalho / novamente com os
+  // links?"). Só abre (nunca fecha sozinho), pra não brigar com quem abriu
+  // pelo botão com texto já digitado.
+  function updateQuickReplyQuery(val: string, caret: number) {
+    const before = val.slice(0, caret);
+    const m = before.match(/^\/(\S{0,30})$/);
+    if (m) { setQrOpen(true); setQrQuery(m[1]); }
+  }
+
   function pickMention(c: { name: string; key: string }) {
     const ta = taRef.current;
     const caret = ta?.selectionStart ?? text.length;
@@ -172,8 +183,10 @@ export function Composer({
   }
 
   // Insere o conteúdo de um modelo/macro no campo de texto e foca.
+  // Veio de "/atalho" em digitação (nada além do comando na caixa)? Substitui
+  // o comando pelo conteúdo. Veio do botão com texto já escrito? Acrescenta.
   function insertQuickReply(qr: QuickReply) {
-    setText((t) => (t.trim() ? `${t}\n${qr.content}` : qr.content));
+    setText((t) => (/^\/\S*$/.test(t) ? qr.content : t.trim() ? `${t}\n${qr.content}` : qr.content));
     setQrOpen(false);
     setQrQuery("");
     requestAnimationFrame(() => taRef.current?.focus());
@@ -540,6 +553,7 @@ export function Composer({
             if (!text.trim() && v.trim()) onType?.();
             setText(v);
             updateMentionQuery(v, e.target.selectionStart ?? v.length);
+            updateQuickReplyQuery(v, e.target.selectionStart ?? v.length);
           }}
           onClick={(e) => updateMentionQuery(text, (e.target as HTMLTextAreaElement).selectionStart ?? 0)}
           onPaste={(e) => {
@@ -571,13 +585,18 @@ export function Composer({
               pickMention(filtered[0]);
               return;
             }
+            if (qrOpen && /^\/\S*$/.test(text) && qrFiltered.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
+              e.preventDefault();
+              insertQuickReply(qrFiltered[0]);
+              return;
+            }
             // Enter sozinho quebra linha (comportamento padrão do textarea,
             // por isso não faz nada aqui). Ctrl+Enter envia.
             if (e.key === "Enter" && e.ctrlKey) {
               e.preventDefault();
               submit();
             }
-            if (e.key === "Escape") setMentionQuery(null);
+            if (e.key === "Escape") { setMentionQuery(null); setQrOpen(false); }
           }}
           rows={1}
           placeholder={
