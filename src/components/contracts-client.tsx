@@ -58,6 +58,17 @@ const rascunhoVazio = (): Rascunho => ({
   title: "", modeloId: "", contentHtml: "", contentDirty: false, planStart: "", planEnd: "", vars: {}, signers: [{ ...SIGNER_VAZIO }],
 });
 
+/** Rascunho "vazio" (só abriu o formulário sem digitar nada) não é digno de
+ * ser salvo nem restaurado — evita reabrir sozinho pra sempre um "Novo
+ * contrato" clicado sem querer. */
+function temConteudo(r: Rascunho): boolean {
+  return !!(
+    r.title.trim() || r.modeloId || r.contentHtml.trim() ||
+    Object.values(r.vars).some((v) => v.trim()) ||
+    r.signers.some((s) => s.name.trim() || s.email.trim())
+  );
+}
+
 const TIPOS_CAMPO = [
   { value: "text", label: "Texto" },
   { value: "date", label: "Data" },
@@ -91,11 +102,21 @@ export function ContractsClient({
   // disso o usuário via a lista, não o formulário, mesmo com um rascunho
   // esperando. Só pra criação nova (edição de contrato existente não usa
   // localStorage — os dados já estão salvos no próprio contrato).
+  //
+  // ARMADILHA REAL (Luana, 19/08): clicou em "Novo contrato" sem querer, e a
+  // tela travou nisso — saiu e voltou várias vezes, fechou tudo, nada
+  // adiantava. Causa: QUALQUER abertura do formulário, mesmo vazia, já
+  // salvava um rascunho; e todo recarregamento/retorno reabria esse rascunho
+  // salvo automaticamente. Só tinha uma saída (o botão "Cancelar"), e sem
+  // achar ele a pessoa ficava presa pra sempre, mesmo sem ter digitado nada.
+  // Agora só salva/restaura rascunho com conteúdo de verdade — abrir por
+  // engano e não digitar nada não prende ninguém.
   useEffect(() => {
     try {
       const salvo = localStorage.getItem(RASCUNHO_KEY);
       if (!salvo) return;
       const r = JSON.parse(salvo) as Rascunho;
+      if (!temConteudo(r)) { localStorage.removeItem(RASCUNHO_KEY); return; }
       setRascunho({ ...r, contentDirty: r.contentDirty ?? false });
       setCreating(true);
     } catch {
@@ -105,11 +126,13 @@ export function ContractsClient({
 
   // Salva a cada mudança, só enquanto o formulário está aberto E é criação
   // nova (rascunho de edição de contrato existente não precisa disto — já
-  // está seguro no banco assim que ela salva).
+  // está seguro no banco assim que ela salva). Só grava se tiver conteúdo de
+  // verdade — ver comentário acima.
   useEffect(() => {
     if (!creating || editingId) return;
     try {
-      localStorage.setItem(RASCUNHO_KEY, JSON.stringify(rascunho));
+      if (temConteudo(rascunho)) localStorage.setItem(RASCUNHO_KEY, JSON.stringify(rascunho));
+      else localStorage.removeItem(RASCUNHO_KEY);
     } catch {
       /* localStorage cheio/bloqueado — pior caso é voltar ao comportamento antigo */
     }
@@ -234,7 +257,21 @@ export function ContractsClient({
   if (creating) {
     return (
       <>
-      <form action={(fd) => startTransition(() => void onSubmit(fd))} className="mt-6 max-w-2xl space-y-5">
+      {/* Sempre visível, mesmo rolando o formulário inteiro — a saída óbvia
+          que faltava. A Luana ficou presa nesta tela: abriu "Novo contrato"
+          sem querer, e nem recarregar a página nem fechar a aba adiantava
+          (o rascunho ficava salvo e reabria sozinho). "Cancelar" lá embaixo
+          exigia rolar até o fim pra achar. */}
+      <div className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-2 border-b border-border bg-canvas/95 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6">
+        <button
+          type="button"
+          onClick={limparRascunho}
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-soft hover:bg-gray-100 hover:text-ink"
+        >
+          ← Voltar para a lista de contratos
+        </button>
+      </div>
+      <form action={(fd) => startTransition(() => void onSubmit(fd))} className="max-w-2xl space-y-5">
         <Card className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">{editingId ? "Editar rascunho" : "Contrato"}</h3>
