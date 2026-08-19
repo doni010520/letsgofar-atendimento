@@ -111,3 +111,18 @@ button:disabled {
   background: #cbd5e1;
   border-radius: 8px;
 }
+
+/* Corpo do editor/visualização de contrato — mesma aparência de documento
+   impresso do Chatwoot (serifada, título em vinho), pra quem troca entre um
+   e outro não estranhar o texto. */
+.contract-doc {
+  font-family: "Times New Roman", Times, serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+}
+.contract-doc h1, .contract-doc h2, .contract-doc h3, .contract-doc h4 { color: #8b0000; }
+.contract-doc table { width: 100%; border-collapse: collapse; }
+.contract-doc td, .contract-doc th { border: 1px solid #ccc; padding: 8px 12px; }
+.contract-doc a { color: #8b0000; }
+.contract-doc p { margin-bottom: 0.5em; }

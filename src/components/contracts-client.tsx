@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
+import { ContractEditor } from "@/components/contract-editor";
+import { renderTemplate } from "@/lib/contract-template";
 import type { ContractRow, TemplateRow } from "@/app/(app)/contratos/page";
-import { createContract, sendContract, cancelContract, createTemplate } from "@/app/(app)/contratos/actions";
+import { createContract, sendContract, cancelContract, createTemplate, getContractForEdit, updateContract } from "@/app/(app)/contratos/actions";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: "Rascunho", cls: "bg-gray-100 text-gray-600" },
@@ -40,6 +42,10 @@ type Rascunho = {
   title: string;
   modeloId: string;
   contentHtml: string;
+  /** true assim que a pessoa mexe no editor de texto direto — a partir daí
+   * o texto para de se regenerar sozinho toda vez que um campo/variável muda
+   * (senão qualquer edição feita à mão seria apagada no próximo campo digitado). */
+  contentDirty: boolean;
   planStart: string;
   planEnd: string;
   vars: Record<string, string>;
@@ -49,7 +55,7 @@ type Rascunho = {
 const RASCUNHO_KEY = "lgf_contrato_rascunho";
 const SIGNER_VAZIO: Signer = { name: "", email: "", document: "", phone: "" };
 const rascunhoVazio = (): Rascunho => ({
-  title: "", modeloId: "", contentHtml: "", planStart: "", planEnd: "", vars: {}, signers: [{ ...SIGNER_VAZIO }],
+  title: "", modeloId: "", contentHtml: "", contentDirty: false, planStart: "", planEnd: "", vars: {}, signers: [{ ...SIGNER_VAZIO }],
 });
 
 const TIPOS_CAMPO = [
@@ -75,36 +81,73 @@ export function ContractsClient({
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [camposNovoModelo, setCamposNovoModelo] = useState<CampoNovo[]>([]);
+  /** Contrato existente sendo editado (null = criando um novo). */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState<string | null>(null);
+  /** "Ler antes de enviar" — funciona pra qualquer contrato, criando ou já salvo. */
+  const [viewing, setViewing] = useState<{ title: string; html: string } | null>(null);
 
   // Restaura o rascunho salvo (se existir) assim que a tela abre — antes
   // disso o usuário via a lista, não o formulário, mesmo com um rascunho
-  // esperando.
+  // esperando. Só pra criação nova (edição de contrato existente não usa
+  // localStorage — os dados já estão salvos no próprio contrato).
   useEffect(() => {
     try {
       const salvo = localStorage.getItem(RASCUNHO_KEY);
       if (!salvo) return;
       const r = JSON.parse(salvo) as Rascunho;
-      setRascunho(r);
+      setRascunho({ ...r, contentDirty: r.contentDirty ?? false });
       setCreating(true);
     } catch {
       /* rascunho corrompido — ignora e segue com um em branco */
     }
   }, []);
 
-  // Salva a cada mudança, só enquanto o formulário está aberto.
+  // Salva a cada mudança, só enquanto o formulário está aberto E é criação
+  // nova (rascunho de edição de contrato existente não precisa disto — já
+  // está seguro no banco assim que ela salva).
   useEffect(() => {
-    if (!creating) return;
+    if (!creating || editingId) return;
     try {
       localStorage.setItem(RASCUNHO_KEY, JSON.stringify(rascunho));
     } catch {
       /* localStorage cheio/bloqueado — pior caso é voltar ao comportamento antigo */
     }
-  }, [rascunho, creating]);
+  }, [rascunho, creating, editingId]);
 
   function limparRascunho() {
     localStorage.removeItem(RASCUNHO_KEY);
     setRascunho(rascunhoVazio());
     setCreating(false);
+    setEditingId(null);
+    setError("");
+  }
+
+  /** Abre um rascunho já existente pra edição — mesma regra do Chatwoot: só dá pra editar enquanto está em rascunho. */
+  async function abrirEdicao(id: string) {
+    setLoadingEdit(id);
+    setError("");
+    try {
+      const c = await getContractForEdit(id);
+      setRascunho({
+        title: c.title,
+        modeloId: c.template_id ?? "",
+        contentHtml: c.content_html ?? "",
+        contentDirty: true, // já é conteúdo salvo/gerado antes — não regenerar por cima
+        planStart: c.plan_start_date ?? "",
+        planEnd: c.plan_end_date ?? "",
+        vars: (c.variables as Record<string, string>) ?? {},
+        signers: (c.contract_signers ?? []).map((s) => ({
+          name: s.name, email: s.email, document: s.document ?? "", phone: s.phone ?? "",
+        })) || [{ ...SIGNER_VAZIO }],
+      });
+      setEditingId(id);
+      setCreating(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível abrir este contrato para edição.");
+    } finally {
+      setLoadingEdit(null);
+    }
   }
 
   const modeloId = rascunho.modeloId;
@@ -122,8 +165,52 @@ export function ContractsClient({
     [templates, modeloId],
   );
 
-  async function onCreate(fd: FormData) {
+  /** Texto bruto do modelo escolhido (com os {{marcadores}} ainda por preencher). */
+  const templateRaw = useMemo(
+    () => templates.find((t) => t.id === modeloId)?.content_html ?? "",
+    [templates, modeloId],
+  );
+
+  /**
+   * Texto mostrado no editor: enquanto ninguém mexeu nele à mão, é gerado ao
+   * vivo a partir do modelo + variáveis (some o marcador, entra o valor). No
+   * instante em que a pessoa edita direto no editor, isto para de recalcular
+   * — o texto dela é que manda, mesmo que ela volte e mude uma variável.
+   */
+  const previewHtml = rascunho.contentDirty || !modeloId
+    ? rascunho.contentHtml
+    : renderTemplate(templateRaw, rascunho.vars);
+
+  /**
+   * Achar automaticamente qual variável do modelo é "o nome de quem assina"
+   * (e o e-mail, se tiver) pra oferecer o botão "usar como signatário" —
+   * equivalente ao que o Chatwoot fazia com o campo fixo de contratante,
+   * adaptado pro esquema de variáveis livres daqui. Olha o RÓTULO do campo,
+   * não a chave, porque quem cria o modelo escreve o rótulo em português.
+   */
+  const nomeVar = campos.find((c) => /nome/i.test(c.label));
+  const emailVar = campos.find((c) => /e-?mail/i.test(c.label));
+  const nomeContratante = nomeVar ? (rascunho.vars[nomeVar.key] ?? "").trim() : "";
+  const emailContratante = emailVar ? (rascunho.vars[emailVar.key] ?? "").trim() : "";
+
+  function usarContratanteComoSignatario() {
+    if (!nomeContratante) return;
+    setSigners((s) => {
+      // Se a primeira linha estiver vazia, preenche ali; senão acrescenta uma nova.
+      if (s.length && !s[0].name && !s[0].email) {
+        return [{ ...s[0], name: nomeContratante, email: emailContratante }, ...s.slice(1)];
+      }
+      return [{ name: nomeContratante, email: emailContratante, document: "", phone: "" }, ...s];
+    });
+  }
+
+  function trocarModelo(id: string) {
+    setRascunho((r) => ({ ...r, modeloId: id, contentDirty: false }));
+  }
+
+  async function onSubmit(fd: FormData) {
     setError("");
+    fd.set("content_html", previewHtml);
     signers.forEach((s) => {
       if (s.name.trim() && s.email.trim()) {
         fd.append("signer_name", s.name);
@@ -133,18 +220,26 @@ export function ContractsClient({
       }
     });
     try {
-      await createContract(fd);
+      if (editingId) {
+        await updateContract(editingId, fd);
+      } else {
+        await createContract(fd);
+      }
       limparRascunho();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao criar o contrato.");
+      setError(err instanceof Error ? err.message : "Erro ao salvar o contrato.");
     }
   }
 
   if (creating) {
     return (
-      <form action={(fd) => startTransition(() => void onCreate(fd))} className="mt-6 max-w-2xl space-y-5">
+      <>
+      <form action={(fd) => startTransition(() => void onSubmit(fd))} className="mt-6 max-w-2xl space-y-5">
         <Card className="space-y-4">
-          <h3 className="text-sm font-semibold text-ink">Contrato</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-ink">{editingId ? "Editar rascunho" : "Contrato"}</h3>
+            {editingId && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-ink-soft">Rascunho — ainda não enviado</span>}
+          </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink">Título</label>
             <input name="title" placeholder="Ex.: Contrato de prestação de serviços" value={rascunho.title}
@@ -156,21 +251,13 @@ export function ContractsClient({
             <select
               name="template_id"
               value={modeloId}
-              onChange={(e) => setRascunho((r) => ({ ...r, modeloId: e.target.value }))}
+              onChange={(e) => trocarModelo(e.target.value)}
               className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm"
             >
-              <option value="">Sem modelo (escrever abaixo)</option>
+              <option value="">Sem modelo (escrever no editor abaixo)</option>
               {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
-          {!modeloId && (
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink">Conteúdo (se não usar modelo)</label>
-              <textarea name="content_html" rows={6} placeholder="<p>Texto do contrato…</p>" value={rascunho.contentHtml}
-                onChange={(e) => setRascunho((r) => ({ ...r, contentHtml: e.target.value }))}
-                className="w-full resize-y rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-xs" />
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Início do plano</label>
@@ -196,6 +283,7 @@ export function ContractsClient({
               <h3 className="text-sm font-semibold text-ink">Dados do contrato</h3>
               <p className="text-xs text-ink-soft">
                 {campos.length} campos deste modelo. O que ficar vazio sai em branco no documento.
+                {rascunho.contentDirty && " Como o texto abaixo já foi editado à mão, mudar um campo aqui não altera mais o texto sozinho."}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -217,6 +305,27 @@ export function ContractsClient({
           </Card>
         )}
 
+        {/* Texto do contrato — o lugar que faltava pra acrescentar pontos que
+            o modelo não previu, revisar e formatar antes de enviar. */}
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-ink">Texto do contrato</h3>
+              <p className="text-xs text-ink-soft">Edite livremente — negrito, listas, links, o que precisar.</p>
+            </div>
+            {rascunho.contentDirty && modeloId && (
+              <Button type="button" variant="ghost"
+                onClick={() => setRascunho((r) => ({ ...r, contentDirty: false }))}>
+                Recarregar do modelo
+              </Button>
+            )}
+          </div>
+          <ContractEditor
+            value={previewHtml}
+            onChange={(html) => setRascunho((r) => ({ ...r, contentHtml: html, contentDirty: true }))}
+          />
+        </Card>
+
         <Card className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Signatários</h3>
@@ -228,30 +337,51 @@ export function ContractsClient({
           <p className="text-xs text-ink-soft">
             O link de assinatura vai por e-mail sempre, e por WhatsApp também se o telefone for preenchido.
           </p>
+          {/* Em vez de redigitar o nome de quem já preencheu lá em cima, um clique
+              usa o que já foi informado como dados do contrato. */}
+          {nomeContratante && (
+            <button type="button" onClick={usarContratanteComoSignatario}
+              className="w-fit rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-medium text-ink-soft hover:border-brand hover:text-brand">
+              + Usar &ldquo;{nomeContratante}&rdquo; como signatário
+            </button>
+          )}
           {signers.map((s, i) => (
-            <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <input placeholder="Nome" value={s.name}
-                onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-              <input placeholder="E-mail" type="email" value={s.email}
-                onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, email: e.target.value } : x))}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-              <input placeholder="WhatsApp (opcional)" type="tel" value={s.phone}
-                onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, phone: e.target.value } : x))}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-              <input placeholder="CPF (opcional)" value={s.document}
-                onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, document: e.target.value } : x))}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            <div key={i} className="flex items-center gap-2">
+              <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
+                <input placeholder="Nome" value={s.name}
+                  onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+                <input placeholder="E-mail" type="email" value={s.email}
+                  onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, email: e.target.value } : x))}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+                <input placeholder="WhatsApp (opcional)" type="tel" value={s.phone}
+                  onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, phone: e.target.value } : x))}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+                <input placeholder="CPF (opcional)" value={s.document}
+                  onChange={(e) => setSigners((arr) => arr.map((x, idx) => idx === i ? { ...x, document: e.target.value } : x))}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+              </div>
+              {signers.length > 1 && (
+                <button type="button" onClick={() => setSigners((arr) => arr.filter((_, idx) => idx !== i))}
+                  className="px-1.5 text-ink-soft hover:text-red-600" aria-label="Remover signatário">✕</button>
+              )}
             </div>
           ))}
         </Card>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => setViewing({ title: rascunho.title || "Contrato", html: previewHtml })}>
+            Ler antes de {editingId ? "salvar" : "criar"}
+          </Button>
           <Button type="button" variant="ghost" onClick={limparRascunho}>Cancelar</Button>
-          <Button type="submit" disabled={pending}>{pending ? "Salvando..." : "Criar contrato"}</Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Salvando..." : editingId ? "Salvar alterações" : "Criar contrato"}
+          </Button>
         </div>
       </form>
+      {viewing && <VisualizarModal title={viewing.title} html={viewing.html} onClose={() => setViewing(null)} />}
+      </>
     );
   }
 
@@ -301,6 +431,7 @@ export function ContractsClient({
                 {camposNovoModelo.length === 0 && (
                   <p className="text-xs text-ink-soft">
                     Nenhum campo ainda — se o texto tem {"{{variavel}}"}, adicione um campo com essa mesma chave.
+                    Chame o campo do nome de quem assina com a palavra &ldquo;Nome&rdquo; no rótulo (ex.: &ldquo;Nome do aluno&rdquo;) pra liberar o atalho de usar como signatário.
                   </p>
                 )}
                 {camposNovoModelo.map((c, i) => (
@@ -344,6 +475,7 @@ export function ContractsClient({
             ))}
           </div>
 
+          {error && <p className="text-sm text-red-600">{error}</p>}
           {!visible.length && <EmptyState title="Nenhum contrato aqui" hint="Crie um contrato ou troque o filtro." />}
 
           <div className="space-y-2">
@@ -375,6 +507,11 @@ export function ContractsClient({
                       )}
                     </div>
                     <div className="flex shrink-0 gap-2">
+                      {c.status === "draft" && (
+                        <Button variant="ghost" disabled={loadingEdit === c.id} onClick={() => abrirEdicao(c.id)}>
+                          {loadingEdit === c.id ? "Abrindo..." : "Editar"}
+                        </Button>
+                      )}
                       <a
                         href={`/contratos/${c.id}/pdf`}
                         target="_blank"
@@ -401,6 +538,21 @@ export function ContractsClient({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Ler o contrato (texto formatado) sem sair da tela — qualquer status, a qualquer momento. */
+function VisualizarModal({ title, html, onClose }: { title: string; html: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h3 className="text-sm font-semibold text-ink">{title}</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-ink-soft hover:bg-gray-100" aria-label="Fechar">✕</button>
+        </div>
+        <div className="contract-doc overflow-y-auto bg-white p-8" dangerouslySetInnerHTML={{ __html: html || "<p>Nada pra mostrar ainda.</p>" }} />
+      </div>
     </div>
   );
 }

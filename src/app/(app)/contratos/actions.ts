@@ -121,6 +121,107 @@ export async function createContract(fd: FormData) {
   return contractId;
 }
 
+/**
+ * Busca um contrato completo para edição.
+ *
+ * Regra igual ao Chatwoot (é o pedido explícito da Luana: "do jeito que
+ * estava lá"): só dá pra editar enquanto está em rascunho — depois de
+ * enviado, o texto já pode ter ido para quem vai assinar, então trava.
+ */
+export async function getContractForEdit(id: string) {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const sb = await createClient();
+
+  const { data: contract, error } = await sb
+    .from("contracts")
+    .select("id, title, status, template_id, content_html, variables, plan_start_date, plan_end_date, contract_signers(id, name, email, document, phone)")
+    .eq("id", id)
+    .eq("organization_id", session.organization.id)
+    .single();
+  if (error || !contract) throw new Error("Contrato não encontrado.");
+  if (contract.status !== "draft") throw new Error("Só é possível editar contratos em rascunho.");
+  return contract;
+}
+
+/**
+ * Salva as alterações de um contrato em rascunho.
+ *
+ * Mesma regra de `getContractForEdit`: bloqueia se o status não for mais
+ * "draft" — confere de novo aqui (não só na tela) porque entre abrir a
+ * edição e salvar alguém pode ter enviado o contrato nesse meio tempo.
+ */
+export async function updateContract(id: string, fd: FormData) {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const org = session.organization.id;
+  const sb = await createClient();
+
+  const { data: atual } = await sb.from("contracts").select("status").eq("id", id).eq("organization_id", org).single();
+  if (!atual) throw new Error("Contrato não encontrado.");
+  if (atual.status !== "draft") throw new Error("Este contrato não está mais em rascunho — não é possível editar.");
+
+  // O editor visual manda o HTML já pronto (modelo + variáveis já aplicados
+  // e possivelmente ajustado à mão) — diferente da criação, aqui NÃO
+  // re-renderiza o modelo por cima do que a pessoa editou.
+  const html = String(fd.get("content_html") || "");
+  const variables: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) {
+    if (k.startsWith("var_")) variables[k.slice(4)] = String(v);
+  }
+
+  const { error } = await sb
+    .from("contracts")
+    .update({
+      title: String(fd.get("title") || "").trim() || "Contrato",
+      content_html: html,
+      variables,
+      plan_start_date: String(fd.get("plan_start_date") || "").trim() || null,
+      plan_end_date: String(fd.get("plan_end_date") || "").trim() || null,
+      document_hash: createHash("sha256").update(`${id}|${html}`).digest("hex"),
+    })
+    .eq("id", id)
+    .eq("organization_id", org);
+  if (error) throw new Error(error.message);
+
+  // Signatários: substitui a lista inteira (apaga e recria) — mais simples
+  // e seguro que tentar casar linha a linha quem mudou, considerando que um
+  // contrato em rascunho tem poucos signatários e nenhum assinou ainda.
+  await sb.from("contract_signers").delete().eq("contract_id", id);
+  const names = fd.getAll("signer_name").map(String);
+  const emails = fd.getAll("signer_email").map(String);
+  const docs = fd.getAll("signer_document").map(String);
+  const phones = fd.getAll("signer_phone").map(String);
+  const signers = names
+    .map((name, i) => ({
+      name: name.trim(),
+      email: (emails[i] ?? "").trim(),
+      document: (docs[i] ?? "").trim(),
+      phone: (phones[i] ?? "").replace(/\D/g, ""),
+    }))
+    .filter((s) => s.name && s.email)
+    .map((s, i) => ({
+      organization_id: org,
+      contract_id: id,
+      name: s.name,
+      email: s.email,
+      document: s.document || null,
+      phone: s.phone || null,
+      sign_token: randomUUID(),
+      sign_order: i + 1,
+    }));
+  if (signers.length) await sb.from("contract_signers").insert(signers);
+
+  await sb.from("contract_activities").insert({
+    organization_id: org,
+    contract_id: id,
+    profile_id: session.profile?.id ?? null,
+    kind: "edited",
+  });
+
+  revalidatePath("/contratos");
+}
+
 /** Coloca o contrato em circulação: gera os links e avisa cada signatário por e-mail e WhatsApp. */
 export async function sendContract(id: string) {
   const session = await getSession();
