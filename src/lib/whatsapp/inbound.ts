@@ -219,6 +219,40 @@ export async function persistInbound(messages: InboundMessage[]) {
      * agora só faz UPDATE quando tem o que atualizar; sem nome novo, é um
      * SELECT simples do que já existe.
      */
+    /**
+     * GRUPO PERDENDO O NOME: sem `idExistente` (grupo nunca passa pela busca
+     * de variantes acima), toda mensagem caía direto no upsert — inclusive
+     * quando `contactName` vinha vazio (eco de mensagem própria dentro do
+     * grupo, entre outros casos). Upsert com `name: null` GRAVA null por
+     * cima do nome que o grupo já tinha — reproduzido direto no banco: um
+     * grupo com nome "LET'S GO FAR SYSTEM" virou nome vazio depois de um eco
+     * assim. Por isso primeiro olha se o contato/grupo já existe; se existir
+     * e não tiver nome novo pra gravar, não mexe — só nesse caso (contato
+     * novo, ou tem nome novo de verdade) é que passa pelo upsert.
+     */
+    async function upsertOuMantemNome() {
+      // Sem nome novo pra gravar, confere se já existe alguém com esse
+      // telefone ANTES de decidir — upsert(name: null) sobrescreveria um
+      // nome que já existia (foi o que apagou o nome do grupo).
+      if (!contactName) {
+        const { data: achado } = await db
+          .from("contacts")
+          .select("id, name, avatar_url, avatar_src, is_group")
+          .eq("organization_id", org)
+          .eq("phone", msg.from)
+          .maybeSingle();
+        if (achado) return { data: achado };
+      }
+      return db
+        .from("contacts")
+        .upsert(
+          { organization_id: org, phone: msg.from, name: contactName, is_group: isGroup },
+          { onConflict: "organization_id,phone", ignoreDuplicates: false },
+        )
+        .select("id, name, avatar_url, avatar_src, is_group")
+        .single();
+    }
+
     const { data: contact } = idExistente
       ? contactName
         ? await db
@@ -232,19 +266,7 @@ export async function persistInbound(messages: InboundMessage[]) {
             .select("id, name, avatar_url, avatar_src, is_group")
             .eq("id", idExistente)
             .single()
-      : await db
-      .from("contacts")
-      .upsert(
-        {
-          organization_id: org,
-          phone: msg.from,
-          name: contactName,
-          is_group: isGroup,
-        },
-        { onConflict: "organization_id,phone", ignoreDuplicates: false },
-      )
-      .select("id, name, avatar_url, avatar_src, is_group")
-      .single();
+      : await upsertOuMantemNome();
 
     // Nome e foto vêm no objeto `chat` do webhook (contato e grupo). Preenche o que faltar.
     // Não usa chatName em fromMe 1:1 (viria o nome do dono, não do contato).
