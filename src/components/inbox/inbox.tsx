@@ -977,6 +977,7 @@ export function Inbox({
           userId={userId}
           isAdmin={isAdmin}
           departments={departments}
+          agents={agents}
         />
       </div>
       {selected ? (

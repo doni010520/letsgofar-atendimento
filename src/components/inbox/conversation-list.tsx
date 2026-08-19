@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, Users, BellOff, BotOff, Bot, SlidersHorizontal, X, Trash2, Check, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ConversationOverview, ConversationStatus, Department } from "@/lib/types";
+import type { ConversationOverview, ConversationStatus, Department, Profile } from "@/lib/types";
 import { closeConversationsBulk } from "@/app/(app)/atendimento/actions";
 
 /* ─── Abas principais (topo) ──────────────────────────────────────────
@@ -120,6 +120,7 @@ export function ConversationList({
   userId = null,
   isAdmin = false,
   departments = [],
+  agents = [],
 }: {
   conversations: ConversationOverview[];
   selectedId: string | null;
@@ -129,13 +130,17 @@ export function ConversationList({
   /** Avisa a caixa para recarregar depois de um encerramento em lote. */
   onBulkClosed?: (ids: string[]) => void;
   userId?: string | null;
-  /** Só o admin vê o filtro de departamento — pra equipe, o time inteiro já é "Em andamento". */
+  /** Só o admin vê os filtros de departamento/atendente — pra equipe, o time inteiro já é "Em andamento". */
   isAdmin?: boolean;
   departments?: Department[];
+  /** Lista de atendentes pra admin filtrar por dono do atendimento (pedido da Ianka: "eu como admin conseguir filtrar por atendente"). */
+  agents?: Profile[];
 }) {
   const [tab, setTab] = useState<MainTab>("minhas");
   /** Filtro de departamento (só admin) — "" = todos. */
   const [dept, setDept] = useState<string>("");
+  /** Filtro de atendente (só admin) — "" = todos. Combina em AND com o de departamento. */
+  const [agentId, setAgentId] = useState<string>("");
   /**
    * Modo seleção: marcar várias conversas e encerrar de uma vez.
    *
@@ -186,6 +191,9 @@ export function ConversationList({
       }
       // Departamento (só admin filtra por aqui)
       if (isAdmin && dept && c.department_id !== dept) return false;
+      // Atendente (só admin) — combina em AND com o departamento, pra achar
+      // ex. "só o que é da Luana dentro do Comercial".
+      if (isAdmin && agentId && c.assigned_user_id !== agentId) return false;
       // Busca textual
       if (query) {
         const q = query.toLowerCase();
@@ -209,18 +217,22 @@ export function ConversationList({
       if (channelIds.length > 0 && !channelIds.includes(c.channel_id)) return false;
       return true;
     });
-  }, [conversations, tab, userId, isAdmin, dept, query, period, channelIds]);
+  }, [conversations, tab, userId, isAdmin, dept, agentId, query, period, channelIds]);
 
-  // Contagens das 3 abas, respeitando o filtro de departamento do admin —
-  // é o que diz de cara se vale a pena olhar cada uma antes de clicar.
+  // Contagens das 3 abas, respeitando os filtros de departamento e atendente
+  // do admin — é o que diz de cara se vale a pena olhar cada uma antes de clicar.
   const contagem = useMemo(() => {
-    const base = isAdmin && dept ? conversations.filter((c) => c.department_id === dept) : conversations;
+    const base = isAdmin
+      ? conversations.filter(
+          (c) => (!dept || c.department_id === dept) && (!agentId || c.assigned_user_id === agentId),
+        )
+      : conversations;
     return {
       minhas: userId ? base.filter((c) => c.status !== "closed" && c.assigned_user_id === userId).length : 0,
       andamento: base.filter((c) => c.status !== "closed").length,
       encerradas: base.filter((c) => c.status === "closed").length,
     };
-  }, [conversations, isAdmin, dept, userId]);
+  }, [conversations, isAdmin, dept, agentId, userId]);
 
   function alternarMarca(id: string) {
     setMarcadas((prev) => {
@@ -357,6 +369,36 @@ export function ConversationList({
                 )}
               >
                 {d.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Atendente — mesma ideia do chip de departamento, mas pra achar
+            direto os atendimentos de uma pessoa específica (ex.: a Ianka quer
+            ver o que é da Luana sem misturar com o que é dela mesma). Combina
+            em AND com o departamento acima. */}
+        {isAdmin && agents.length > 0 && (
+          <div className="mt-2 flex gap-1 overflow-x-auto">
+            <button
+              onClick={() => setAgentId("")}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition",
+                agentId === "" ? "bg-brand/10 text-brand ring-1 ring-brand/30" : "bg-gray-100 text-ink-soft hover:bg-gray-200",
+              )}
+            >
+              Todo mundo
+            </button>
+            {agents.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => setAgentId(a.id)}
+                className={cn(
+                  "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition",
+                  agentId === a.id ? "bg-brand/10 text-brand ring-1 ring-brand/30" : "bg-gray-100 text-ink-soft hover:bg-gray-200",
+                )}
+              >
+                {a.name.split(" ")[0]}
               </button>
             ))}
           </div>
