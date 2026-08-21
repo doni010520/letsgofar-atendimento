@@ -265,6 +265,51 @@ export async function sendContract(id: string) {
   revalidatePath("/contratos");
 }
 
+/**
+ * Reenvia o link de assinatura pra UM signatário específico (e-mail +
+ * WhatsApp, se tiver telefone) — igual ao "Reenviar" do Chatwoot. Faltava
+ * isto: depois de "Enviar para assinatura" (que só funciona uma vez, com o
+ * contrato em rascunho), não tinha nenhum jeito de mandar de novo pra quem
+ * não recebeu ou perdeu a mensagem original. Confirmado com a Luana: ela
+ * ficou sem nenhuma forma de reenviar o link do contrato do Lucas Luiz.
+ */
+export async function resendToSigner(contractId: string, signerId: string) {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const sb = await createClient();
+
+  const { data: signer } = await sb
+    .from("contract_signers")
+    .select("name, email, phone, sign_token, status")
+    .eq("id", signerId)
+    .eq("contract_id", contractId)
+    .single();
+  if (!signer) throw new Error("Signatário não encontrado.");
+  if (signer.status !== "pending") throw new Error("Este signatário já assinou ou recusou — não há o que reenviar.");
+
+  const { data: contract } = await sb
+    .from("contracts")
+    .select("title, number")
+    .eq("id", contractId)
+    .single();
+  if (!contract) throw new Error("Contrato não encontrado.");
+
+  await notifySigners(
+    { title: contract.title, number: contract.number, organization_id: session.organization.id },
+    [signer],
+  );
+
+  await sb.from("contract_activities").insert({
+    organization_id: session.organization.id,
+    contract_id: contractId,
+    profile_id: session.profile?.id ?? null,
+    kind: "resent",
+    metadata: { signer_id: signerId, signer_name: signer.name },
+  });
+
+  revalidatePath("/contratos");
+}
+
 export async function cancelContract(id: string) {
   await orgUpdate("contracts", id, { status: "cancelled" });
   revalidatePath("/contratos");

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Organization, Profile } from "@/lib/types";
 
@@ -53,4 +54,40 @@ export async function requireAdmin() {
     throw new Error("Acesso restrito a administradores.");
   }
   return session;
+}
+
+/**
+ * Mesmas checagens de acesso do layout do app (sessão, onboarding, senha
+ * provisória e 2FA/AAL2) — extraído para dar pra reusar em layouts que NÃO
+ * mostram a casca com sidebar (ex.: páginas de impressão), sem abrir mão de
+ * nenhuma das proteções. Redireciona e nunca retorna quando bloqueia.
+ */
+export async function requireAppSession() {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (!session.organization) redirect("/onboarding");
+  const org = session.organization;
+  if (session.mustChangePassword) redirect("/trocar-senha");
+
+  if (process.env.REQUIRE_2FA !== "false") {
+    const DEFAULT_EXEMPT = ["admin@mvf.com.br", "revisor@benitechlab.com"];
+    const exempt = [
+      ...DEFAULT_EXEMPT,
+      ...(process.env.MFA_EXEMPT_EMAILS ?? "").split(","),
+    ].map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const emailLc = (session.profile?.email ?? "").toLowerCase();
+    if (!emailLc || !exempt.includes(emailLc)) {
+      let needs2fa = false;
+      try {
+        const sb = await createClient();
+        const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+        needs2fa = !!aal && aal.currentLevel !== "aal2";
+      } catch {
+        needs2fa = false;
+      }
+      if (needs2fa) redirect("/2fa");
+    }
+  }
+
+  return { ...session, organization: org };
 }

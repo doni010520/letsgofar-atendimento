@@ -5,7 +5,7 @@ import { Card, Button, EmptyState } from "@/components/ui";
 import { ContractEditor } from "@/components/contract-editor";
 import { renderTemplate } from "@/lib/contract-template";
 import type { ContractRow, TemplateRow } from "@/app/(app)/contratos/page";
-import { createContract, sendContract, cancelContract, createTemplate, getContractForEdit, updateContract } from "@/app/(app)/contratos/actions";
+import { createContract, sendContract, cancelContract, createTemplate, getContractForEdit, updateContract, resendToSigner } from "@/app/(app)/contratos/actions";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: "Rascunho", cls: "bg-gray-100 text-gray-600" },
@@ -97,6 +97,39 @@ export function ContractsClient({
   const [loadingEdit, setLoadingEdit] = useState<string | null>(null);
   /** "Ler antes de enviar" — funciona pra qualquer contrato, criando ou já salvo. */
   const [viewing, setViewing] = useState<{ title: string; html: string } | null>(null);
+  /** Feedback de "Copiado!" ao lado do botão certo, por alguns segundos. */
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  function linkAssinatura(token: string) {
+    return `${window.location.origin}/assinar/${token}`;
+  }
+
+  async function copiarLink(signerId: string, token: string) {
+    const link = linkAssinatura(token);
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // Clipboard bloqueado (sem permissão/contexto não seguro) — mesma
+      // saída que o Chatwoot usava: mostra o link pra copiar à mão.
+      window.prompt("Copie o link:", link);
+      return;
+    }
+    setCopiedId(signerId);
+    setTimeout(() => setCopiedId((id) => (id === signerId ? null : id)), 2000);
+  }
+
+  async function reenviar(contractId: string, signerId: string) {
+    setResendingId(signerId);
+    setError("");
+    try {
+      await resendToSigner(contractId, signerId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível reenviar.");
+    } finally {
+      setResendingId(null);
+    }
+  }
 
   // Restaura o rascunho salvo (se existir) assim que a tela abre — antes
   // disso o usuário via a lista, não o formulário, mesmo com um rascunho
@@ -533,12 +566,25 @@ export function ContractsClient({
                         {signed}/{signers.length} assinaram
                         {c.plan_end_date && ` · plano até ${new Date(`${c.plan_end_date}T12:00:00`).toLocaleDateString("pt-BR")}`}
                       </p>
-                      {c.status === "pending" && signers.some((x) => x.status === "pending") && (
-                        <div className="mt-2 space-y-1">
+                      {/* Copiar link / Reenviar por signatário pendente — faltava
+                          totalmente (só existia um caminho relativo minúsculo, sem
+                          domínio, impossível de copiar de verdade). É como a Luana
+                          ficou sem ter o que mandar pro Lucas de novo. */}
+                      {["pending", "partially_signed"].includes(c.status) && signers.some((x) => x.status === "pending") && (
+                        <div className="mt-2 space-y-1.5">
                           {signers.filter((x) => x.status === "pending").map((x) => (
-                            <p key={x.id} className="truncate text-[11px] text-ink-soft">
-                              {x.name}: <code className="rounded bg-gray-100 px-1">/assinar/{x.sign_token}</code>
-                            </p>
+                            <div key={x.id} className="flex flex-wrap items-center gap-2">
+                              <span className="text-[11px] text-ink-soft">{x.name}:</span>
+                              <button type="button" onClick={() => copiarLink(x.id, x.sign_token)}
+                                className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-gray-50 hover:text-ink">
+                                {copiedId === x.id ? "Copiado!" : "Copiar link"}
+                              </button>
+                              <button type="button" disabled={resendingId === x.id}
+                                onClick={() => startTransition(() => void reenviar(c.id, x.id))}
+                                className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-gray-50 hover:text-ink disabled:opacity-50">
+                                {resendingId === x.id ? "Reenviando..." : "Reenviar"}
+                              </button>
+                            </div>
                           ))}
                         </div>
                       )}
