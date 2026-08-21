@@ -1,7 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/cadastro", "/auth", "/api/webhooks", "/api/version", "/api/cron", "/privacidade"];
+// "/assinar" faltava aqui: quem assina o contrato é o CLIENTE, sem conta
+// nenhuma no sistema — o link único (por token) é o que garante que é a
+// pessoa certa, não login. Sem essa entrada, todo link de assinatura
+// mandado por e-mail/WhatsApp caía direto na tela de login da equipe.
+// Confirmado batendo a URL real de produção: /assinar/{token} redirecionava
+// pra /login (caso real: Lucas Luiz, contrato pendente de assinatura).
+const PUBLIC_PATHS = ["/login", "/cadastro", "/auth", "/assinar", "/api/webhooks", "/api/version", "/api/cron", "/privacidade"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
