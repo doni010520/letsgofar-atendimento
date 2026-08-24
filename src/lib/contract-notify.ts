@@ -60,3 +60,61 @@ export async function notifySigners(contract: ContractInfo, signers: Signer[]) {
     }
   }
 }
+
+/** Moldura comum dos e-mails, pra não repetir estilo em cada um. */
+function wrap(inner: string): string {
+  return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1f2937">${inner}</div>`;
+}
+
+/**
+ * Confirmação para quem acabou de assinar. O Chatwoot mandava; aqui não
+ * existia — a pessoa assinava e não recebia nenhum comprovante, sem nada
+ * escrito dizendo que deu certo.
+ */
+export async function notifySigned(
+  signer: { name: string; email: string },
+  contract: ContractInfo,
+  evidencia: { assinadoEm: string; hash: string },
+) {
+  const quando = new Date(evidencia.assinadoEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  await sendMail({
+    to: signer.email,
+    subject: `Assinatura confirmada: ${contract.title}`,
+    html: wrap(`
+      <p>Olá, ${signer.name}!</p>
+      <p>Sua assinatura do contrato <strong>${contract.title}</strong> (${contract.number}) foi registrada.</p>
+      <p style="font-size:13px;color:#6b7280">Data e hora: ${quando}<br/>
+      Código de verificação: ${evidencia.hash.slice(0, 16)}</p>
+      <p style="font-size:13px;color:#6b7280">Guarde este e-mail como comprovante.</p>
+    `),
+  });
+}
+
+/** Avisa quem criou o contrato que o signatário recusou, com o motivo. */
+export async function notifyRefused(
+  to: string,
+  signerName: string,
+  contract: ContractInfo,
+  reason: string,
+) {
+  await sendMail({
+    to,
+    subject: `Contrato recusado: ${contract.title}`,
+    html: wrap(`
+      <p><strong>${signerName}</strong> recusou o contrato <strong>${contract.title}</strong> (${contract.number}).</p>
+      <p style="background:#fef2f2;border-left:3px solid #dc2626;padding:8px 12px">Motivo: ${reason || "(não informado)"}</p>
+    `),
+  });
+}
+
+/** Avisa quem criou o contrato que todos assinaram. */
+export async function notifyCompleted(to: string, contract: ContractInfo) {
+  await sendMail({
+    to,
+    subject: `Contrato concluído: ${contract.title}`,
+    html: wrap(`
+      <p>Todos os signatários assinaram o contrato <strong>${contract.title}</strong> (${contract.number}).</p>
+      <p style="font-size:13px;color:#6b7280">Ele já aparece como concluído na tela de Contratos.</p>
+    `),
+  });
+}
