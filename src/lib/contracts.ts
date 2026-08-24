@@ -31,7 +31,11 @@ export async function loadSignerByToken(token: string): Promise<SignerView | nul
   const db = createServiceClient();
   const { data } = await db
     .from("contract_signers")
-    .select("id, name, email, document, status, viewed_at, contracts(id, number, title, content_html, status, organization_id)")
+    // `contract:` é OBRIGATÓRIO. Sem o apelido, o PostgREST devolve a chave com
+    // o nome da tabela ("contracts") e o `row.contract` logo abaixo dá sempre
+    // undefined — o que fazia TODA página de assinatura responder "Link
+    // inválido". O `as unknown as SignerView` escondia isso do TypeScript.
+    .select("id, name, email, document, status, viewed_at, contract:contracts(id, number, title, content_html, status, organization_id)")
     .eq("sign_token", token)
     .maybeSingle();
 
