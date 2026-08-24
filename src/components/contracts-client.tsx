@@ -100,32 +100,69 @@ export function ContractsClient({
   /** Feedback de "Copiado!" ao lado do botão certo, por alguns segundos. */
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resentId, setResentId] = useState<string | null>(null);
+  /** Signatário cujo link precisa virar campo selecionável (clipboard barrado). */
+  const [manual, setManual] = useState<{ id: string; link: string } | null>(null);
+  const [erroLinha, setErroLinha] = useState<{ id: string; msg: string } | null>(null);
 
+  /** Só é chamada em handler de clique, onde `window` existe (nunca no SSR). */
   function linkAssinatura(token: string) {
     return `${window.location.origin}/assinar/${token}`;
   }
 
+  /**
+   * Copiar tem que funcionar em QUALQUER lugar. `navigator.clipboard` só existe
+   * em contexto seguro e é bloqueado por vários navegadores de celular; o
+   * `window.prompt` que servia de saída é inutilizável no toque — não dá pra
+   * selecionar a URL inteira, e a pessoa copia um pedaço que não abre. Foi a
+   * queixa da Luana ("o link copiado eu não consigo abrir").
+   * Ordem: clipboard → execCommand → revelar num campo, que sempre funciona.
+   */
   async function copiarLink(signerId: string, token: string) {
     const link = linkAssinatura(token);
+    setErroLinha(null);
+    const ok = () => {
+      setCopiedId(signerId);
+      setTimeout(() => setCopiedId((id) => (id === signerId ? null : id)), 2000);
+    };
     try {
       await navigator.clipboard.writeText(link);
+      return ok();
     } catch {
-      // Clipboard bloqueado (sem permissão/contexto não seguro) — mesma
-      // saída que o Chatwoot usava: mostra o link pra copiar à mão.
-      window.prompt("Copie o link:", link);
-      return;
+      /* plano B */
     }
-    setCopiedId(signerId);
-    setTimeout(() => setCopiedId((id) => (id === signerId ? null : id)), 2000);
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = link;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, link.length);
+      const copiou = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (copiou) return ok();
+    } catch {
+      /* plano C */
+    }
+    setManual({ id: signerId, link });
   }
 
   async function reenviar(contractId: string, signerId: string) {
     setResendingId(signerId);
     setError("");
+    setErroLinha(null);
     try {
       await resendToSigner(contractId, signerId);
+      setResentId(signerId);
+      setTimeout(() => setResentId((id) => (id === signerId ? null : id)), 4000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível reenviar.");
+      const msg = err instanceof Error ? err.message : "Não foi possível reenviar.";
+      setError(msg);
+      // O aviso do topo fica fora da tela no celular: repete na própria linha,
+      // senão o clique "não faz nada" aos olhos de quem está usando.
+      setErroLinha({ id: signerId, msg });
     } finally {
       setResendingId(null);
     }
@@ -570,20 +607,51 @@ export function ContractsClient({
                           totalmente (só existia um caminho relativo minúsculo, sem
                           domínio, impossível de copiar de verdade). É como a Luana
                           ficou sem ter o que mandar pro Lucas de novo. */}
-                      {["pending", "partially_signed"].includes(c.status) && signers.some((x) => x.status === "pending") && (
-                        <div className="mt-2 space-y-1.5">
-                          {signers.filter((x) => x.status === "pending").map((x) => (
-                            <div key={x.id} className="flex flex-wrap items-center gap-2">
-                              <span className="text-[11px] text-ink-soft">{x.name}:</span>
-                              <button type="button" onClick={() => copiarLink(x.id, x.sign_token)}
-                                className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-gray-50 hover:text-ink">
-                                {copiedId === x.id ? "Copiado!" : "Copiar link"}
-                              </button>
-                              <button type="button" disabled={resendingId === x.id}
-                                onClick={() => startTransition(() => void reenviar(c.id, x.id))}
-                                className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-gray-50 hover:text-ink disabled:opacity-50">
-                                {resendingId === x.id ? "Reenviando..." : "Reenviar"}
-                              </button>
+                      {["pending", "partially_signed"].includes(c.status) &&
+                        signers.some((x) => x.status === "pending" || x.status === "viewed") && (
+                        <div className="mt-2 space-y-3">
+                          {/* `viewed` ENTRA: assim que o cliente abre o link o status
+                              vira "viewed", e com o filtro só de "pending" os botões
+                              sumiam justamente na hora em que ainda é preciso
+                              reenviar. O Chatwoot mostrava nos dois casos. */}
+                          {signers.filter((x) => x.status === "pending" || x.status === "viewed").map((x) => (
+                            <div key={x.id} className="rounded-lg border border-border p-2">
+                              <p className="text-xs font-medium text-ink">{x.name}</p>
+                              {/* O link fica SEMPRE visível e clicável. No celular
+                                  isso resolve sozinho — toca pra abrir, segura pra
+                                  copiar — sem depender de clipboard nenhum. */}
+                              <a
+                                href={`/assinar/${x.sign_token}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-flex min-h-[44px] items-center text-sm text-blue-600 underline"
+                              >
+                                Abrir link de assinatura
+                              </a>
+                              {/* Alvos de toque de 44px: os de 11px/py-1 eram
+                                  praticamente inacertáveis no dedo. */}
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <button type="button" onClick={() => copiarLink(x.id, x.sign_token)}
+                                  className="min-h-[44px] rounded-md border border-border px-3 py-2 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink">
+                                  {copiedId === x.id ? "Copiado!" : "Copiar link"}
+                                </button>
+                                <button type="button" disabled={resendingId === x.id}
+                                  onClick={() => startTransition(() => void reenviar(c.id, x.id))}
+                                  className="min-h-[44px] rounded-md border border-border px-3 py-2 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink disabled:opacity-50">
+                                  {resendingId === x.id ? "Reenviando..." : resentId === x.id ? "Reenviado!" : "Reenviar"}
+                                </button>
+                              </div>
+                              {manual?.id === x.id && (
+                                <input
+                                  readOnly
+                                  value={manual.link}
+                                  onFocus={(e) => e.currentTarget.select()}
+                                  className="mt-2 w-full rounded-md border border-border px-2 py-2 text-[11px] text-ink"
+                                />
+                              )}
+                              {erroLinha?.id === x.id && (
+                                <p className="mt-2 text-xs text-red-600">{erroLinha.msg}</p>
+                              )}
                             </div>
                           ))}
                         </div>
