@@ -7,6 +7,7 @@ import { ConversationList } from "./conversation-list";
 import { ChatThread } from "./chat-thread";
 import { ContactPanel } from "./contact-panel";
 import { createClient } from "@/lib/supabase/client";
+import { JANELA_MENSAGENS } from "@/lib/inbox-config";
 
 /**
  * Teto de espera para uma Server Action, do lado do NAVEGADOR.
@@ -49,6 +50,34 @@ function startTransitionComTeto(startTransition: (fn: () => void | Promise<void>
         toast("Sem resposta do servidor — confira antes de tentar de novo.", "error");
       }
     }
+  });
+}
+
+/**
+ * Une o que já está na tela com o lote que chegou do servidor, sem encolher.
+ *
+ * A caixa carrega só as 60 mensagens mais recentes; quem clica em "carregar
+ * mais" fica com 120, 180... Se o tique de reconciliação simplesmente trocasse
+ * a lista pelo que voltou, o histórico que a pessoa acabou de abrir sumiria
+ * embaixo dela e o scroll saltaria. Então: união por id, com o lote novo
+ * vencendo nos campos (é ele que traz status/edição/reação atualizados).
+ *
+ * Exclusão é lógica (`is_deleted`), não sumiço de linha — por isso a união
+ * nunca deixa passar mensagem apagada como se ainda existisse.
+ */
+function mergeMessages(atuais: Message[], lote: Message[]): Message[] {
+  if (!atuais.length) return lote;
+  const porId = new Map(atuais.map((m) => [m.id, m]));
+  for (const m of lote) {
+    const anterior = porId.get(m.id);
+    // Mantém o MESMO objeto quando nada mudou. Sem isto, todo tique produziria
+    // 60 objetos novos e o React re-renderizaria a conversa inteira à toa —
+    // trocaria egress por trabalho de tela, que é o que a equipe sente.
+    porId.set(m.id, anterior && JSON.stringify(anterior) === JSON.stringify(m) ? anterior : { ...anterior, ...m });
+  }
+  return [...porId.values()].sort((a, b) => {
+    const d = Date.parse(a.created_at) - Date.parse(b.created_at);
+    return d !== 0 ? d : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }
 
@@ -199,6 +228,39 @@ export function Inbox({
     }, 0);
   const lastPingRef = useRef<number>(maxInbound(initialConversations));
 
+  // Espelho da lista para ler dentro de callbacks do realtime (que fecham sobre
+  // o estado antigo). Usado só para saber se a conversa está silenciada antes
+  // de tocar o aviso sonoro.
+  const conversationsRef = useRef(conversations);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+
+  // "Carregar mais" do histórico. `semMais` guarda as conversas que já chegaram
+  // ao começo — o servidor devolveu menos que a janela, então não há mais nada
+  // atrás e o botão some.
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [semMais, setSemMais] = useState<Record<string, boolean>>({});
+
+  async function handleLoadMore() {
+    if (!selectedId || loadingMore) return;
+    const convId = selectedId;
+    // Só as que existem no servidor: o balão otimista (`tmp-...`) ainda não
+    // está lá, e contá-lo deslocaria a janela em uma posição — o lote anterior
+    // viria com um buraco no meio do histórico.
+    const carregadas = (messagesByConv[convId] ?? []).filter((m) => !m.id.startsWith("tmp-")).length;
+    setLoadingMore(true);
+    try {
+      const antigas = await fetchMessages(convId, { skip: carregadas });
+      if (antigas.length < JANELA_MENSAGENS) setSemMais((p) => ({ ...p, [convId]: true }));
+      if (antigas.length) {
+        setMessagesByConv((prev) => ({ ...prev, [convId]: mergeMessages(prev[convId] ?? [], antigas) }));
+      }
+    } catch {
+      /* silencioso: o botão continua lá para tentar de novo */
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   function maybePing(convs: ConversationOverview[]) {
     const newest = maxInbound(convs);
     if (lastPingRef.current && newest > lastPingRef.current) playPing();
@@ -258,8 +320,8 @@ export function Inbox({
           setConversations((prev) => [...ativas, ...prev.filter((c) => c.status === "closed")]);
         }
       } catch { /* silencioso */ }
-      // Checa canais a cada ~15s (6 ticks × 2.5s)
-      if (channelTick++ % 6 === 0) {
+      // Checa canais a cada ~60s (3 ticks × 20s)
+      if (channelTick++ % 3 === 0) {
         try {
           const chs = await fetchChannelStatuses();
           if (!cancel) setDisconnectedChannels(chs.filter((c) => c.status !== "connected"));
@@ -267,7 +329,13 @@ export function Inbox({
       }
     };
     tick();
-    const t = setInterval(tick, 2500);
+    // 20s, não 2,5s. Cada tique custa ~377 KB (252 conversas ativas na view com
+    // os dois LATERAL JOIN): a 2,5s era 9 MB/min por aba, ~4,3 GB num dia de
+    // trabalho — foi o que estourou a cota de egress e derrubou o login de todo
+    // mundo. Quem entrega tempo real é o realtime (INSERT e UPDATE já tratados
+    // logo abaixo); este relógio é rede de segurança para quando o WebSocket
+    // cai, mais o refetch ao voltar o foco na aba.
+    const t = setInterval(tick, 20000);
     return () => { cancel = true; clearInterval(t); };
   }, [live]);
 
@@ -296,10 +364,11 @@ export function Inbox({
         if (!cancel) {
           setMessagesByConv((prev) => {
             const cur = prev[selectedId] ?? [];
-            const lastCur = cur[cur.length - 1];
-            const lastNew = msgs[msgs.length - 1];
-            if (cur.length === msgs.length && lastCur?.id === lastNew?.id && lastCur?.status === lastNew?.status) return prev;
-            return { ...prev, [selectedId]: msgs };
+            const unido = mergeMessages(cur, msgs);
+            // Sem mudança de conteúdo: devolve o objeto anterior para não
+            // re-renderizar a conversa inteira a cada 30s.
+            if (unido.length === cur.length && unido.every((m, i) => m === cur[i])) return prev;
+            return { ...prev, [selectedId]: unido };
           });
         }
       } catch (e) {
@@ -307,7 +376,10 @@ export function Inbox({
       }
     };
     tick();
-    const t = setInterval(tick, 3000);
+    // 30s, não 3s: as mensagens novas chegam pelo realtime (INSERT) e as
+    // mudanças de status pelo UPDATE. Este tique só reconcilia o que o
+    // WebSocket tenha perdido.
+    const t = setInterval(tick, 30000);
     return () => { cancel = true; clearInterval(t); };
   }, [live, selectedId]);
 
@@ -322,6 +394,19 @@ export function Inbox({
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const m = payload.new as Message;
+
+          // Aviso sonoro AQUI, e não só no polling: o tique da lista subiu de
+          // 2,5s para 20s, e o som de mensagem nova não pode esperar o relógio.
+          // Conversa desconhecida (recém-criada) toca — não existe silenciada
+          // que a lista ainda não tenha.
+          if (m.direction === "in") {
+            const conv = conversationsRef.current.find((c) => c.id === m.conversation_id);
+            const t = Date.parse(m.created_at);
+            if (!conv?.is_muted && t > lastPingRef.current) {
+              playPing();
+              lastPingRef.current = t;
+            }
+          }
 
           setMessagesByConv((prev) => {
             const list = prev[m.conversation_id];
@@ -985,6 +1070,9 @@ export function Inbox({
           onBack={() => setSelectedId(null)}
           conversation={selected}
           messages={messages}
+          onLoadMore={handleLoadMore}
+          hasMore={!semMais[selectedId ?? ""] && messages.length >= JANELA_MENSAGENS}
+          loadingMore={loadingMore}
           groupParticipants={groupParticipants}
           onSend={handleSend}
           onSendInternal={handleSendInternal}

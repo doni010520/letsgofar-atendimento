@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { MOCK_CONVERSATIONS, MOCK_MESSAGES, PREVIEW_MODE } from "@/lib/mock";
 import type { ConversationOverview, Message } from "@/lib/types";
+import { JANELA_MENSAGENS } from "@/lib/inbox-config";
 
 export async function getConversations(opts: { includeClosed?: boolean } = {}): Promise<ConversationOverview[]> {
   if (PREVIEW_MODE) return MOCK_CONVERSATIONS;
@@ -76,15 +77,43 @@ export async function getConversationTagMap(): Promise<Record<string, string[]>>
   return map;
 }
 
-export async function getMessages(conversationId: string): Promise<Message[]> {
+/**
+ * Mensagens de uma conversa, das MAIS RECENTES para trás.
+ *
+ * Antes isto trazia a conversa inteira, sem limite, e o polling da caixa
+ * repetia a busca a cada 3s: a conversa de 2.960 mensagens custava 756 KB por
+ * tique, 20 tiques por minuto, por aba aberta — sozinha, ~6,9 GB de egress num
+ * dia de trabalho. As 60 últimas custam 38 KB (−95%), e 1.005 das 1.079
+ * conversas têm 60 mensagens ou menos: para elas nada muda.
+ *
+ * `skip` pagina para trás (o "carregar mais" do topo da conversa): pula as N
+ * mais recentes e traz o lote anterior.
+ *
+ * Ordena por (created_at, id) — o id desempata. 53 pontos do histórico têm duas
+ * ou três mensagens com o mesmo `created_at`, herança da importação do Chatwoot;
+ * sem o desempate a ordem entre elas seria arbitrária e o "carregar mais"
+ * poderia repetir ou perder mensagem na virada da página. Por isso também a
+ * paginação é por posição e não por `created_at <`, que pularia as empatadas.
+ *
+ * A ordem de saída é sempre cronológica (antiga → recente), que é a que a tela
+ * espera; a consulta é que desce, para o LIMIT pegar a ponta certa.
+ */
+export async function getMessages(
+  conversationId: string,
+  opts: { limit?: number; skip?: number } = {},
+): Promise<Message[]> {
   if (PREVIEW_MODE) return MOCK_MESSAGES[conversationId] ?? [];
   noStore(); // sempre dados frescos (polling da inbox)
 
+  const limit = opts.limit ?? JANELA_MENSAGENS;
+  const skip = opts.skip ?? 0;
   const supabase = await createClient();
   const { data } = await supabase
     .from("messages")
     .select("*")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
-  return (data as Message[]) ?? [];
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(skip, skip + limit - 1);
+  return ((data as Message[]) ?? []).reverse();
 }

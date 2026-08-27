@@ -12,8 +12,11 @@ import type { Channel, ContentType, InternalMention } from "@/lib/types";
 
 const isPreview = () => !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-export async function fetchMessages(conversationId: string) {
-  return getMessages(conversationId);
+export async function fetchMessages(
+  conversationId: string,
+  opts: { limit?: number; skip?: number } = {},
+) {
+  return getMessages(conversationId, opts);
 }
 
 /** Lista atualizada de conversas (usada pelo polling da inbox). */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { UserCheck, CheckCircle2, Users, Bell, BellOff, Reply, X, ArrowRightLeft, Hash, ArrowLeft, Bot, BotOff, StickyNote, Eye, EyeOff, RotateCcw, Signature } from "lucide-react";
 import { MessageBubble } from "./message-bubble";
 import { Composer } from "./composer";
@@ -44,9 +44,16 @@ export function ChatThread({
   templates,
   onSendTemplate,
   pending,
+  onLoadMore,
+  hasMore,
+  loadingMore,
 }: {
   conversation: ConversationOverview;
   messages: Message[];
+  /** Carrega o lote anterior do histórico (a caixa abre só com as 60 últimas). */
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
   groupParticipants?: { name: string; phone: string }[];
   quickReplies?: { title: string; content: string; shortcut: string | null }[];
   templates?: { name: string; language: string; bodyText: string; varCount: number }[];
@@ -83,13 +90,36 @@ export function ChatThread({
   pending?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const alturaAntesRef = useRef<number | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [showInternal, setShowInternal] = useState(true);
   const internalCount = messages.filter((m) => m.is_internal).length;
+  const ultimaId = messages[messages.length - 1]?.id;
 
+  // Desce ao pé da conversa quando chega mensagem NOVA — e não a cada mudança
+  // de tamanho da lista. "Carregar mais" também muda o tamanho, e antes disso
+  // jogava a pessoa de volta lá pra baixo, justamente quando ela pediu para ver
+  // o que veio antes.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, conversation.id]);
+  }, [ultimaId, conversation.id]);
+
+  // Ao inserir histórico no topo, o navegador mantém o scrollTop e o conteúdo
+  // "pula". Recompõe a posição pela diferença de altura, para a mensagem que a
+  // pessoa estava lendo continuar exatamente onde estava.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el && alturaAntesRef.current != null) {
+      el.scrollTop += el.scrollHeight - alturaAntesRef.current;
+      alturaAntesRef.current = null;
+    }
+  }, [messages]);
+
+  function handleLoadMore() {
+    alturaAntesRef.current = listRef.current?.scrollHeight ?? null;
+    onLoadMore?.();
+  }
   useEffect(() => setReplyTo(null), [conversation.id]);
   // Pré-preenche o reply quando vem de "Responder no privado"
   useEffect(() => { if (initialReplyTo) setReplyTo(initialReplyTo); }, [initialReplyTo]);
@@ -240,9 +270,21 @@ export function ChatThread({
       </header>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.length === 0 && (
           <p className="mt-10 text-center text-xs text-ink-soft">Nenhuma mensagem ainda.</p>
+        )}
+        {hasMore && messages.length > 0 && (
+          <div className="flex justify-center pb-2">
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="rounded-full border border-border px-3 py-1 text-xs text-ink-soft hover:bg-canvas disabled:opacity-50"
+            >
+              {loadingMore ? "Carregando..." : "Carregar mensagens anteriores"}
+            </button>
+          </div>
         )}
         {(() => {
           // Mapa id-externo (sufixo) → mensagem, para resolver o autor/treco citado.
