@@ -4,6 +4,47 @@ import { MOCK_CONVERSATIONS, MOCK_MESSAGES, PREVIEW_MODE } from "@/lib/mock";
 import type { ConversationOverview, Message } from "@/lib/types";
 import { JANELA_MENSAGENS } from "@/lib/inbox-config";
 
+/**
+ * Colunas que a tela realmente usa, em vez de `select("*")`.
+ *
+ * A view `conversation_overview` tem 41 colunas e DOIS LATERAL JOIN por linha,
+ * e esta consulta roda em polling. Medido em produção (259 conversas ativas,
+ * `Accept-Encoding: identity`): 392.266 bytes com `*` contra 329.651 bytes com
+ * esta lista — 16% a menos por tique, de graça.
+ *
+ * As 10 que ficaram de fora não são lidas em lugar nenhum a partir de uma
+ * ConversationOverview (conferido em toda a src): organization_id, close_reason,
+ * bot_automation_id, survey_id, pinned, archived, awaiting_satisfaction,
+ * closed_by, contact_email, contact_city. Quem precisa delas — cron, chatbot,
+ * relatórios — consulta a tabela `conversations` direto, não passa por aqui.
+ *
+ * Ao usar uma coluna nova na tela, ACRESCENTE AQUI: sem isso ela chega
+ * `undefined` e o campo some da interface sem erro nenhum.
+ */
+const CAMPOS_INBOX = [
+  "id", "status", "assigned_user_id", "department_id", "channel_id", "contact_id",
+  "protocol", "last_message_at", "opened_at", "closed_at", "created_at",
+  "is_muted", "satisfaction", "ai_enabled", "transferred_at",
+  "contact_name", "contact_phone", "contact_avatar", "is_group", "contact_jid",
+  "channel_name", "channel_type", "assigned_name", "department_name", "department_color",
+  "last_message_body", "last_message_type", "last_message_direction",
+  "last_message_author", "last_message_created_at", "unread_count",
+].join(",");
+
+/**
+ * Idem para as mensagens: `organization_id` e `delivery_checked_at` não são
+ * lidos pela conversa aberta. Medido nas 60 mensagens da janela: 56.565 bytes
+ * com `*` contra 51.525 com esta lista (−8,9%).
+ */
+const CAMPOS_MENSAGEM = [
+  "id", "conversation_id", "direction", "sender_type", "sender_id", "content_type",
+  "body", "media_url", "media_name", "status", "external_id", "created_at",
+  "author_name", "author_phone", "author_lid",
+  "reply_to_external", "reply_excerpt", "reply_author",
+  "reactions", "is_deleted", "deleted_scope", "edited", "is_internal",
+  "forwarded", "mentions",
+].join(",");
+
 export async function getConversations(opts: { includeClosed?: boolean } = {}): Promise<ConversationOverview[]> {
   if (PREVIEW_MODE) return MOCK_CONVERSATIONS;
   noStore(); // sempre dados frescos (polling da inbox)
@@ -42,12 +83,14 @@ export async function getConversations(opts: { includeClosed?: boolean } = {}): 
   for (let inicio = 0; ; inicio += PAGINA) {
     let query = supabase
       .from("conversation_overview")
-      .select("*")
+      .select(CAMPOS_INBOX)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .range(inicio, inicio + PAGINA - 1);
     if (!includeClosed) query = query.neq("status", "closed");
     const { data } = await query;
-    const lote = (data as ConversationOverview[]) ?? [];
+    // Cast via unknown: com a lista de colunas em string (e não "*") o
+    // supabase-js não consegue inferir o shape da linha.
+    const lote = (data as unknown as ConversationOverview[]) ?? [];
     rows = rows.concat(lote);
     // Teto de segurança: a caixa não é lugar para dezenas de milhares de
     // conversas — se chegar lá, o certo é buscar sob demanda, não crescer aqui.
@@ -110,10 +153,10 @@ export async function getMessages(
   const supabase = await createClient();
   const { data } = await supabase
     .from("messages")
-    .select("*")
+    .select(CAMPOS_MENSAGEM)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .range(skip, skip + limit - 1);
-  return ((data as Message[]) ?? []).reverse();
+  return ((data as unknown as Message[]) ?? []).reverse();
 }

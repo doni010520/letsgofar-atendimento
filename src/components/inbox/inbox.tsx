@@ -302,6 +302,23 @@ export function Inbox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Aba em segundo plano não precisa de dado fresco — e era ela que sobrava de
+  // conta pra pagar. O polling não parava quando a janela perdia o foco: uma
+  // aba esquecida aberta baixava 392 KB a cada 20s a noite toda e no fim de
+  // semana (~1,7 GB/dia sem ninguém olhando, contra ~560 MB num dia de trabalho
+  // de 8h). Quando a cota de egress satura, os requests falham, o middleware
+  // não confirma a sessão e a atendente é jogada no /login "do nada".
+  const [abaVisivel, setAbaVisivel] = useState(true);
+  useEffect(() => {
+    const sync = () => setAbaVisivel(!document.hidden);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
+  // Porta única dos relógios: aba oculta congela o polling e volta sozinho
+  // (o efeito remonta e dispara o tique imediato) quando a aba reaparece.
+  const ativo = live && abaVisivel;
+
   // Polling rápido: lista de conversas a cada 2.5s + status dos canais a cada 15s.
   //
   // Só busca as NÃO encerradas aqui — ver o comentário em getConversations().
@@ -309,7 +326,7 @@ export function Inbox({
   // (carregadas na abertura da página, ou na última vez que uma ação destas
   // trouxe a lista inteira) em vez de buscar de novo 24×/min.
   useEffect(() => {
-    if (!live) return;
+    if (!ativo) return;
     let cancel = false;
     let channelTick = 0;
     const tick = async () => {
@@ -337,7 +354,7 @@ export function Inbox({
     // cai, mais o refetch ao voltar o foco na aba.
     const t = setInterval(tick, 20000);
     return () => { cancel = true; clearInterval(t); };
-  }, [live]);
+  }, [ativo]);
 
   // Ao voltar o foco na aba (atendente deixou em segundo plano), atualiza na
   // hora — navegadores estrangulam timers/WebSocket em abas ocultas, o que
@@ -346,7 +363,18 @@ export function Inbox({
     if (!live) return;
     const onVisible = () => {
       if (document.hidden) return;
-      fetchConversations().then((c) => Array.isArray(c) && setConversations(c)).catch(() => {});
+      // MESMO RECORTE DO TIQUE: só as NÃO encerradas. Medido em produção hoje,
+      // com 1.086 conversas (259 ativas): a lista inteira custa 1.442.552 bytes
+      // e as ativas 392.266 — eram 1,44 MB baixados TODA vez que a atendente
+      // voltava pra aba, pra quase sempre reencontrar o mesmo dado. Encerrada
+      // não muda mais sozinha, então mantém as que já estão no estado em vez de
+      // rebuscá-las.
+      fetchConversations({ includeClosed: false })
+        .then((ativas) => {
+          if (!Array.isArray(ativas)) return;
+          setConversations((prev) => [...ativas, ...prev.filter((c) => c.status === "closed")]);
+        })
+        .catch(() => {});
       if (selectedId) fetchMessages(selectedId).then((m) => setMessagesByConv((prev) => ({ ...prev, [selectedId]: m }))).catch(() => {});
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -356,7 +384,7 @@ export function Inbox({
 
   // Polling de mensagens da conversa aberta a cada 3s.
   useEffect(() => {
-    if (!live || !selectedId) return;
+    if (!ativo || !selectedId) return;
     let cancel = false;
     const tick = async () => {
       try {
@@ -381,9 +409,21 @@ export function Inbox({
     // WebSocket tenha perdido.
     const t = setInterval(tick, 30000);
     return () => { cancel = true; clearInterval(t); };
-  }, [live, selectedId]);
+  }, [ativo, selectedId]);
 
   // Realtime: mensagens recebidas (apenas direção "in"; as enviadas são otimistas).
+  //
+  // DE PROPÓSITO fora do `ativo`, e aqui é onde esta caixa diverge da Corrêa:
+  // lá o `playPing` só sai do polling, então derrubar a assinatura com a aba
+  // oculta não custa nada. Aqui o aviso sonoro mora no handler de INSERT logo
+  // abaixo (foi movido pra cá quando o tique subiu pra 20s) — derrubar o
+  // WebSocket calaria a atendente com a caixa em aba de fundo, que é justamente
+  // quando ela precisa ser avisada.
+  //
+  // E não é isso que gasta cota. Medido: assinatura ociosa = 1.012 bytes em 90s
+  // (~40 KB/h, ~1 MB/dia), contra os ~1,86 GB/dia que a mesma aba esquecida
+  // gastava de polling. Congelar os relógios resolve 99,9% do problema; matar
+  // o WebSocket junto compraria ~1 MB/dia ao preço do aviso de mensagem nova.
   useEffect(() => {
     if (!live) return;
     const supabase = createClient();
