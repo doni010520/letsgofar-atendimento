@@ -122,6 +122,106 @@ export async function createContract(fd: FormData) {
 }
 
 /**
+ * Duplica um contrato: cópia editável, do jeito que o Chatwoot fazia.
+ *
+ * Pedido literal da Luana: "criei o contrato do André, porém ele pediu para
+ * alterar um ponto, e só fiz duplicar, editei a alteração e ele assinou a
+ * cópia". Hoje, sem isto, alterar dois pontos de um contrato já enviado
+ * obriga a refazer tudo do zero para o mesmo cliente — porque `updateContract`
+ * (de propósito) só deixa editar enquanto está em rascunho.
+ *
+ * A cópia nasce em RASCUNHO e sem vínculo nenhum com o original: número novo,
+ * `sign_token` novo por signatário, e nenhuma assinatura/evidência herdada.
+ * Duplicar não pode ressuscitar a assinatura de ninguém.
+ */
+export async function duplicateContract(id: string) {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+  const org = session.organization.id;
+  const sb = await createClient();
+
+  const { data } = await sb
+    .from("contracts")
+    // String literal inteira, sem concatenar: o supabase-js so consegue inferir
+    // o shape da linha quando o select e um literal estatico.
+    .select("template_id, contact_id, title, content_html, variables, plan_start_date, plan_end_date, contract_signers(name, email, phone, document, sign_order)")
+    .eq("id", id)
+    .eq("organization_id", org)
+    .maybeSingle();
+  if (!data) throw new Error("Contrato não encontrado.");
+
+  const orig = data as {
+    template_id: string | null;
+    contact_id: string | null;
+    title: string;
+    content_html: string | null;
+    variables: Record<string, string> | null;
+    plan_start_date: string | null;
+    plan_end_date: string | null;
+    contract_signers: {
+      name: string; email: string; phone: string | null;
+      document: string | null; sign_order: number | null;
+    }[];
+  };
+
+  const { data: numberRow } = await sb.rpc("next_contract_number", { org });
+  const number = (numberRow as string) ?? `CTR-${new Date().getFullYear()}-00001`;
+  const html = orig.content_html ?? "";
+
+  const { data: novo, error } = await sb
+    .from("contracts")
+    .insert({
+      organization_id: org,
+      created_by: session.profile?.id ?? null,
+      template_id: orig.template_id,
+      contact_id: orig.contact_id,
+      number,
+      title: orig.title,
+      content_html: html,
+      variables: orig.variables ?? {},
+      plan_start_date: orig.plan_start_date,
+      plan_end_date: orig.plan_end_date,
+      status: "draft",
+      // RECALCULA, não copia: o hash é do par (número, texto). Copiado, a cópia
+      // nasceria carregando o hash do original e a evidência de assinatura
+      // passaria a apontar para um documento que não é aquele.
+      document_hash: createHash("sha256").update(`${number}|${html}`).digest("hex"),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const novoId = (novo as { id: string }).id;
+
+  // Signatários vêm junto (é o ponto do pedido: não redigitar o mesmo cliente),
+  // mas ZERADOS — token novo, e status/assinatura ficam no default da tabela.
+  const signers = orig.contract_signers
+    .filter((x) => x.name?.trim() && x.email?.trim())
+    .map((x, i) => ({
+      organization_id: org,
+      contract_id: novoId,
+      name: x.name.trim(),
+      email: x.email.trim(),
+      document: x.document || null,
+      phone: x.phone || null,
+      sign_token: randomUUID(),
+      sign_order: x.sign_order ?? i + 1,
+    }));
+  if (signers.length) await sb.from("contract_signers").insert(signers);
+
+  await sb.from("contract_activities").insert({
+    organization_id: org,
+    contract_id: novoId,
+    profile_id: session.profile?.id ?? null,
+    kind: "created",
+    metadata: { number, duplicado_de: id },
+  });
+
+  revalidatePath("/contratos");
+  return novoId;
+}
+
+/**
  * Busca um contrato completo para edição.
  *
  * Regra igual ao Chatwoot (é o pedido explícito da Luana: "do jeito que

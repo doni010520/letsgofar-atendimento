@@ -5,7 +5,8 @@ import { Card, Button, EmptyState } from "@/components/ui";
 import { ContractEditor } from "@/components/contract-editor";
 import { renderTemplate } from "@/lib/contract-template";
 import type { ContractRow, TemplateRow } from "@/app/(app)/contratos/page";
-import { createContract, sendContract, cancelContract, createTemplate, getContractForEdit, updateContract, resendToSigner } from "@/app/(app)/contratos/actions";
+import { createContract, sendContract, cancelContract, createTemplate, getContractForEdit, updateContract, resendToSigner, duplicateContract } from "@/app/(app)/contratos/actions";
+import { assinantes, resumoNomes, textoBuscavel, normalizar } from "@/lib/contract-nome";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: "Rascunho", cls: "bg-gray-100 text-gray-600" },
@@ -87,6 +88,10 @@ export function ContractsClient({
 }) {
   const [tab, setTab] = useState<"contracts" | "templates">("contracts");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
+  /** Busca por aluno/número/título — os chips de status sozinhos não achavam
+   *  "o contrato do André" no meio de 38. */
+  const [busca, setBusca] = useState("");
+  const [duplicandoId, setDuplicandoId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [rascunho, setRascunho] = useState<Rascunho>(rascunhoVazio);
   const [error, setError] = useState("");
@@ -247,10 +252,12 @@ export function ContractsClient({
   const signers = rascunho.signers;
   const setSigners = (fn: (s: Signer[]) => Signer[]) => setRascunho((r) => ({ ...r, signers: fn(r.signers) }));
 
-  const visible = useMemo(
-    () => (filter === "all" ? contracts : contracts.filter((c) => c.status === filter)),
-    [contracts, filter],
-  );
+  const visible = useMemo(() => {
+    const porStatus = filter === "all" ? contracts : contracts.filter((c) => c.status === filter);
+    const termo = normalizar(busca);
+    if (!termo) return porStatus;
+    return porStatus.filter((c) => textoBuscavel(c).includes(termo));
+  }, [contracts, filter, busca]);
 
   /** Campos que o modelo escolhido pede — mudam quando troca o modelo. */
   const campos = useMemo(
@@ -573,13 +580,28 @@ export function ContractsClient({
         </div>
       ) : (
         <>
-          <div className="inline-flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
-            {FILTERS.map((f) => (
-              <button key={f.key} onClick={() => setFilter(f.key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${filter === f.key ? "bg-surface text-ink shadow-sm" : "text-ink-soft"}`}>
-                {f.label}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
+              {FILTERS.map((f) => (
+                <button key={f.key} onClick={() => setFilter(f.key)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${filter === f.key ? "bg-surface text-ink shadow-sm" : "text-ink-soft"}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por aluno, numero ou titulo"
+              aria-label="Buscar contrato"
+              className="min-h-[44px] flex-1 rounded-lg border border-border px-3 py-2 text-sm text-ink placeholder:text-ink-soft sm:max-w-xs"
+            />
+            {busca && (
+              <button type="button" onClick={() => setBusca("")}
+                className="min-h-[44px] rounded-lg border border-border px-3 py-2 text-sm text-ink-soft hover:text-ink">
+                Limpar
               </button>
-            ))}
+            )}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -590,6 +612,7 @@ export function ContractsClient({
               const s = STATUS[c.status] ?? { label: c.status, cls: "bg-gray-100 text-gray-600" };
               const signers = c.contract_signers ?? [];
               const signed = signers.filter((x) => x.status === "signed").length;
+              const nomes = resumoNomes(assinantes(signers));
               return (
                 <Card key={c.id}>
                   <div className="flex items-start justify-between gap-4">
@@ -599,6 +622,16 @@ export function ContractsClient({
                         <span className="font-medium text-ink">{c.title}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                       </div>
+                      {/* O NOME, que era o buraco: o card mostrava numero,
+                          titulo, status e "1/1 assinaram" — e o nome do aluno so
+                          aparecia no bloco de reenvio, que nao renderiza para
+                          contrato ja assinado. Justamente o caso em que ela
+                          precisa achar a pessoa. */}
+                      {nomes && (
+                        <p className="mt-1 truncate text-sm text-ink" title={nomes}>
+                          {nomes}
+                        </p>
+                      )}
                       <p className="mt-1 text-xs text-ink-soft">
                         {signed}/{signers.length} assinaram
                         {c.plan_end_date && ` · plano até ${new Date(`${c.plan_end_date}T12:00:00`).toLocaleDateString("pt-BR")}`}
@@ -671,6 +704,27 @@ export function ContractsClient({
                       >
                         PDF
                       </a>
+                      {/* Duplicar vale em QUALQUER status — o caso de uso e
+                          justamente o contrato ja enviado, que updateContract
+                          trava para edicao. */}
+                      <Button
+                        variant="ghost"
+                        disabled={duplicandoId === c.id}
+                        onClick={() => {
+                          setDuplicandoId(c.id);
+                          startTransition(async () => {
+                            try {
+                              await duplicateContract(c.id);
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Nao foi possivel duplicar.");
+                            } finally {
+                              setDuplicandoId(null);
+                            }
+                          });
+                        }}
+                      >
+                        {duplicandoId === c.id ? "Duplicando..." : "Duplicar"}
+                      </Button>
                       {c.status === "draft" && (
                         <Button onClick={() => startTransition(() => void sendContract(c.id))}>
                           Enviar para assinatura

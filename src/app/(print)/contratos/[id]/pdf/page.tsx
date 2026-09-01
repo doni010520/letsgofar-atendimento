@@ -1,6 +1,38 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
+import { tituloPdfContrato } from "@/lib/contract-nome";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * O título da página É o nome do arquivo baixado.
+ *
+ * "Imprimir -> Salvar como PDF" usa o `document.title` como nome sugerido.
+ * Esta página não definia título nenhum, então herdava o do layout raiz e TODO
+ * contrato baixava como "Let's Go Far — Atendimento.pdf": na pasta de
+ * Downloads ficavam vários arquivos de nome idêntico, indistinguíveis. Era
+ * isso o "se precisarmos consultar um aluno específico, não aparece o nome, aí
+ * teríamos que baixar um por um até achar".
+ *
+ * Consulta enxuta e à parte da página (número + signatários, nada de HTML do
+ * contrato): é uma tela aberta a mão, uma vez, não um caminho quente.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const db = await createClient();
+  const { data } = await db
+    .from("contracts")
+    .select("number, contract_signers(name, status)")
+    .eq("id", id)
+    .maybeSingle();
+
+  const c = data as { number: string; contract_signers: { name: string; status: string }[] } | null;
+  return { title: c ? tituloPdfContrato(c.number, c.contract_signers) : "Contrato" };
+}
 
 /**
  * Versão imprimível do contrato (A2).
