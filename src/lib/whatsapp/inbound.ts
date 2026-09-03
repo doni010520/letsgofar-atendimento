@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { InboundMessage } from "./types";
 import type { Channel } from "@/lib/types";
 import { storeInboundMedia } from "./media";
+import { nomeParaGravar } from "./nome-contato";
 import { rehostImageUrl } from "./avatar";
 import { runChatbot } from "./chatbot";
 import { getProvider } from "./index";
@@ -234,15 +235,17 @@ export async function persistInbound(messages: InboundMessage[]) {
       // Sem nome novo pra gravar, confere se já existe alguém com esse
       // telefone ANTES de decidir — upsert(name: null) sobrescreveria um
       // nome que já existia (foi o que apagou o nome do grupo).
-      if (!contactName) {
-        const { data: achado } = await db
-          .from("contacts")
-          .select("id, name, avatar_url, avatar_src, is_group")
-          .eq("organization_id", org)
-          .eq("phone", msg.from)
-          .maybeSingle();
-        if (achado) return { data: achado };
-      }
+      // SEMPRE confere antes, tendo nome novo ou não. O upsert com onConflict
+      // grava o `name` por cima do que já existe nos DOIS sentidos: vazio
+      // apagava o nome do grupo, e preenchido desfazia o nome que a atendente
+      // tinha digitado. Contato que já existe nunca passa pelo upsert.
+      const { data: achado } = await db
+        .from("contacts")
+        .select("id, name, avatar_url, avatar_src, is_group")
+        .eq("organization_id", org)
+        .eq("phone", msg.from)
+        .maybeSingle();
+      if (achado) return { data: achado };
       return db
         .from("contacts")
         .upsert(
@@ -253,26 +256,33 @@ export async function persistInbound(messages: InboundMessage[]) {
         .single();
     }
 
+    // Contato que já existe: só LÊ. Aqui havia um `update({ name: contactName })`
+    // sem condição nenhuma — era ele que regravava o nome com o push name do
+    // WhatsApp a cada mensagem recebida e desfazia a edição da atendente
+    // ("editei 3 vezes e não salva, só fica esse emoji"). Quem decide se há o
+    // que gravar é `nomeParaGravar`, no patch logo abaixo.
     const { data: contact } = idExistente
-      ? contactName
-        ? await db
-            .from("contacts")
-            .update({ name: contactName })
-            .eq("id", idExistente)
-            .select("id, name, avatar_url, avatar_src, is_group")
-            .single()
-        : await db
-            .from("contacts")
-            .select("id, name, avatar_url, avatar_src, is_group")
-            .eq("id", idExistente)
-            .single()
+      ? await db
+          .from("contacts")
+          .select("id, name, avatar_url, avatar_src, is_group")
+          .eq("id", idExistente)
+          .single()
       : await upsertOuMantemNome();
 
     // Nome e foto vêm no objeto `chat` do webhook (contato e grupo). Preenche o que faltar.
     // Não usa chatName em fromMe 1:1 (viria o nome do dono, não do contato).
     if (contact) {
       const patch: Record<string, unknown> = {};
-      if (!contact.name && msg.chatName && !(fromMe && !isGroup)) patch.name = msg.chatName;
+      // Regra única (e testada) de quem manda no nome: só PREENCHE o que está
+      // vazio, nunca sobrescreve. Ver src/lib/whatsapp/nome-contato.ts.
+      const nomeNovo = nomeParaGravar({
+        atual: contact.name,
+        contactName,
+        chatName: msg.chatName,
+        fromMe,
+        isGroup,
+      });
+      if (nomeNovo) patch.name = nomeNovo;
       if (isGroup && msg.chatJid) patch.chat_jid = msg.chatJid; // JID completo do grupo
       // Foto: re-hospeda no nosso Storage. "src" = caminho da URL do WhatsApp (sem query
       // de expiração) — muda quando a pessoa troca a foto → re-hospeda a nova.

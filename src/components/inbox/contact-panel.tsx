@@ -48,6 +48,7 @@ export function ContactPanel({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const [history, setHistory] = useState<AttendanceHistoryItem[]>([]);
   const [sgpLoading, setSgpLoading] = useState(false);
   const [sgpMsg, setSgpMsg] = useState<string | null>(null);
@@ -108,10 +109,19 @@ export function ContactPanel({
 
   async function save() {
     setSaving(true);
+    setErroSalvar(null);
     try {
-      await updateContactDetails(conversation.id, { name, notes, custom_fields: fields });
+      // Confere o retorno: antes o resultado era ignorado e a tela dizia
+      // "Salvo!" mesmo quando a gravação falhava.
+      const r = await updateContactDetails(conversation.id, { name, notes, custom_fields: fields });
+      if (r && r.ok === false) {
+        setErroSalvar(r.erro ?? "Não foi possível salvar.");
+        return;
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setErroSalvar(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
       setSaving(false);
     }
@@ -252,6 +262,9 @@ export function ContactPanel({
               {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
               {saved ? "Salvo!" : "Salvar"}
             </button>
+            {erroSalvar && (
+              <p className="mt-2 text-xs text-red-600">{erroSalvar}</p>
+            )}
 
             {/* Ações rápidas */}
             <div className="mt-3 flex gap-1.5">

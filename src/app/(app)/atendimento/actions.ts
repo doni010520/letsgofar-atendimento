@@ -250,12 +250,16 @@ export async function updateContactDetails(
     .select("contact_id")
     .eq("id", conversationId)
     .single();
-  if (!conv) return { ok: false };
+  if (!conv) return { ok: false, erro: "Conversa não encontrada." };
   const upd: Record<string, unknown> = {};
   if (patch.name !== undefined) upd.name = patch.name.trim() || null;
   if (patch.notes !== undefined) upd.notes = patch.notes;
   if (patch.custom_fields !== undefined) upd.custom_fields = patch.custom_fields;
-  await supabase.from("contacts").update(upd).eq("id", conv.contact_id);
+  // O erro deste update era DESCARTADO e a função devolvia ok:true de qualquer
+  // jeito — a tela dizia "Salvo!" mesmo quando nada tinha sido gravado. Foi o
+  // que fez a atendente editar o mesmo contato três vezes sem entender por quê.
+  const { error } = await supabase.from("contacts").update(upd).eq("id", conv.contact_id);
+  if (error) return { ok: false, erro: error.message };
   revalidatePath("/atendimento");
   return { ok: true };
 }
