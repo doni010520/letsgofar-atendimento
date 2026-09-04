@@ -6,6 +6,7 @@ import { getApprovedTemplates } from "@/app/(app)/atendimento/actions";
 import { getSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PREVIEW_MODE } from "@/lib/mock";
+import { deveAssinar } from "@/lib/assinatura";
 
 export const revalidate = 0;
 
@@ -36,7 +37,10 @@ export default async function AtendimentoPage({
   if (!PREVIEW_MODE) {
     const session = await getSession();
     userId = session?.userId ?? null;
-    identifyAgentEnabled = (session?.organization?.settings as Record<string, unknown> | undefined)?.identify_agent === true;
+    identifyAgentEnabled = deveAssinar(
+      session?.profile?.identify_agent,
+      (session?.organization?.settings as Record<string, unknown> | undefined)?.identify_agent,
+    );
     if (userId) {
       const sb = await createClient();
       const { data: me } = await sb

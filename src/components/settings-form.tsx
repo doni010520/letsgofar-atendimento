@@ -56,7 +56,7 @@ export function SettingsForm({ settings, departments, channels = [] }: { setting
         <div className="space-y-6">
           <Section title="Opções gerais" hint="Ajuste o funcionamento geral do chat.">
             <Toggle name="identify_agent" label="Identificar atendente"
-              hint="Enviar o nome do atendente antes da mensagem enviada." defaultChecked={s.identify_agent} />
+              hint="Padrão do time: envia o nome do atendente antes da mensagem. Cada atendente pode desligar só pra si, pelo botão Assinatura na conversa." defaultChecked={s.identify_agent} />
             <div>
               <label className={labelCls}>Comando para encerrar atendimento</label>
               <input name="close_command" defaultValue={s.close_command ?? ""} placeholder="Ex.: encerrar, sair (separados por vírgula)" className={inputCls} />

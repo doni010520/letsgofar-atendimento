@@ -128,6 +128,8 @@ export interface Profile {
   notify: boolean;
   totp_enabled?: boolean;
   created_at: string;
+  /** Assinatura só desta pessoa. null = segue o padrão da organização. */
+  identify_agent?: boolean | null;
 }
 
 export interface Department {

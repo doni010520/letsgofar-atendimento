@@ -1039,7 +1039,7 @@ export function Inbox({
         setIdentifyAgentEnabled(!next);
         toast(r.error, "error");
       } else {
-        toast(next ? 'Assinatura ativada — vale para toda a equipe.' : "Assinatura desativada — vale para toda a equipe.");
+        toast(next ? "Assinatura ativada nas suas mensagens." : "Assinatura desativada nas suas mensagens.");
       }
     });
   }

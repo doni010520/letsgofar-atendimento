@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { deveAssinar } from "@/lib/assinatura";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { validateResolution, type RequiredAttribute } from "@/lib/required-attributes";
@@ -321,9 +322,10 @@ export async function sendMessage(
   if (!session?.organization) throw new Error("Sessão inválida.");
   const supabase = await createClient();
 
-  // Identificar atendente: prefixa o nome se configurado.
+  // Identificar atendente: a preferência DELA manda; sem preferência, segue o
+  // padrão da organização. Ver src/lib/assinatura.ts.
   const orgSettings = (session.organization.settings ?? {}) as Record<string, unknown>;
-  if (orgSettings.identify_agent && session.profile?.name) {
+  if (deveAssinar(session.profile?.identify_agent, orgSettings.identify_agent) && session.profile?.name) {
     body = `*${session.profile.name}:*\n${body}`;
   }
 
@@ -1303,12 +1305,16 @@ export async function toggleIdentifyAgent(enabled: boolean) {
   // pode estar em cache da sessão e sobrescrever de volta qualquer mudança
   // feita depois do login (foi o que aconteceu no teste: gravava, mas a
   // leitura seguinte devolvia o valor antigo).
-  const { data: atual } = await supabase.from("organizations").select("settings").eq("id", session.organization.id).single();
-  const settings = { ...((atual?.settings as Record<string, unknown>) ?? {}), identify_agent: enabled };
+  // Grava no PRÓPRIO perfil, não na organização. Escrevia em
+  // `organizations.settings`, e a RLS de organizations exige
+  // `current_role_is('admin')`: quem atende não é admin, então o update não
+  // dava erro, afetava ZERO linhas, e o botão voltava sozinho — a assinatura
+  // não desligava nunca. O padrão do time continua em Ajustes → Configurações
+  // (lá é admin mesmo); a RLS de profiles já permite editar a própria linha.
   const { data: linha, error } = await supabase
-    .from("organizations")
-    .update({ settings })
-    .eq("id", session.organization.id)
+    .from("profiles")
+    .update({ identify_agent: enabled })
+    .eq("id", session.userId)
     .select("id")
     .maybeSingle();
   if (error || !linha) return { enabled: !enabled, error: "Não foi possível salvar." };

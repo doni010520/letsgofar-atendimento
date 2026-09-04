@@ -83,7 +83,7 @@ export function ChatThread({
   onAddNote?: () => void;
   onToggleMute: () => void;
   onToggleAi: () => void;
-  /** Liga/desliga o prefixo "*Nome:*" nas mensagens — vale pra organização inteira, não só esta conversa. */
+  /** Liga/desliga o prefixo "*Nome:*" nas mensagens DESTA pessoa — preferência individual, vale em todas as conversas dela. */
   identifyAgentEnabled?: boolean;
   onToggleIdentifyAgent?: () => void;
   initialReplyTo?: Message | null;
@@ -198,8 +198,8 @@ export function ChatThread({
               onClick={onToggleIdentifyAgent}
               title={
                 identifyAgentEnabled
-                  ? 'Desligar: mensagens deixam de sair com "*Seu nome:*" na frente (vale pra toda a equipe)'
-                  : 'Ligar: mensagens passam a sair com "*Seu nome:*" na frente, pro cliente saber quem fala (vale pra toda a equipe)'
+                  ? 'Desligar: SUAS mensagens deixam de sair com "*Seu nome:*" na frente (só pra você)'
+                  : 'Ligar: SUAS mensagens passam a sair com "*Seu nome:*" na frente, pro cliente saber quem fala (só pra você)'
               }
               className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ${
                 identifyAgentEnabled ? "bg-violet-100 text-violet-700 hover:bg-violet-200" : "bg-gray-100 text-ink hover:bg-gray-200"
