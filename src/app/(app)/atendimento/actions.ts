@@ -76,13 +76,22 @@ export async function openDirectConversation(
     .limit(1)
     .maybeSingle();
 
+  // Sem nome novo, NÃO manda update. `update({})` parece inofensivo e não é:
+  // o PostgREST responde 200 com lista VAZIA (não atualiza nada, não casa
+  // linha nenhuma), e o `.single()` em cima disso vira erro PGRST116 "The
+  // result contains 0 rows". Resultado: `contact` nulo, a função devolvia
+  // `{ id: null }` e a tela dizia "Não foi possível abrir o atendimento" —
+  // TODA vez que se abria atendimento com um contato que já existe sem
+  // digitar um nome, que é o caso normal com a base cheia.
   const { data: contact } = achado
-    ? await supabase
-        .from("contacts")
-        .update(name ? { name } : {})
-        .eq("id", achado.id)
-        .select("id")
-        .single()
+    ? name
+      ? await supabase
+          .from("contacts")
+          .update({ name })
+          .eq("id", achado.id)
+          .select("id")
+          .single()
+      : { data: achado }
     : await supabase
         .from("contacts")
         .upsert(
