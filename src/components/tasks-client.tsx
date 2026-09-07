@@ -2,9 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
+import { toast } from "@/components/toast";
 import type { TaskRow } from "@/app/(app)/tarefas/page";
 import { createTask, updateTaskStatus, deleteTask, toggleTaskItem } from "@/app/(app)/tarefas/actions";
 import { TaskKanbanView, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
+import { MAX_ANEXO_LABEL, erroDeTamanho } from "@/lib/task-files";
 
 const PRIORITY: Record<string, { label: string; cls: string }> = {
   urgent: { label: "Urgente", cls: "bg-red-100 text-red-700" },
@@ -139,11 +141,23 @@ export function TasksClient({
       setError("Informe o título da tarefa.");
       return;
     }
+    // Barra o arquivo grande ANTES de enviar: passando do teto da server
+    // action o Next recusa o corpo inteiro e a tela não recebe motivo nenhum.
+    const arquivos = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+    const grande = erroDeTamanho(arquivos);
+    if (grande) {
+      setError(grande);
+      return;
+    }
     items.forEach((i) => fd.append("item", i));
     try {
-      await createTask(fd);
+      const r = await createTask(fd);
       setCreating(false);
       setItems([]);
+      // A tarefa foi criada mesmo quando o anexo falha — avisa em vez de
+      // deixar a pessoa achar que o arquivo subiu junto.
+      if (r.erroAnexo) toast(`Tarefa criada, mas o anexo não subiu: ${r.erroAnexo}`, "error");
+      else if (r.anexos) toast(r.anexos === 1 ? "Tarefa criada com 1 anexo." : `Tarefa criada com ${r.anexos} anexos.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar a tarefa.");
     }
@@ -246,6 +260,23 @@ export function TasksClient({
                 ))}
               </ul>
             )}
+          </div>
+
+          {/* Anexo já na criação — no Chatwoot o formulário de nova tarefa
+              aceitava `files`, e sem este campo só dava para anexar depois,
+              abrindo o detalhe. */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Anexos</label>
+            <input
+              type="file"
+              name="files"
+              multiple
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-soft file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
+            />
+            <p className="mt-1 text-xs text-ink-soft">
+              Até {MAX_ANEXO_LABEL} por arquivo. Marcando mais de um responsável, cada cópia da
+              tarefa recebe os mesmos anexos.
+            </p>
           </div>
         </Card>
 

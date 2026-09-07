@@ -20,6 +20,7 @@ import {
   assignTask,
   updateTask,
 } from "@/app/(app)/tarefas/actions";
+import { MAX_ANEXO_LABEL, erroDeTamanho, urlDoAnexo } from "@/lib/task-files";
 
 const STATUS_COLUMNS = [
   { key: "pending", label: "A fazer" },
@@ -269,6 +270,8 @@ export function TaskDetailPanel({
   const [comment, setComment] = useState("");
   const [item, setItem] = useState("");
   const [editando, setEditando] = useState(false);
+  /** Contador só para remontar (e limpar) o campo de arquivo após cada envio. */
+  const [envio, setEnvio] = useState(0);
   const [pending, startTransition] = useTransition();
 
   const agentName = useMemo(
@@ -303,12 +306,26 @@ export function TaskDetailPanel({
 
         {editando ? (
           <form
-            action={(fd) =>
+            action={(fd) => {
+              // Mesmo corte que a criação faz: arquivo acima do teto derruba o
+              // corpo inteiro da server action, e aí nem o texto seria salvo.
+              const arquivos = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+              const grande = erroDeTamanho(arquivos);
+              if (grande) {
+                toast(grande, "error");
+                return;
+              }
               startTransition(async () => {
-                await updateTask(task.id, fd);
-                setEditando(false);
-              })
-            }
+                try {
+                  const r = await updateTask(task.id, fd);
+                  setEditando(false);
+                  if (r.erroAnexo) toast(`Tarefa salva, mas o anexo não subiu: ${r.erroAnexo}`, "error");
+                  else if (r.anexos) toast(r.anexos === 1 ? "1 anexo adicionado." : `${r.anexos} anexos adicionados.`);
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : "Não foi possível salvar a tarefa.", "error");
+                }
+              });
+            }}
             className="mt-3 space-y-2"
           >
             <input
@@ -339,7 +356,19 @@ export function TaskDetailPanel({
                 className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
               />
             </div>
-            <Button type="submit" disabled={pending}>Salvar</Button>
+            {/* É aqui que a pessoa procura o anexo ("edito para colocar").
+                Sem este campo, o formulário de edição salvava só o texto. */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-soft">Anexar arquivos</label>
+              <input
+                type="file"
+                name="files"
+                multiple
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-ink-soft file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
+              />
+              <p className="mt-1 text-[11px] text-ink-soft">Até {MAX_ANEXO_LABEL} por arquivo.</p>
+            </div>
+            <Button type="submit" disabled={pending}>{pending ? "Salvando..." : "Salvar"}</Button>
           </form>
         ) : (
           task.description && <p className="mt-2 text-sm text-ink-soft">{task.description}</p>
@@ -491,7 +520,22 @@ export function TaskDetailPanel({
           <ul className="space-y-1">
             {(task.task_files ?? []).map((f) => (
               <li key={f.id} className="flex items-center justify-between rounded border border-border px-2 py-1.5 text-sm">
-                <span className="truncate text-ink">{f.filename}</span>
+                {/* Anexo que não abre não serve para nada: a lista só mostrava
+                    o nome, sem link para o arquivo. */}
+                <a
+                  href={urlDoAnexo(f.path)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate text-brand hover:underline"
+                  title={f.filename}
+                >
+                  {f.filename}
+                </a>
+                {f.byte_size != null && (
+                  <span className="ml-2 shrink-0 text-[11px] text-ink-soft">
+                    {Math.max(1, Math.round(f.byte_size / 1024))} KB
+                  </span>
+                )}
                 <button
                   onClick={() => startTransition(() => void removeTaskFile(f.id))}
                   className="ml-2 shrink-0 text-xs text-red-600"
@@ -504,12 +548,39 @@ export function TaskDetailPanel({
               <li className="text-xs text-ink-soft">Nenhum anexo.</li>
             )}
           </ul>
+          {/* `key` limpa o campo depois de enviar — sem isso o mesmo arquivo
+              fica selecionado e dá para reenviar sem perceber. */}
           <form
-            action={(fd) => startTransition(() => void uploadTaskFiles(task.id, fd))}
+            key={envio}
+            action={(fd) => {
+              const arquivos = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+              if (!arquivos.length) {
+                toast("Escolha um arquivo antes de enviar.", "error");
+                return;
+              }
+              const grande = erroDeTamanho(arquivos);
+              if (grande) {
+                toast(grande, "error");
+                return;
+              }
+              startTransition(async () => {
+                const r = await uploadTaskFiles(task.id, fd);
+                // O resultado era descartado com `void`: quando o upload
+                // falhava, a tela não mudava e não dizia nada — que é
+                // exatamente o "não fica os arquivos" relatado.
+                if (r.erroAnexo) toast(r.erroAnexo, "error");
+                else {
+                  setEnvio((n) => n + 1);
+                  toast(r.anexos === 1 ? "1 anexo adicionado." : `${r.anexos} anexos adicionados.`);
+                }
+              });
+            }}
             className="mt-2 flex items-center gap-2"
           >
-            <input type="file" name="files" multiple className="text-xs text-ink-soft" />
-            <Button type="submit" variant="ghost" disabled={pending}>Enviar</Button>
+            <input type="file" name="files" multiple className="min-w-0 flex-1 text-xs text-ink-soft" />
+            <Button type="submit" variant="ghost" disabled={pending}>
+              {pending ? "Enviando..." : "Enviar"}
+            </Button>
           </form>
         </section>
 

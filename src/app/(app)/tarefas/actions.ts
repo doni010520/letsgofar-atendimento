@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { orgUpdate, orgDelete } from "@/lib/crud-helpers";
+import { MAX_ANEXO_BYTES, MAX_ANEXO_LABEL } from "@/lib/task-files";
 
 function taskFields(fd: FormData) {
   return {
@@ -18,14 +19,100 @@ function taskFields(fd: FormData) {
   };
 }
 
+/** Arquivos de verdade que vieram no campo `files` do formulário. */
+function arquivosDoForm(fd: FormData): File[] {
+  return fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+}
+
+/**
+ * Sobe os arquivos para o storage e grava o vínculo em `task_files`.
+ *
+ * O upload vai pelo cliente de SERVICE ROLE de propósito. O bucket `media`
+ * tem RLS ligada e a única política que existe em `storage.objects` é de
+ * SELECT (`media_public_read`, migration 0007) — qualquer INSERT feito com o
+ * token do usuário volta como "new row violates row-level security policy".
+ * Todo o resto do app que grava mídia (envio no atendimento, avatares, áudio
+ * do bot) já sobe por service role; o anexo de tarefa era o único que tentava
+ * subir pelo cliente do usuário e, por isso, o único que nunca funcionou —
+ * `task_files` estava com ZERO linhas em produção, com 660 tarefas criadas.
+ *
+ * O caminho é montado no servidor a partir da organização da sessão e a
+ * tarefa é conferida antes de subir qualquer coisa, então o service role aqui
+ * não amplia o alcance de quem chamou. A linha em `task_files` continua indo
+ * pelo cliente do usuário, sob RLS.
+ */
+async function anexarArquivos(taskIds: string[], files: File[], org: string): Promise<number> {
+  if (!taskIds.length || !files.length) return 0;
+
+  const grande = files.find((f) => f.size > MAX_ANEXO_BYTES);
+  if (grande) throw new Error(`"${grande.name}" passa de ${MAX_ANEXO_LABEL}.`);
+
+  const sb = await createClient();
+  const svc = createServiceClient();
+  let gravados = 0;
+
+  for (const file of files) {
+    // Lê UMA vez. Com vários responsáveis o mesmo arquivo vai para N tarefas,
+    // e reaproveitar o `File` a cada volta arrisca subir arquivo vazio nas
+    // cópias seguintes — o buffer resolve e ainda evita reler o corpo N vezes.
+    const buf = Buffer.from(await file.arrayBuffer());
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_") || "arquivo";
+    const carimbo = Date.now();
+
+    for (const taskId of taskIds) {
+      const path = `${org}/tarefas/${taskId}/${carimbo}-${safeName}`;
+      const up = await svc.storage
+        .from("media")
+        .upload(path, buf, { contentType: file.type || "application/octet-stream", upsert: true });
+      if (up.error) throw new Error(`Falha ao enviar ${file.name}: ${up.error.message}`);
+
+      const { error } = await sb.from("task_files").insert({
+        organization_id: org,
+        task_id: taskId,
+        path,
+        filename: file.name,
+        content_type: file.type || null,
+        byte_size: file.size,
+      });
+      // Sem a linha o arquivo existe no storage mas some da tela — nesse caso
+      // desfaz o upload em vez de deixar lixo pendurado.
+      if (error) {
+        await svc.storage.from("media").remove([path]);
+        throw new Error(`Falha ao anexar ${file.name}: ${error.message}`);
+      }
+      gravados++;
+    }
+  }
+
+  return gravados;
+}
+
+/** Confere que a tarefa existe e é da organização da sessão. */
+async function tarefaDaOrg(taskId: string, org: string): Promise<boolean> {
+  const sb = await createClient();
+  const { data } = await sb
+    .from("tasks")
+    .select("id")
+    .eq("id", taskId)
+    .eq("organization_id", org)
+    .maybeSingle();
+  return !!data;
+}
+
+export type ResultadoAnexo = { anexos: number; erroAnexo?: string };
+
 /**
  * Cria a tarefa. Com vários responsáveis, gera UMA tarefa independente por
  * pessoa — foi o pedido da cliente: "mesma tarefa, mas cada uma faz a sua
  * parte, aparecendo no painel de cada uma".
+ *
+ * Os anexos escolhidos na criação sobem para CADA cópia, pelo mesmo motivo:
+ * cada responsável abre a tarefa dele e precisa ter o arquivo ali.
  */
-export async function createTask(fd: FormData) {
+export async function createTask(fd: FormData): Promise<ResultadoAnexo & { criadas: number }> {
   const session = await getSession();
   if (!session?.organization) throw new Error("Sessão inválida.");
+  const org = session.organization.id;
 
   const fields = taskFields(fd);
   if (!fields.title) throw new Error("Informe o título da tarefa.");
@@ -38,7 +125,7 @@ export async function createTask(fd: FormData) {
     .from("tasks")
     .insert(
       targets.map((assignee) => ({
-        organization_id: session.organization!.id,
+        organization_id: org,
         created_by: session.profile?.id ?? null,
         assigned_to: assignee,
         ...fields,
@@ -48,14 +135,16 @@ export async function createTask(fd: FormData) {
 
   if (error) throw new Error(error.message);
 
+  const ids = (data ?? []).map((t: { id: string }) => t.id);
+
   // Checklist inicial (mesmos itens em cada cópia).
   const items = fd.getAll("item").map(String).map((t) => t.trim()).filter(Boolean);
-  if (items.length && data?.length) {
+  if (items.length && ids.length) {
     await sb.from("task_items").insert(
-      data.flatMap((task: { id: string }) =>
+      ids.flatMap((taskId) =>
         items.map((title, position) => ({
-          organization_id: session.organization!.id,
-          task_id: task.id,
+          organization_id: org,
+          task_id: taskId,
           title,
           position,
         })),
@@ -63,8 +152,22 @@ export async function createTask(fd: FormData) {
     );
   }
 
+  // A tarefa já existe neste ponto: falha de anexo VOLTA COMO AVISO, não como
+  // exceção. Estourando aqui, a tela mostraria "erro ao criar" e a pessoa
+  // criaria a mesma tarefa de novo — duplicando o que já foi salvo.
+  let anexos = 0;
+  let erroAnexo: string | undefined;
+  const arquivos = arquivosDoForm(fd);
+  if (arquivos.length && ids.length) {
+    try {
+      anexos = await anexarArquivos(ids, arquivos, org);
+    } catch (e) {
+      erroAnexo = e instanceof Error ? e.message : "Não foi possível anexar os arquivos.";
+    }
+  }
+
   revalidatePath("/tarefas");
-  return data?.length ?? 0;
+  return { criadas: ids.length, anexos, erroAnexo };
 }
 
 export async function updateTaskStatus(id: string, status: string) {
@@ -114,11 +217,18 @@ export async function assignTask(id: string, profileId: string | null) {
 }
 
 /**
- * Edita o conteúdo da tarefa (título, descrição, prioridade, prazo).
- * Só mexe no que veio no formulário — status, responsável e recorrência têm
- * ações próprias e não são tocados aqui.
+ * Edita o conteúdo da tarefa (título, descrição, prioridade, prazo) e anexa
+ * o que veio no campo de arquivo. Status, responsável e recorrência têm ações
+ * próprias e não são tocados aqui.
+ *
+ * O anexo entra aqui porque é onde a pessoa procura: ela abre "Editar" para
+ * pôr o arquivo. Antes o formulário de edição nem tinha campo de arquivo — e
+ * o que ela escolhesse não ia para lugar nenhum.
  */
-export async function updateTask(id: string, fd: FormData) {
+export async function updateTask(id: string, fd: FormData): Promise<ResultadoAnexo> {
+  const session = await getSession();
+  if (!session?.organization) throw new Error("Sessão inválida.");
+
   const titulo = String(fd.get("title") || "").trim();
   if (!titulo) throw new Error("O título não pode ficar vazio.");
 
@@ -130,7 +240,22 @@ export async function updateTask(id: string, fd: FormData) {
     due_time: String(fd.get("due_time") || "").trim() || null,
     updated_at: new Date().toISOString(),
   });
+
+  // Mesma regra da criação: o texto já foi salvo, então falha de anexo volta
+  // como aviso — não como "não deu para salvar".
+  let anexos = 0;
+  let erroAnexo: string | undefined;
+  const arquivos = arquivosDoForm(fd);
+  if (arquivos.length) {
+    try {
+      anexos = await anexarArquivos([id], arquivos, session.organization.id);
+    } catch (e) {
+      erroAnexo = e instanceof Error ? e.message : "Não foi possível anexar os arquivos.";
+    }
+  }
+
   revalidatePath("/tarefas");
+  return { anexos, erroAnexo };
 }
 
 export async function deleteTask(id: string) {
@@ -201,39 +326,41 @@ export async function deleteTaskComment(commentId: string) {
   revalidatePath("/tarefas");
 }
 
-/** Anexa arquivos à tarefa (bucket "media", pasta por organização). */
-export async function uploadTaskFiles(taskId: string, fd: FormData) {
+/**
+ * Anexa arquivos a uma tarefa que já existe (seção "Anexos" do detalhe).
+ *
+ * Devolve o resultado em vez de lançar: erro lançado de server action chega
+ * ao navegador redigido em produção ("An error occurred..."), e a tela mostra
+ * essa frase inútil no lugar do motivo real.
+ */
+export async function uploadTaskFiles(taskId: string, fd: FormData): Promise<ResultadoAnexo> {
   const session = await getSession();
-  if (!session?.organization) throw new Error("Sessão inválida.");
+  if (!session?.organization) return { anexos: 0, erroAnexo: "Sessão inválida." };
   const org = session.organization.id;
-  const sb = await createClient();
 
-  const files = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  for (const file of files) {
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `${org}/tarefas/${taskId}/${Date.now()}-${safeName}`;
-    const { error } = await sb.storage
-      .from("media")
-      .upload(path, file, { contentType: file.type || undefined, upsert: false });
-    if (error) throw new Error(`Falha ao enviar ${file.name}: ${error.message}`);
+  const arquivos = arquivosDoForm(fd);
+  if (!arquivos.length) return { anexos: 0, erroAnexo: "Escolha um arquivo antes de enviar." };
 
-    await sb.from("task_files").insert({
-      organization_id: org,
-      task_id: taskId,
-      path,
-      filename: file.name,
-      content_type: file.type || null,
-      byte_size: file.size,
-    });
+  if (!(await tarefaDaOrg(taskId, org))) {
+    return { anexos: 0, erroAnexo: "Tarefa não encontrada." };
   }
-  revalidatePath("/tarefas");
-  return files.length;
+
+  try {
+    const anexos = await anexarArquivos([taskId], arquivos, org);
+    revalidatePath("/tarefas");
+    return { anexos };
+  } catch (e) {
+    return { anexos: 0, erroAnexo: e instanceof Error ? e.message : "Falha ao enviar o arquivo." };
+  }
 }
 
 export async function removeTaskFile(fileId: string) {
   const sb = await createClient();
   const { data: f } = await sb.from("task_files").select("path").eq("id", fileId).maybeSingle();
-  if (f?.path) await sb.storage.from("media").remove([f.path]);
+  // Apagar do storage também precisa de service role: `storage.objects` só
+  // tem política de SELECT, então o DELETE do usuário falha em silêncio e o
+  // arquivo fica no bucket para sempre, mesmo depois de sumir da tela.
+  if (f?.path) await createServiceClient().storage.from("media").remove([f.path]);
   await orgDelete("task_files", fileId);
   revalidatePath("/tarefas");
 }

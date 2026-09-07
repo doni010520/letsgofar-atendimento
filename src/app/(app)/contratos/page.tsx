@@ -26,7 +26,10 @@ export type TemplateRow = {
 };
 
 async function getData() {
-  if (PREVIEW_MODE) return { contracts: [], templates: [] };
+  if (PREVIEW_MODE) return { contracts: [
+    { id: "d582f5d0-a884-4288-9aa7-45e04435f98b", number: "CTR-2026-00035", title: "CONTRATO DE AULAS EM GRUPO", status: "pending", plan_start_date: "2026-08-27", plan_end_date: "2027-02-27", created_at: "2026-08-18T23:52:11Z", contract_signers: [{ id: "61507101-5300-4eab-8bed-1420ac4961b0", name: "LUCAS LUIZ DA SILVA", email: "lucas@example.com", status: "pending", sign_token: "fdd38ea1-6d5f-4030-9690-f00bf0c4f7bd" }] },
+    { id: "2ccddd24-b398-4f98-b74d-6869bc115956", number: "CTR-2026-00036", title: "EXECUTIVE CLASS", status: "draft", plan_start_date: null, plan_end_date: null, created_at: "2026-08-19T23:42:49Z", contract_signers: [] },
+  ] as ContractRow[], templates: [] };
   const sb = await createClient();
   const [{ data: contracts }, { data: templates }] = await Promise.all([
     sb
