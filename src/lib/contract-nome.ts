@@ -1,3 +1,5 @@
+import { normalizar } from "@/lib/texto";
+
 /**
  * Quem é o contrato, do ponto de vista de quem procura por ele.
  *
@@ -68,14 +70,6 @@ export function tituloPdfContrato(
   return bruto.replace(ILEGAIS_EM_ARQUIVO, "-").replace(/\s+/g, " ").trim();
 }
 
-/** Tira acento e caixa: "André" tem que ser achado digitando "andre". */
-export function normalizar(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim();
-}
 
 /**
  * Texto onde a busca da lista procura. Junta número, título e signatários para
@@ -89,3 +83,6 @@ export function textoBuscavel(c: {
   const nomes = (c.contract_signers ?? []).map((s) => s?.name ?? "");
   return normalizar([c.number ?? "", c.title ?? "", ...nomes].join(" "));
 }
+
+/** Reexporta a normalização compartilhada — ver src/lib/texto.ts. */
+export { normalizar };

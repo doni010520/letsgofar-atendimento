@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { User } from "lucide-react";
 import { Card, Button } from "@/components/ui";
 import { toast } from "@/components/toast";
-import type { TaskRow } from "@/app/(app)/tarefas/page";
+import type { TaskRow, TaskColumn } from "@/app/(app)/tarefas/page";
 import {
   updateTaskStatus,
   moveTask,
@@ -19,6 +19,11 @@ import {
   setTaskTags,
   assignTask,
   updateTask,
+  createTaskColumn,
+  updateTaskColumn,
+  deleteTaskColumn,
+  reorderTaskColumns,
+  moveTaskToColumn,
 } from "@/app/(app)/tarefas/actions";
 import { MAX_ANEXO_LABEL, erroDeTamanho, urlDoAnexo } from "@/lib/task-files";
 
@@ -42,6 +47,73 @@ const PRIORITY_DOT: Record<string, string> = {
  * entre dois cards muitas vezes antes de os números se aproximarem demais.
  */
 const PASSO = 1000;
+
+/**
+ * Card de tarefa. Extraído para os DOIS quadros usarem exatamente o mesmo —
+ * o de status e o de colunas próprias. Duplicar o markup faria os dois
+ * divergirem na primeira mudança de visual.
+ */
+function CardTarefa({
+  t,
+  onOpen,
+  arrastando,
+  algoArrastando,
+  onDragStart,
+  onDragEnd,
+  onSoltarAqui,
+}: {
+  t: TaskRow;
+  onOpen: (t: TaskRow) => void;
+  arrastando: boolean;
+  algoArrastando: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onSoltarAqui: () => void;
+}) {
+  return (
+              <div
+                                draggable
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                // Soltar SOBRE um card insere antes dele; o `stopPropagation`
+                // impede que a coluna também receba o evento e jogue no fim.
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.stopPropagation(); onSoltarAqui(); }}
+                className={`cursor-grab rounded-lg border border-border bg-surface p-3 shadow-sm ${
+                  arrastando ? "opacity-50" : ""
+                } ${algoArrastando && !arrastando ? "hover:border-brand hover:border-t-2" : ""}`}
+              >
+                <button onClick={() => onOpen(t)} className="w-full text-left">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gray-400"}`} />
+                    <span className="truncate text-sm text-ink">{t.title}</span>
+                  </div>
+                  {t.due_date && (
+                    <p className="mt-1 text-[11px] text-ink-soft">
+                      {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
+                    </p>
+                  )}
+                </button>
+                {/* Tarefa de lead: o nome leva direto à conversa, para escrever
+                    para a pessoa sem ter que procurá-la pelo nome depois. */}
+                {t.contacts && (
+                  t.conversation_id ? (
+                    <a
+                      href={`/atendimento?c=${t.conversation_id}`}
+                      className="mt-1.5 flex items-center gap-1 truncate rounded bg-brand/10 px-1.5 py-1 text-[11px] font-medium text-brand hover:bg-brand/20"
+                    >
+                      <User size={11} /> {t.contacts.name || t.contacts.phone}
+                      <span className="ml-auto shrink-0">→</span>
+                    </a>
+                  ) : (
+                    <p className="mt-1.5 flex items-center gap-1 truncate text-[11px] font-medium text-ink-soft">
+                      <User size={11} /> {t.contacts.name || t.contacts.phone}
+                    </p>
+                  )
+                )}
+              </div>
+  );
+}
 
 /** Visão Kanban por status (paridade com o TaskKanban do Chatwoot). */
 export function TaskKanbanView({
@@ -105,48 +177,16 @@ export function TaskKanbanView({
           </div>
           <div className="flex-1 space-y-2 p-2">
             {byStatus[col.key].map((t) => (
-              <div
+              <CardTarefa
                 key={t.id}
-                draggable
+                t={t}
+                onOpen={onOpen}
+                arrastando={dragging === t.id}
+                algoArrastando={!!dragging}
                 onDragStart={() => setDragging(t.id)}
                 onDragEnd={() => setDragging(null)}
-                // Soltar SOBRE um card insere antes dele; o `stopPropagation`
-                // impede que a coluna também receba o evento e jogue no fim.
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.stopPropagation(); soltar(col.key, t.id); }}
-                className={`cursor-grab rounded-lg border border-border bg-surface p-3 shadow-sm ${
-                  dragging === t.id ? "opacity-50" : ""
-                } ${dragging && dragging !== t.id ? "hover:border-brand hover:border-t-2" : ""}`}
-              >
-                <button onClick={() => onOpen(t)} className="w-full text-left">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gray-400"}`} />
-                    <span className="truncate text-sm text-ink">{t.title}</span>
-                  </div>
-                  {t.due_date && (
-                    <p className="mt-1 text-[11px] text-ink-soft">
-                      {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
-                    </p>
-                  )}
-                </button>
-                {/* Tarefa de lead: o nome leva direto à conversa, para escrever
-                    para a pessoa sem ter que procurá-la pelo nome depois. */}
-                {t.contacts && (
-                  t.conversation_id ? (
-                    <a
-                      href={`/atendimento?c=${t.conversation_id}`}
-                      className="mt-1.5 flex items-center gap-1 truncate rounded bg-brand/10 px-1.5 py-1 text-[11px] font-medium text-brand hover:bg-brand/20"
-                    >
-                      <User size={11} /> {t.contacts.name || t.contacts.phone}
-                      <span className="ml-auto shrink-0">→</span>
-                    </a>
-                  ) : (
-                    <p className="mt-1.5 flex items-center gap-1 truncate text-[11px] font-medium text-ink-soft">
-                      <User size={11} /> {t.contacts.name || t.contacts.phone}
-                    </p>
-                  )
-                )}
-              </div>
+                onSoltarAqui={() => soltar(col.key, t.id)}
+              />
             ))}
             {!byStatus[col.key].length && (
               <p className="py-6 text-center text-xs text-ink-soft">vazio</p>
@@ -154,6 +194,263 @@ export function TaskKanbanView({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Quadro de COLUNAS PRÓPRIAS — o pedido da Ianka ("criar uma coluna DELEGADAS"
+ * e "criar nossas próprias colunas").
+ *
+ * É um segundo quadro sobre as MESMAS tarefas, não um substituto do de status.
+ * Mover um card aqui muda só `column_id`; `status` fica onde estava. Esse é o
+ * ponto: se "DELEGADAS" fosse mais uma coluna de status, uma tarefa delegada
+ * que já está em andamento teria que escolher entre aparecer como delegada OU
+ * como em andamento. Aqui ela é as duas coisas.
+ *
+ * As colunas são da ORGANIZAÇÃO. Tarefa é objeto compartilhado: quadro por
+ * pessoa faria a mesma tarefa morar em lugares diferentes para cada uma. Quem
+ * recorta "o que interessa para cada uma" são os filtros por pessoa e a busca,
+ * que continuam valendo aqui.
+ */
+export function TaskColumnsBoard({
+  tasks,
+  columns,
+  onOpen,
+}: {
+  tasks: TaskRow[];
+  columns: TaskColumn[];
+  onOpen: (t: TaskRow) => void;
+}) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [criando, setCriando] = useState(false);
+  const [nome, setNome] = useState("");
+  const [editando, setEditando] = useState<string | null>(null);
+  const [rascunho, setRascunho] = useState("");
+  const [, startTransition] = useTransition();
+
+  const ordenadas = useMemo(
+    () => [...columns].sort((a, b) => a.position - b.position),
+    [columns],
+  );
+
+  const porColuna = useMemo(() => {
+    const map: Record<string, TaskRow[]> = { __sem__: [] };
+    for (const c of ordenadas) map[c.id] = [];
+    for (const t of tasks) {
+      const k = t.column_id && map[t.column_id] ? t.column_id : "__sem__";
+      map[k].push(t);
+    }
+    return map;
+  }, [tasks, ordenadas]);
+
+  function soltar(columnId: string | null, antesDe: string | null) {
+    if (!dragging) return;
+    const id = dragging;
+    setDragging(null);
+    const chave = columnId ?? "__sem__";
+    const lista = (porColuna[chave] ?? []).filter((t) => t.id !== id);
+    const idx = antesDe ? lista.findIndex((t) => t.id === antesDe) : lista.length;
+    const anterior = idx > 0 ? lista[idx - 1]?.position : null;
+    const seguinte = idx < lista.length ? lista[idx]?.position : null;
+    let nova: number;
+    if (anterior == null && seguinte == null) nova = PASSO;
+    else if (anterior == null) nova = (seguinte as number) - PASSO;
+    else if (seguinte == null) nova = (anterior as number) + PASSO;
+    else nova = ((anterior as number) + (seguinte as number)) / 2;
+
+    startTransition(async () => {
+      const r = await moveTaskToColumn(id, columnId, nova);
+      if (!r.ok) toast(r.erro, "error");
+    });
+  }
+
+  function criar() {
+    const limpo = nome.trim();
+    if (!limpo) return;
+    setNome("");
+    setCriando(false);
+    startTransition(async () => {
+      const r = await createTaskColumn(limpo);
+      if (!r.ok) toast(r.erro, "error");
+      else toast('Coluna "' + limpo + '" criada.');
+    });
+  }
+
+  function renomear(id: string) {
+    const limpo = rascunho.trim();
+    setEditando(null);
+    if (!limpo) return;
+    startTransition(async () => {
+      const r = await updateTaskColumn(id, { name: limpo });
+      if (!r.ok) toast(r.erro, "error");
+    });
+  }
+
+  function apagar(c: TaskColumn) {
+    const n = porColuna[c.id]?.length ?? 0;
+    const aviso = n
+      ? 'Apagar a coluna "' + c.name + '"? As ' + n + ' tarefa(s) dela voltam para "Sem coluna" — nenhuma tarefa é apagada.'
+      : 'Apagar a coluna "' + c.name + '"?';
+    if (!confirm(aviso)) return;
+    startTransition(async () => {
+      const r = await deleteTaskColumn(c.id);
+      if (!r.ok) toast(r.erro, "error");
+    });
+  }
+
+  function mover(id: string, direcao: -1 | 1) {
+    const idx = ordenadas.findIndex((c) => c.id === id);
+    const alvo = idx + direcao;
+    if (idx < 0 || alvo < 0 || alvo >= ordenadas.length) return;
+    const nova = [...ordenadas];
+    [nova[idx], nova[alvo]] = [nova[alvo], nova[idx]];
+    startTransition(async () => {
+      const r = await reorderTaskColumns(nova.map((c) => c.id));
+      if (!r.ok) toast(r.erro, "error");
+    });
+  }
+
+  const semColuna = porColuna.__sem__ ?? [];
+
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-4">
+      {/* "Sem coluna" sempre existe e não se apaga: é para onde as tarefas
+          voltam quando uma coluna some, e onde ficam as que ninguém moveu. */}
+      <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={() => soltar(null, null)}
+        className="flex w-64 shrink-0 flex-col rounded-card border border-dashed border-border bg-surface/40"
+      >
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <span className="text-sm font-medium text-ink-soft">Sem coluna</span>
+          <span className="text-xs text-ink-soft">{semColuna.length}</span>
+        </div>
+        <div className="flex-1 space-y-2 p-2">
+          {semColuna.map((t) => (
+            <CardTarefa
+              key={t.id}
+              t={t}
+              onOpen={onOpen}
+              arrastando={dragging === t.id}
+              algoArrastando={!!dragging}
+              onDragStart={() => setDragging(t.id)}
+              onDragEnd={() => setDragging(null)}
+              onSoltarAqui={() => soltar(null, t.id)}
+            />
+          ))}
+          {!semColuna.length && <p className="py-6 text-center text-xs text-ink-soft">vazio</p>}
+        </div>
+      </div>
+
+      {ordenadas.map((c, i) => (
+        <div
+          key={c.id}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => soltar(c.id, null)}
+          className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
+        >
+          <div className="border-b border-border px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+              {editando === c.id ? (
+                <input
+                  autoFocus
+                  value={rascunho}
+                  onChange={(e) => setRascunho(e.target.value)}
+                  onBlur={() => renomear(c.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") renomear(c.id);
+                    if (e.key === "Escape") setEditando(null);
+                  }}
+                  className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5 text-sm text-ink"
+                />
+              ) : (
+                <button
+                  onClick={() => { setEditando(c.id); setRascunho(c.name); }}
+                  title="Clique para renomear"
+                  className="min-w-0 flex-1 truncate text-left text-sm font-medium text-ink hover:underline"
+                >
+                  {c.name}
+                </button>
+              )}
+              <span className="shrink-0 text-xs text-ink-soft">{porColuna[c.id]?.length ?? 0}</span>
+            </div>
+            <div className="mt-1 flex items-center gap-1">
+              <button
+                onClick={() => mover(c.id, -1)}
+                disabled={i === 0}
+                title="Mover coluna para a esquerda"
+                className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
+              >
+                &larr;
+              </button>
+              <button
+                onClick={() => mover(c.id, 1)}
+                disabled={i === ordenadas.length - 1}
+                title="Mover coluna para a direita"
+                className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
+              >
+                &rarr;
+              </button>
+              <button
+                onClick={() => apagar(c)}
+                title="Apagar coluna (as tarefas voltam para Sem coluna)"
+                className="ml-auto rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-red-50 hover:text-red-600"
+              >
+                apagar
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 space-y-2 p-2">
+            {(porColuna[c.id] ?? []).map((t) => (
+              <CardTarefa
+                key={t.id}
+                t={t}
+                onOpen={onOpen}
+                arrastando={dragging === t.id}
+                algoArrastando={!!dragging}
+                onDragStart={() => setDragging(t.id)}
+                onDragEnd={() => setDragging(null)}
+                onSoltarAqui={() => soltar(c.id, t.id)}
+              />
+            ))}
+            {!(porColuna[c.id] ?? []).length && (
+              <p className="py-6 text-center text-xs text-ink-soft">arraste tarefas para cá</p>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Nova coluna */}
+      <div className="flex w-64 shrink-0 flex-col rounded-card border border-dashed border-border p-2">
+        {criando ? (
+          <div className="space-y-2">
+            <input
+              autoFocus
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") criar();
+                if (e.key === "Escape") { setCriando(false); setNome(""); }
+              }}
+              placeholder="Ex.: DELEGADAS"
+              className="w-full rounded-lg border border-border px-2 py-1.5 text-sm text-ink"
+            />
+            <div className="flex gap-2">
+              <Button onClick={criar}>Criar</Button>
+              <Button variant="ghost" onClick={() => { setCriando(false); setNome(""); }}>Cancelar</Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setCriando(true)}
+            className="w-full rounded-lg px-3 py-6 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink"
+          >
+            + Nova coluna
+          </button>
+        )}
+      </div>
     </div>
   );
 }

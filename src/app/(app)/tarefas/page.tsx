@@ -24,6 +24,8 @@ export type TaskRow = {
   created_at: string;
   /** Ordem manual dentro da coluna do kanban. Nulo = ordem automática. */
   position: number | null;
+  /** Coluna do quadro próprio (task_columns). Nulo = "Sem coluna". */
+  column_id?: string | null;
   task_items?: { id: string; title: string; completed: boolean; position: number; created_at: string }[];
   task_comments?: { id: string; content: string; created_at: string; profile_id: string | null }[];
   task_files?: { id: string; filename: string; path: string; byte_size: number | null }[];
@@ -49,6 +51,19 @@ async function getTasks(): Promise<TaskRow[]> {
   return (data as TaskRow[]) ?? [];
 }
 
+/** Colunas do quadro próprio, criadas pela equipe. */
+export type TaskColumn = { id: string; name: string; color: string; position: number };
+
+async function getTaskColumns(): Promise<TaskColumn[]> {
+  if (PREVIEW_MODE) return [];
+  const sb = await createClient();
+  const { data } = await sb
+    .from("task_columns")
+    .select("id, name, color, position")
+    .order("position", { ascending: true });
+  return (data as TaskColumn[]) ?? [];
+}
+
 async function getAgents(): Promise<{ id: string; name: string | null }[]> {
   if (PREVIEW_MODE) return [];
   const sb = await createClient();
@@ -64,10 +79,11 @@ async function getTags(): Promise<{ id: string; name: string; color: string | nu
 }
 
 export default async function TarefasPage() {
-  const [tasks, agents, tags, session] = await Promise.all([
+  const [tasks, agents, tags, columns, session] = await Promise.all([
     getTasks(),
     getAgents(),
     getTags(),
+    getTaskColumns(),
     PREVIEW_MODE ? Promise.resolve(null) : getSession(),
   ]);
   return (
@@ -77,7 +93,7 @@ export default async function TarefasPage() {
         subtitle="Tarefas da equipe com checklist, prazo, recorrência e vários responsáveis."
       />
       {/* meId permite o filtro "Minhas" sem outra consulta no cliente. */}
-      <TasksClient tasks={tasks} agents={agents} tags={tags} meId={session?.profile?.id ?? null} />
+      <TasksClient tasks={tasks} agents={agents} tags={tags} columns={columns} meId={session?.profile?.id ?? null} />
     </Scroll>
   );
 }

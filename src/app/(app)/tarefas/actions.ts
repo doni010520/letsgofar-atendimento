@@ -382,3 +382,120 @@ export async function setTaskTags(taskId: string, tagIds: string[]) {
   }
   revalidatePath("/tarefas");
 }
+
+// =====================================================================
+// Colunas próprias do kanban de tarefas (pedido da Ianka)
+//
+// Estas ações CONFEREM quantas linhas mudaram, em vez de confiar no silêncio.
+// `orgUpdate` não confere — e já custou caro duas vezes: a reatribuição de
+// tarefa antes da migration 0036, e o botão de assinatura, que o RLS recusava
+// devolvendo zero linhas e nenhum erro. Aqui a tela recebe o motivo.
+// =====================================================================
+
+const CORES_COLUNA = ["#6366F1", "#F59E0B", "#3B82F6", "#10B981", "#EF4444", "#8B5CF6", "#EC4899", "#64748B"];
+
+export async function createTaskColumn(name: string) {
+  const limpo = name.trim();
+  if (!limpo) return { ok: false as const, erro: "Dê um nome para a coluna." };
+  const session = await getSession();
+  if (!session?.organization) return { ok: false as const, erro: "Sessão inválida." };
+  const sb = await createClient();
+
+  // Posição no fim e cor seguinte da paleta, para colunas novas não nascerem
+  // todas iguais nem empilhadas na frente das que já existem.
+  const { data: existentes } = await sb
+    .from("task_columns")
+    .select("id, position")
+    .order("position", { ascending: false })
+    .limit(1);
+  const proxima = ((existentes?.[0]?.position as number | undefined) ?? -1) + 1;
+  const { count } = await sb.from("task_columns").select("id", { count: "exact", head: true });
+
+  const { data, error } = await sb
+    .from("task_columns")
+    .insert({
+      organization_id: session.organization.id,
+      name: limpo,
+      position: proxima,
+      color: CORES_COLUNA[(count ?? 0) % CORES_COLUNA.length],
+      created_by: session.profile?.id ?? null,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    // 23505 = unique (organization_id, name).
+    const dup = error.code === "23505";
+    return { ok: false as const, erro: dup ? `Já existe uma coluna "${limpo}".` : error.message };
+  }
+  if (!data) return { ok: false as const, erro: "Não foi possível criar a coluna." };
+  revalidatePath("/tarefas");
+  return { ok: true as const, id: (data as { id: string }).id };
+}
+
+export async function updateTaskColumn(id: string, patch: { name?: string; color?: string }) {
+  const upd: Record<string, unknown> = {};
+  if (patch.name !== undefined) {
+    const limpo = patch.name.trim();
+    if (!limpo) return { ok: false as const, erro: "O nome não pode ficar vazio." };
+    upd.name = limpo;
+  }
+  if (patch.color !== undefined) upd.color = patch.color;
+  // Update vazio devolve 200 com lista VAZIA e o `.maybeSingle()` acharia que
+  // sumiu — a mesma armadilha que quebrou o "Novo atendimento".
+  if (!Object.keys(upd).length) return { ok: true as const };
+
+  const sb = await createClient();
+  const { data, error } = await sb.from("task_columns").update(upd).eq("id", id).select("id").maybeSingle();
+  if (error) return { ok: false as const, erro: error.code === "23505" ? "Já existe uma coluna com esse nome." : error.message };
+  if (!data) return { ok: false as const, erro: "Não foi possível salvar a coluna." };
+  revalidatePath("/tarefas");
+  return { ok: true as const };
+}
+
+/**
+ * Apaga a coluna. As tarefas NÃO são apagadas: a FK é `on delete set null`,
+ * então elas voltam para "Sem coluna". Apagar uma coluna nunca pode levar o
+ * trabalho de alguém junto.
+ */
+export async function deleteTaskColumn(id: string) {
+  const sb = await createClient();
+  const { data, error } = await sb.from("task_columns").delete().eq("id", id).select("id").maybeSingle();
+  if (error) return { ok: false as const, erro: error.message };
+  if (!data) return { ok: false as const, erro: "Não foi possível apagar a coluna." };
+  revalidatePath("/tarefas");
+  return { ok: true as const };
+}
+
+/** Reordena as colunas na ordem em que os ids chegam. */
+export async function reorderTaskColumns(ids: string[]) {
+  const sb = await createClient();
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await sb.from("task_columns").update({ position: i }).eq("id", ids[i]);
+    if (error) return { ok: false as const, erro: error.message };
+  }
+  revalidatePath("/tarefas");
+  return { ok: true as const };
+}
+
+/**
+ * Move a tarefa para uma coluna do quadro próprio (null = "Sem coluna").
+ *
+ * Não mexe em `status`: o quadro de colunas próprias é uma segunda leitura das
+ * MESMAS tarefas, não um substituto do fluxo. Uma tarefa pode estar em
+ * "DELEGADAS" e continuar "Em andamento" — que é justamente o que se perderia
+ * se "delegada" virasse mais uma coluna de status.
+ */
+export async function moveTaskToColumn(taskId: string, columnId: string | null, position: number | null) {
+  const sb = await createClient();
+  const { data, error } = await sb
+    .from("tasks")
+    .update({ column_id: columnId, position })
+    .eq("id", taskId)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false as const, erro: error.message };
+  if (!data) return { ok: false as const, erro: "Não foi possível mover a tarefa." };
+  revalidatePath("/tarefas");
+  return { ok: true as const };
+}

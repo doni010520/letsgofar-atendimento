@@ -3,9 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
 import { toast } from "@/components/toast";
-import type { TaskRow } from "@/app/(app)/tarefas/page";
+import type { TaskRow, TaskColumn } from "@/app/(app)/tarefas/page";
+import { noEscopo, casaBusca, type EscopoPessoa } from "@/lib/task-filtros";
 import { createTask, updateTaskStatus, deleteTask, toggleTaskItem } from "@/app/(app)/tarefas/actions";
-import { TaskKanbanView, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
+import { TaskKanbanView, TaskColumnsBoard, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
 import { MAX_ANEXO_LABEL, erroDeTamanho } from "@/lib/task-files";
 
 const PRIORITY: Record<string, { label: string; cls: string }> = {
@@ -28,21 +29,33 @@ export function TasksClient({
   tasks,
   agents,
   tags = [],
+  columns = [],
   meId = null,
 }: {
   tasks: TaskRow[];
   agents: { id: string; name: string | null }[];
   tags?: { id: string; name: string; color: string | null }[];
+  /** Colunas do quadro próprio, criadas pela equipe. */
+  columns?: TaskColumn[];
   /** Perfil de quem está logado — habilita o filtro "Minhas". */
   meId?: string | null;
 }) {
-  const [soMinhas, setSoMinhas] = useState(false);
   /**
-   * "Delegadas por mim": criadas por mim, mas atribuídas a outra pessoa —
-   * pedido da Ianka. Sem isto ela só tinha "Só as minhas" (o que É dela
-   * fazer); não tinha como acompanhar o que ela distribuiu para o time.
+   * Um recorte por pessoa de cada vez — antes eram dois booleanos que se
+   * desligavam na mão, o que já é um estado único mal escrito.
+   *
+   * - `delegadas` (já existia): eu criei e passei para OUTRA pessoa.
+   * - `recebidas` (novo, pedido da Ianka): outra pessoa criou e passou PARA
+   *   MIM. É o espelho do de cima — "as que recebemos de terceiros e não
+   *   misturar com as nossas". O botão que existia fazia só o sentido oposto.
+   *
+   * A regra fica em `src/lib/task-filtros.ts`, com teste.
    */
-  const [delegadas, setDelegadas] = useState(false);
+  const [escopoPessoa, setEscopoPessoa] = useState<EscopoPessoa>("todas");
+  /** Busca por título, descrição ou nome de quem é responsável. */
+  const [busca, setBusca] = useState("");
+  /** Kanban por STATUS (padrão) ou pelo quadro de colunas próprias. */
+  const [quadro, setQuadro] = useState<"status" | "colunas">("status");
   /**
    * São dois tipos de tarefa e o Chatwoot os mantinha em lugares separados: a
    * aba de Tarefas listava só as da equipe (conferido na tela: "Pendente 47",
@@ -69,15 +82,17 @@ export function TasksClient({
   // Escopo de pessoa: vale para lista, kanban e calendário — por isso é
   // aplicado antes, e não só dentro do filtro de status da lista.
   const escopo = useMemo(() => {
-    let lista = soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks;
-    if (delegadas && meId) lista = lista.filter((t) => t.created_by === meId && t.assigned_to !== meId);
+    let lista = tasks.filter((t) => noEscopo(t, escopoPessoa, meId));
+    // A busca vale para lista, kanban e calendário — procurar tarefa era o
+    // segundo pedido da Ianka, e não existia campo nenhum em nenhuma visão.
+    if (busca.trim()) lista = lista.filter((t) => casaBusca(t, busca, agentName[t.assigned_to ?? ""]));
     if (tipo === "lead") lista = lista.filter((t) => t.contact_id);
     if (tipo === "equipe") lista = lista.filter((t) => !t.contact_id);
     if (esconderFinalizadas) {
       lista = lista.filter((t) => t.status !== "completed" && t.status !== "cancelled");
     }
     return lista;
-  }, [tasks, soMinhas, delegadas, meId, tipo, esconderFinalizadas]);
+  }, [tasks, escopoPessoa, busca, agentName, meId, tipo, esconderFinalizadas]);
 
   /** Follow-ups pendentes: tarefa presa a um contato. Vêm em lista própria. */
   const followUps = useMemo(
@@ -129,11 +144,11 @@ export function TasksClient({
    *  existem mesmo quando a aba está mostrando só tarefas da equipe. */
   const leadsHoje = useMemo(() => {
     const d = today();
-    const base = soMinhas && meId ? tasks.filter((t) => t.assigned_to === meId) : tasks;
+    const base = tasks.filter((t) => noEscopo(t, escopoPessoa, meId));
     return base.filter(
       (t) => t.contact_id && t.status !== "completed" && t.status !== "cancelled" && t.due_date === d,
     ).length;
-  }, [tasks, soMinhas, meId]);
+  }, [tasks, escopoPessoa, meId]);
 
   async function onSubmit(fd: FormData) {
     setError("");
@@ -353,7 +368,34 @@ export function TasksClient({
       </div>
 
       {mode === "kanban" && (
-        <TaskKanbanView tasks={escopo} onOpen={setDetail} esconderFinalizadas={esconderFinalizadas} />
+        <>
+          {/* Dois quadros sobre as MESMAS tarefas: o de status (o de sempre) e
+              o de colunas que a equipe cria. Trocar de quadro nao mexe em
+              tarefa nenhuma; e so outra forma de olhar. */}
+          <div className="inline-flex rounded-lg bg-gray-100 p-1">
+            {([
+              { k: "status", r: "Por status", t: "A fazer / Em andamento / Concluidas" },
+              { k: "colunas", r: "Minhas colunas", t: "Colunas criadas pela equipe" },
+            ] as const).map((o) => (
+              <button
+                key={o.k}
+                onClick={() => setQuadro(o.k)}
+                aria-pressed={quadro === o.k}
+                title={o.t}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                  quadro === o.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
+                }`}
+              >
+                {o.r}
+              </button>
+            ))}
+          </div>
+          {quadro === "status" ? (
+            <TaskKanbanView tasks={escopo} onOpen={setDetail} esconderFinalizadas={esconderFinalizadas} />
+          ) : (
+            <TaskColumnsBoard tasks={escopo} columns={columns} onOpen={setDetail} />
+          )}
+        </>
       )}
       {mode === "calendar" && <TaskCalendarView tasks={escopo} onOpen={setDetail} />}
 
@@ -413,33 +455,51 @@ export function TasksClient({
           {esconderFinalizadas ? "Concluídas escondidas" : "Esconder concluídas"}
         </button>
 
-        {/* Vale para lista, kanban e calendário. */}
+        {/* Recorte por pessoa — vale para lista, kanban e calendário. */}
         {meId && (
+          <div className="inline-flex rounded-lg bg-gray-100 p-1">
+            {([
+              { k: "todas", r: "Todas", t: "Sem recorte por pessoa" },
+              { k: "minhas", r: "Minhas", t: "Tarefas sob minha responsabilidade" },
+              { k: "delegadas", r: "Delegadas por mim", t: "Eu criei e passei para outra pessoa" },
+              { k: "recebidas", r: "Recebidas", t: "Outra pessoa criou e passou para mim — as que vêm de terceiros" },
+            ] as const).map((o) => (
+              <button
+                key={o.k}
+                onClick={() => setEscopoPessoa(o.k)}
+                aria-pressed={escopoPessoa === o.k}
+                title={o.t}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                  escopoPessoa === o.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
+                }`}
+              >
+                {o.r}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Busca — vale para as três visões. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar tarefa por título, descrição ou responsável"
+          aria-label="Buscar tarefa"
+          className="min-h-[40px] flex-1 rounded-lg border border-border px-3 py-2 text-sm text-ink placeholder:text-ink-soft sm:max-w-md"
+        />
+        {busca && (
           <button
-            onClick={() => { setSoMinhas((v) => !v); setDelegadas(false); }}
-            aria-pressed={soMinhas}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              soMinhas
-                ? "border-ink bg-ink text-white"
-                : "border-border bg-surface text-ink-soft hover:text-ink"
-            }`}
+            type="button"
+            onClick={() => setBusca("")}
+            className="min-h-[40px] rounded-lg border border-border px-3 py-2 text-xs font-medium text-ink-soft hover:text-ink"
           >
-            {soMinhas ? "Mostrando só as minhas" : "Só as minhas"}
+            Limpar
           </button>
         )}
-        {meId && (
-          <button
-            onClick={() => { setDelegadas((v) => !v); setSoMinhas(false); }}
-            aria-pressed={delegadas}
-            title="Tarefas que eu criei, mas que estão sob responsabilidade de outra pessoa"
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              delegadas
-                ? "border-ink bg-ink text-white"
-                : "border-border bg-surface text-ink-soft hover:text-ink"
-            }`}
-          >
-            {delegadas ? "Mostrando delegadas" : "Delegadas por mim"}
-          </button>
+        {busca.trim() && (
+          <span className="text-xs text-ink-soft">{escopo.length} encontrada(s)</span>
         )}
       </div>
 
