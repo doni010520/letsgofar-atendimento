@@ -6,7 +6,7 @@ import { toast } from "@/components/toast";
 import type { TaskRow, TaskColumn } from "@/app/(app)/tarefas/page";
 import { noEscopo, casaBusca, type EscopoPessoa } from "@/lib/task-filtros";
 import { createTask, updateTaskStatus, deleteTask, toggleTaskItem } from "@/app/(app)/tarefas/actions";
-import { TaskKanbanView, TaskColumnsBoard, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
+import { TaskKanbanView, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
 import { MAX_ANEXO_LABEL, erroDeTamanho } from "@/lib/task-files";
 
 const PRIORITY: Record<string, { label: string; cls: string }> = {
@@ -54,8 +54,7 @@ export function TasksClient({
   const [escopoPessoa, setEscopoPessoa] = useState<EscopoPessoa>("todas");
   /** Busca por título, descrição ou nome de quem é responsável. */
   const [busca, setBusca] = useState("");
-  /** Kanban por STATUS (padrão) ou pelo quadro de colunas próprias. */
-  const [quadro, setQuadro] = useState<"status" | "colunas">("status");
+
   /**
    * São dois tipos de tarefa e o Chatwoot os mantinha em lugares separados: a
    * aba de Tarefas listava só as da equipe (conferido na tela: "Pendente 47",
@@ -367,35 +366,16 @@ export function TasksClient({
         <Button onClick={() => setCreating(true)}>+ Nova tarefa</Button>
       </div>
 
+      {/* Quadro ÚNICO: colunas de status + as que a equipe criou, lado a lado.
+          Eram dois quadros alternados e a Ianka reclamou com razão — criar uma
+          coluna é acrescentar ao fluxo, não trocar de fluxo. */}
       {mode === "kanban" && (
-        <>
-          {/* Dois quadros sobre as MESMAS tarefas: o de status (o de sempre) e
-              o de colunas que a equipe cria. Trocar de quadro nao mexe em
-              tarefa nenhuma; e so outra forma de olhar. */}
-          <div className="inline-flex rounded-lg bg-gray-100 p-1">
-            {([
-              { k: "status", r: "Por status", t: "A fazer / Em andamento / Concluidas" },
-              { k: "colunas", r: "Minhas colunas", t: "Colunas criadas pela equipe" },
-            ] as const).map((o) => (
-              <button
-                key={o.k}
-                onClick={() => setQuadro(o.k)}
-                aria-pressed={quadro === o.k}
-                title={o.t}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                  quadro === o.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
-                }`}
-              >
-                {o.r}
-              </button>
-            ))}
-          </div>
-          {quadro === "status" ? (
-            <TaskKanbanView tasks={escopo} onOpen={setDetail} esconderFinalizadas={esconderFinalizadas} />
-          ) : (
-            <TaskColumnsBoard tasks={escopo} columns={columns} onOpen={setDetail} />
-          )}
-        </>
+        <TaskKanbanView
+          tasks={escopo}
+          columns={columns}
+          onOpen={setDetail}
+          esconderFinalizadas={esconderFinalizadas}
+        />
       )}
       {mode === "calendar" && <TaskCalendarView tasks={escopo} onOpen={setDetail} />}
 

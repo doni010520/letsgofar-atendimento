@@ -1,5 +1,5 @@
 // Recortes e busca de tarefas (rodar: npx tsx scripts/verify-task-filtros.mjs)
-import { noEscopo, casaBusca } from "../src/lib/task-filtros.ts";
+import { noEscopo, casaBusca, chaveDaColuna } from "../src/lib/task-filtros.ts";
 
 let fail = 0;
 const ok = (c, m) => { console.log(`${c ? "OK " : "XX "} ${m}`); if (!c) fail++; };
@@ -40,6 +40,20 @@ ok(casaBusca(t, "financeiro") === false, "termo que nao existe nao casa");
 ok(casaBusca(t, "luana", "Luana Lima") === true, "acha pelo NOME de quem e responsavel");
 ok(casaBusca(t, "luana") === false, "sem o nome do responsavel, nao inventa correspondencia");
 ok(casaBusca({ title: null, description: null }, "x") === false, "titulo/descricao nulos nao quebram");
+
+
+// --- posicionamento no quadro unico ---
+const COLS = new Set(["col-delegadas", "col-espera"]);
+ok(chaveDaColuna({ status: "pending", column_id: null }, COLS) === "pending",
+   "sem coluna propria, cai na coluna do STATUS");
+ok(chaveDaColuna({ status: "in_progress", column_id: "col-delegadas" }, COLS) === "col-delegadas",
+   "com coluna propria, aparece nela (e o status continua gravado)");
+ok(chaveDaColuna({ status: "completed", column_id: "col-que-foi-apagada" }, COLS) === "completed",
+   "coluna apagada nao some com a tarefa: volta pro status");
+ok(chaveDaColuna({ status: null, column_id: null }, COLS) === "pending",
+   "sem status nenhum, assume 'a fazer' em vez de sumir");
+ok(chaveDaColuna({ status: "pending", column_id: null }, []) === "pending",
+   "sem nenhuma coluna propria criada, o quadro e so o de status");
 
 console.log(fail ? `\n${fail} falha(s)` : "\nTudo certo.");
 process.exit(fail ? 1 : 0);

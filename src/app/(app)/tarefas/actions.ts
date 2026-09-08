@@ -190,7 +190,9 @@ export async function updateTaskStatus(id: string, status: string) {
  * ordem automática (por prazo), como era antes de existir ordem manual.
  */
 export async function moveTask(id: string, status: string, position: number | null) {
-  const patch: Record<string, unknown> = { position };
+  // Voltar para uma coluna de status tira a tarefa da coluna própria: no quadro
+  // unificado ela aparece em UM lugar só, e o lugar passa a ser o status.
+  const patch: Record<string, unknown> = { position, column_id: null };
   if (status) {
     patch.status = status;
     if (status === "completed") patch.completed_at = new Date().toISOString();
@@ -205,14 +207,20 @@ export async function moveTask(id: string, status: string, position: number | nu
 }
 
 export async function assignTask(id: string, profileId: string | null) {
-  // `orgUpdate` não confere quantas linhas mudaram — se o RLS bloquear em
-  // silêncio, a chamada "funciona" (sem erro) e zero linhas mudam. Foi
-  // exatamente isso que aconteceu aqui até a migration 0036: reatribuir para
-  // outra pessoa esbarrava na própria política de UPDATE. Conferir a linha
-  // devolvida transforma esse silêncio num erro visível, se voltar a ocorrer.
+  // Vai pela função `reassign_task` (migration 0041), não por UPDATE direto.
+  //
+  // A 0036 já tinha consertado a política de UPDATE e mesmo assim continuava
+  // falhando — quem barrava era a de SELECT. O Postgres exige que a linha
+  // RESULTANTE siga visível para quem editou; ao passar adiante uma tarefa que
+  // ela não criou, a linha deixa de ser dela e some da sua visão, e o banco
+  // recusa com 42501. Era o "Não consigo mudar o responsável pelas tarefas",
+  // que na tela aparecia como erro genérico de render do servidor.
+  //
+  // A função é SECURITY DEFINER e confere a permissão explicitamente, então a
+  // troca acontece sem precisar afrouxar quem enxerga o quê.
   const sb = await createClient();
-  const { data, error } = await sb.from("tasks").update({ assigned_to: profileId }).eq("id", id).select("id").maybeSingle();
-  if (error || !data) throw new Error(error?.message ?? "Não foi possível mudar o responsável.");
+  const { error } = await sb.rpc("reassign_task", { p_task: id, p_to: profileId });
+  if (error) throw new Error(error.message || "Não foi possível mudar o responsável.");
   revalidatePath("/tarefas");
 }
 

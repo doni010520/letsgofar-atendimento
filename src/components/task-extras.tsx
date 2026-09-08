@@ -5,6 +5,7 @@ import { User } from "lucide-react";
 import { Card, Button } from "@/components/ui";
 import { toast } from "@/components/toast";
 import type { TaskRow, TaskColumn } from "@/app/(app)/tarefas/page";
+import { chaveDaColuna } from "@/lib/task-filtros";
 import {
   updateTaskStatus,
   moveTask,
@@ -115,112 +116,33 @@ function CardTarefa({
   );
 }
 
-/** Visão Kanban por status (paridade com o TaskKanban do Chatwoot). */
+/**
+ * Kanban de tarefas: UM quadro só, com as colunas de status e as colunas que
+ * a equipe criou lado a lado.
+ *
+ * Antes eram dois quadros alternados, e a Ianka bateu de frente com isso:
+ * "quando clico em minhas colunas somem as outras (andamento...), tem como
+ * manter elas? E eu add as que eu quiser na nova coluna?". Estava certa — o
+ * ponto de criar uma coluna é acrescentar ao fluxo, não trocar de fluxo.
+ *
+ * Uma tarefa aparece em UM lugar só (ver `chaveDaColuna`): na coluna própria
+ * onde foi posta, ou, na falta dela, na coluna do seu status. Arrastar para
+ * uma coluna de status limpa a coluna própria e grava o status; arrastar para
+ * uma coluna própria guarda a coluna e NÃO mexe no status — o que estava "em
+ * andamento" continua em andamento por baixo.
+ */
 export function TaskKanbanView({
   tasks,
+  columns = [],
   onOpen,
   esconderFinalizadas = false,
 }: {
   tasks: TaskRow[];
+  /** Colunas criadas pela equipe. Vazio = quadro só de status, como sempre foi. */
+  columns?: TaskColumn[];
   onOpen: (t: TaskRow) => void;
   /** Esconde as colunas Concluídas e Canceladas — a tela vive cheia delas. */
   esconderFinalizadas?: boolean;
-}) {
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-
-  const colunas = esconderFinalizadas
-    ? STATUS_COLUMNS.filter((c) => c.key !== "completed" && c.key !== "cancelled")
-    : STATUS_COLUMNS;
-
-  const byStatus = useMemo(() => {
-    const map: Record<string, TaskRow[]> = {};
-    for (const c of STATUS_COLUMNS) map[c.key] = [];
-    for (const t of tasks) if (map[t.status]) map[t.status].push(t);
-    return map;
-  }, [tasks]);
-
-  /**
-   * Onde o card cai. `antesDe` é o card sobre o qual foi solto (null = fim da
-   * coluna). A posição nova é a média entre o vizinho de cima e o de baixo.
-   */
-  function soltar(colKey: string, antesDe: string | null) {
-    if (!dragging) return;
-    const id = dragging;
-    setDragging(null);
-    const lista = byStatus[colKey].filter((t) => t.id !== id);
-    const idx = antesDe ? lista.findIndex((t) => t.id === antesDe) : lista.length;
-    const anterior = idx > 0 ? lista[idx - 1]?.position : null;
-    const seguinte = idx < lista.length ? lista[idx]?.position : null;
-
-    let nova: number;
-    if (anterior == null && seguinte == null) nova = PASSO;              // coluna vazia
-    else if (anterior == null) nova = (seguinte as number) - PASSO;      // foi para o topo
-    else if (seguinte == null) nova = (anterior as number) + PASSO;      // foi para o fim
-    else nova = ((anterior as number) + (seguinte as number)) / 2;       // entre dois
-
-    startTransition(() => void moveTask(id, colKey, nova));
-  }
-
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
-      {colunas.map((col) => (
-        <div
-          key={col.key}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => soltar(col.key, null)}
-          className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
-        >
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-sm font-medium text-ink">{col.label}</span>
-            <span className="text-xs text-ink-soft">{byStatus[col.key].length}</span>
-          </div>
-          <div className="flex-1 space-y-2 p-2">
-            {byStatus[col.key].map((t) => (
-              <CardTarefa
-                key={t.id}
-                t={t}
-                onOpen={onOpen}
-                arrastando={dragging === t.id}
-                algoArrastando={!!dragging}
-                onDragStart={() => setDragging(t.id)}
-                onDragEnd={() => setDragging(null)}
-                onSoltarAqui={() => soltar(col.key, t.id)}
-              />
-            ))}
-            {!byStatus[col.key].length && (
-              <p className="py-6 text-center text-xs text-ink-soft">vazio</p>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Quadro de COLUNAS PRÓPRIAS — o pedido da Ianka ("criar uma coluna DELEGADAS"
- * e "criar nossas próprias colunas").
- *
- * É um segundo quadro sobre as MESMAS tarefas, não um substituto do de status.
- * Mover um card aqui muda só `column_id`; `status` fica onde estava. Esse é o
- * ponto: se "DELEGADAS" fosse mais uma coluna de status, uma tarefa delegada
- * que já está em andamento teria que escolher entre aparecer como delegada OU
- * como em andamento. Aqui ela é as duas coisas.
- *
- * As colunas são da ORGANIZAÇÃO. Tarefa é objeto compartilhado: quadro por
- * pessoa faria a mesma tarefa morar em lugares diferentes para cada uma. Quem
- * recorta "o que interessa para cada uma" são os filtros por pessoa e a busca,
- * que continuam valendo aqui.
- */
-export function TaskColumnsBoard({
-  tasks,
-  columns,
-  onOpen,
-}: {
-  tasks: TaskRow[];
-  columns: TaskColumn[];
-  onOpen: (t: TaskRow) => void;
 }) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -229,38 +151,52 @@ export function TaskColumnsBoard({
   const [rascunho, setRascunho] = useState("");
   const [, startTransition] = useTransition();
 
-  const ordenadas = useMemo(
+  const proprias = useMemo(
     () => [...columns].sort((a, b) => a.position - b.position),
     [columns],
   );
+  const idsProprias = useMemo(() => new Set(proprias.map((c) => c.id)), [proprias]);
+
+  const status = esconderFinalizadas
+    ? STATUS_COLUMNS.filter((c) => c.key !== "completed" && c.key !== "cancelled")
+    : STATUS_COLUMNS;
 
   const porColuna = useMemo(() => {
-    const map: Record<string, TaskRow[]> = { __sem__: [] };
-    for (const c of ordenadas) map[c.id] = [];
+    const map: Record<string, TaskRow[]> = {};
+    for (const c of STATUS_COLUMNS) map[c.key] = [];
+    for (const c of proprias) map[c.id] = [];
     for (const t of tasks) {
-      const k = t.column_id && map[t.column_id] ? t.column_id : "__sem__";
-      map[k].push(t);
+      const k = chaveDaColuna(t, idsProprias);
+      (map[k] ??= []).push(t);
     }
     return map;
-  }, [tasks, ordenadas]);
+  }, [tasks, proprias, idsProprias]);
 
-  function soltar(columnId: string | null, antesDe: string | null) {
-    if (!dragging) return;
-    const id = dragging;
-    setDragging(null);
-    const chave = columnId ?? "__sem__";
+  /** Nova posição do card: média entre os vizinhos, como no quadro antigo. */
+  function novaPosicao(chave: string, id: string, antesDe: string | null) {
     const lista = (porColuna[chave] ?? []).filter((t) => t.id !== id);
     const idx = antesDe ? lista.findIndex((t) => t.id === antesDe) : lista.length;
     const anterior = idx > 0 ? lista[idx - 1]?.position : null;
     const seguinte = idx < lista.length ? lista[idx]?.position : null;
-    let nova: number;
-    if (anterior == null && seguinte == null) nova = PASSO;
-    else if (anterior == null) nova = (seguinte as number) - PASSO;
-    else if (seguinte == null) nova = (anterior as number) + PASSO;
-    else nova = ((anterior as number) + (seguinte as number)) / 2;
+    if (anterior == null && seguinte == null) return PASSO;
+    if (anterior == null) return (seguinte as number) - PASSO;
+    if (seguinte == null) return (anterior as number) + PASSO;
+    return ((anterior as number) + (seguinte as number)) / 2;
+  }
 
+  function soltarNoStatus(statusKey: string, antesDe: string | null) {
+    if (!dragging) return;
+    const id = dragging;
+    setDragging(null);
+    startTransition(() => void moveTask(id, statusKey, novaPosicao(statusKey, id, antesDe)));
+  }
+
+  function soltarNaPropria(columnId: string, antesDe: string | null) {
+    if (!dragging) return;
+    const id = dragging;
+    setDragging(null);
     startTransition(async () => {
-      const r = await moveTaskToColumn(id, columnId, nova);
+      const r = await moveTaskToColumn(id, columnId, novaPosicao(columnId, id, antesDe));
       if (!r.ok) toast(r.erro, "error");
     });
   }
@@ -290,7 +226,7 @@ export function TaskColumnsBoard({
   function apagar(c: TaskColumn) {
     const n = porColuna[c.id]?.length ?? 0;
     const aviso = n
-      ? 'Apagar a coluna "' + c.name + '"? As ' + n + ' tarefa(s) dela voltam para "Sem coluna" — nenhuma tarefa é apagada.'
+      ? 'Apagar a coluna "' + c.name + '"? As ' + n + ' tarefa(s) dela voltam para a coluna do status — nenhuma tarefa é apagada.'
       : 'Apagar a coluna "' + c.name + '"?';
     if (!confirm(aviso)) return;
     startTransition(async () => {
@@ -299,11 +235,11 @@ export function TaskColumnsBoard({
     });
   }
 
-  function mover(id: string, direcao: -1 | 1) {
-    const idx = ordenadas.findIndex((c) => c.id === id);
+  function moverColuna(id: string, direcao: -1 | 1) {
+    const idx = proprias.findIndex((c) => c.id === id);
     const alvo = idx + direcao;
-    if (idx < 0 || alvo < 0 || alvo >= ordenadas.length) return;
-    const nova = [...ordenadas];
+    if (idx < 0 || alvo < 0 || alvo >= proprias.length) return;
+    const nova = [...proprias];
     [nova[idx], nova[alvo]] = [nova[alvo], nova[idx]];
     startTransition(async () => {
       const r = await reorderTaskColumns(nova.map((c) => c.id));
@@ -311,43 +247,46 @@ export function TaskColumnsBoard({
     });
   }
 
-  const semColuna = porColuna.__sem__ ?? [];
-
   return (
     <div className="flex gap-3 overflow-x-auto pb-4">
-      {/* "Sem coluna" sempre existe e não se apaga: é para onde as tarefas
-          voltam quando uma coluna some, e onde ficam as que ninguém moveu. */}
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={() => soltar(null, null)}
-        className="flex w-64 shrink-0 flex-col rounded-card border border-dashed border-border bg-surface/40"
-      >
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="text-sm font-medium text-ink-soft">Sem coluna</span>
-          <span className="text-xs text-ink-soft">{semColuna.length}</span>
+      {/* Colunas de STATUS — continuam onde sempre estiveram. */}
+      {status.map((col) => (
+        <div
+          key={col.key}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => soltarNoStatus(col.key, null)}
+          className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
+        >
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <span className="text-sm font-medium text-ink">{col.label}</span>
+            <span className="text-xs text-ink-soft">{porColuna[col.key]?.length ?? 0}</span>
+          </div>
+          <div className="flex-1 space-y-2 p-2">
+            {(porColuna[col.key] ?? []).map((t) => (
+              <CardTarefa
+                key={t.id}
+                t={t}
+                onOpen={onOpen}
+                arrastando={dragging === t.id}
+                algoArrastando={!!dragging}
+                onDragStart={() => setDragging(t.id)}
+                onDragEnd={() => setDragging(null)}
+                onSoltarAqui={() => soltarNoStatus(col.key, t.id)}
+              />
+            ))}
+            {!(porColuna[col.key] ?? []).length && (
+              <p className="py-6 text-center text-xs text-ink-soft">vazio</p>
+            )}
+          </div>
         </div>
-        <div className="flex-1 space-y-2 p-2">
-          {semColuna.map((t) => (
-            <CardTarefa
-              key={t.id}
-              t={t}
-              onOpen={onOpen}
-              arrastando={dragging === t.id}
-              algoArrastando={!!dragging}
-              onDragStart={() => setDragging(t.id)}
-              onDragEnd={() => setDragging(null)}
-              onSoltarAqui={() => soltar(null, t.id)}
-            />
-          ))}
-          {!semColuna.length && <p className="py-6 text-center text-xs text-ink-soft">vazio</p>}
-        </div>
-      </div>
+      ))}
 
-      {ordenadas.map((c, i) => (
+      {/* Colunas da EQUIPE — a partir daqui é o que ela criou. */}
+      {proprias.map((c, i) => (
         <div
           key={c.id}
           onDragOver={(e) => e.preventDefault()}
-          onDrop={() => soltar(c.id, null)}
+          onDrop={() => soltarNaPropria(c.id, null)}
           className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
         >
           <div className="border-b border-border px-3 py-2">
@@ -378,7 +317,7 @@ export function TaskColumnsBoard({
             </div>
             <div className="mt-1 flex items-center gap-1">
               <button
-                onClick={() => mover(c.id, -1)}
+                onClick={() => moverColuna(c.id, -1)}
                 disabled={i === 0}
                 title="Mover coluna para a esquerda"
                 className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
@@ -386,8 +325,8 @@ export function TaskColumnsBoard({
                 &larr;
               </button>
               <button
-                onClick={() => mover(c.id, 1)}
-                disabled={i === ordenadas.length - 1}
+                onClick={() => moverColuna(c.id, 1)}
+                disabled={i === proprias.length - 1}
                 title="Mover coluna para a direita"
                 className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
               >
@@ -395,7 +334,7 @@ export function TaskColumnsBoard({
               </button>
               <button
                 onClick={() => apagar(c)}
-                title="Apagar coluna (as tarefas voltam para Sem coluna)"
+                title="Apagar coluna (as tarefas voltam para a coluna do status)"
                 className="ml-auto rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-red-50 hover:text-red-600"
               >
                 apagar
@@ -412,7 +351,7 @@ export function TaskColumnsBoard({
                 algoArrastando={!!dragging}
                 onDragStart={() => setDragging(t.id)}
                 onDragEnd={() => setDragging(null)}
-                onSoltarAqui={() => soltar(c.id, t.id)}
+                onSoltarAqui={() => soltarNaPropria(c.id, t.id)}
               />
             ))}
             {!(porColuna[c.id] ?? []).length && (
@@ -422,8 +361,8 @@ export function TaskColumnsBoard({
         </div>
       ))}
 
-      {/* Nova coluna */}
-      <div className="flex w-64 shrink-0 flex-col rounded-card border border-dashed border-border p-2">
+      {/* Criar coluna nova, sempre no fim da fila. */}
+      <div className="flex w-56 shrink-0 flex-col rounded-card border border-dashed border-border p-2">
         {criando ? (
           <div className="space-y-2">
             <input
@@ -455,7 +394,6 @@ export function TaskColumnsBoard({
   );
 }
 
-/** Visão Calendário mensal (paridade com o TaskCalendar do Chatwoot). */
 export function TaskCalendarView({
   tasks,
   onOpen,

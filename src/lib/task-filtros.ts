@@ -57,3 +57,27 @@ export function casaBusca(
   const campos = [t.title ?? "", t.description ?? "", nomeDoResponsavel ?? ""];
   return campos.some((c) => normalizar(c).includes(alvo));
 }
+
+/**
+ * Em QUAL coluna do quadro a tarefa aparece.
+ *
+ * O quadro é um só: as colunas de status (A fazer, Em andamento...) e as
+ * colunas que a equipe criou, lado a lado. A Ianka pediu exatamente isso —
+ * "quando clico em minhas colunas somem as outras (andamento...), tem como
+ * manter elas? E eu add as que eu quiser na nova coluna?".
+ *
+ * Uma tarefa aparece em UM lugar só:
+ * - foi posta numa coluna própria que ainda existe → nessa coluna;
+ * - caso contrário → na coluna do status dela.
+ *
+ * A segunda metade é o que faz a coluna apagada não sumir com tarefa: o
+ * `column_id` órfão é ignorado e a tarefa reaparece no status.
+ */
+export function chaveDaColuna(
+  t: { status?: string | null; column_id?: string | null },
+  colunasProprias: Iterable<string>,
+): string {
+  const validas = colunasProprias instanceof Set ? colunasProprias : new Set(colunasProprias);
+  if (t.column_id && validas.has(t.column_id)) return t.column_id;
+  return t.status ?? "pending";
+}
