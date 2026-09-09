@@ -1,5 +1,5 @@
 import { InboxLoader } from "@/components/inbox/inbox-loader";
-import { getConversations, getMessages } from "@/lib/data/conversations";
+import { getConversations, getClosedCount, getConversationById, getMessages } from "@/lib/data/conversations";
 import { getTags, getAgents, getDepartments, getQuickReplies } from "@/lib/data/management";
 import { getChannels } from "@/lib/data/channels";
 import { getApprovedTemplates } from "@/app/(app)/atendimento/actions";
@@ -15,8 +15,9 @@ export default async function AtendimentoPage({
 }: {
   searchParams: Promise<{ c?: string }>;
 }) {
-  const [conversations, tags, agents, departments, quickReplies, channels, templates] = await Promise.all([
-    getConversations(),
+  const [conversations, closedCount, tags, agents, departments, quickReplies, channels, templates] = await Promise.all([
+    getConversations({ includeClosed: false }),
+    getClosedCount(),
     getTags("conversation"),
     getAgents(),
     getDepartments(),
@@ -26,8 +27,15 @@ export default async function AtendimentoPage({
   ]);
   // Deep-link ?c=<convId> (ex.: clique numa menção do sino) abre essa conversa.
   const requested = (await searchParams)?.c;
-  const first =
-    (requested && conversations.some((c) => c.id === requested) ? requested : conversations[0]?.id) ?? null;
+  // A lista traz só as ATIVAS. Se a menção aponta para uma conversa que já foi
+  // encerrada, ela não está aqui — busca essa uma e põe na frente, em vez de
+  // abrir a primeira conversa qualquer sem avisar.
+  let lista = conversations;
+  if (requested && !lista.some((c) => c.id === requested)) {
+    const avulsa = await getConversationById(requested);
+    if (avulsa) lista = [avulsa, ...lista];
+  }
+  const first = (requested && lista.some((c) => c.id === requested) ? requested : lista[0]?.id) ?? null;
   const initialMessages = first ? await getMessages(first) : [];
 
   let userId: string | null = null;
@@ -57,7 +65,8 @@ export default async function AtendimentoPage({
 
   return (
     <InboxLoader
-      initialConversations={conversations}
+      initialConversations={lista}
+      closedCount={closedCount}
       initialSelectedId={first}
       initialMessages={initialMessages}
       userId={userId}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Users, BellOff, BotOff, Bot, SlidersHorizontal, X, Trash2, Check, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConversationOverview, ConversationStatus, Department, Profile } from "@/lib/types";
@@ -112,6 +112,9 @@ function MultiSelect({
 /* ─── Componente principal ─── */
 export function ConversationList({
   conversations,
+  closedCount = 0,
+  carregandoEncerradas = false,
+  onPrecisaEncerradas,
   selectedId,
   onSelect,
   onPauseAi,
@@ -123,6 +126,11 @@ export function ConversationList({
   agents = [],
 }: {
   conversations: ConversationOverview[];
+  /** Quantas encerradas existem no banco — podem ainda não ter sido carregadas. */
+  closedCount?: number;
+  carregandoEncerradas?: boolean;
+  /** Pede as encerradas ao servidor — chamado ao abrir a aba ou ao buscar. */
+  onPrecisaEncerradas?: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onPauseAi?: (id: string) => void;
@@ -219,6 +227,14 @@ export function ConversationList({
     });
   }, [conversations, tab, userId, isAdmin, dept, agentId, query, period, channelIds]);
 
+  // As encerradas não vêm na carga da página. Elas são necessárias em dois
+  // momentos: ao abrir a aba delas, e ao BUSCAR — porque a busca ignora a aba
+  // de propósito, e sem isso volta o "pesquisei e não encontrei" da Luana.
+  const precisaEncerradas = tab === "encerradas" || !!query.trim();
+  useEffect(() => {
+    if (precisaEncerradas) onPrecisaEncerradas?.();
+  }, [precisaEncerradas, onPrecisaEncerradas]);
+
   // Contagens das 3 abas, respeitando os filtros de departamento e atendente
   // do admin — é o que diz de cara se vale a pena olhar cada uma antes de clicar.
   const contagem = useMemo(() => {
@@ -230,9 +246,11 @@ export function ConversationList({
     return {
       minhas: userId ? base.filter((c) => c.status !== "closed" && c.assigned_user_id === userId).length : 0,
       andamento: base.filter((c) => c.status !== "closed").length,
-      encerradas: base.filter((c) => c.status === "closed").length,
+      // Enquanto não foram carregadas, mostra o total que veio do banco — o
+      // contador não pode dizer 0 só porque a lista ainda não chegou.
+      encerradas: Math.max(base.filter((c) => c.status === "closed").length, closedCount),
     };
-  }, [conversations, isAdmin, dept, agentId, userId]);
+  }, [conversations, isAdmin, dept, agentId, userId, closedCount]);
 
   function alternarMarca(id: string) {
     setMarcadas((prev) => {
@@ -321,7 +339,9 @@ export function ConversationList({
               >
                 {t.label}
                 <span className={cn("ml-1 tabular-nums", tab === t.key ? "opacity-70" : "opacity-50")}>
-                  {contagem[t.key]}
+                  {/* As encerradas chegam sob demanda: enquanto a busca não
+                      volta, mostra "…" em vez de um número que ainda vai mudar. */}
+                  {carregandoEncerradas && t.key === "encerradas" ? "…" : contagem[t.key]}
                 </span>
               </button>
             ))}

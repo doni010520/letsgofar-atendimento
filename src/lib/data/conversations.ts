@@ -45,7 +45,45 @@ const CAMPOS_MENSAGEM = [
   "forwarded", "mentions",
 ].join(",");
 
-export async function getConversations(opts: { includeClosed?: boolean } = {}): Promise<ConversationOverview[]> {
+/**
+ * Uma conversa pelo id, no mesmo formato da lista.
+ *
+ * Existe por causa do deep-link `?c=<id>` (clique numa menção do sino): agora
+ * que a página carrega só as ATIVAS, uma menção numa conversa já encerrada não
+ * estaria na lista e a tela cairia calada na primeira conversa qualquer.
+ */
+export async function getConversationById(id: string): Promise<ConversationOverview | null> {
+  if (PREVIEW_MODE) return MOCK_CONVERSATIONS.find((c) => c.id === id) ?? null;
+  noStore();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("conversation_overview")
+    .select(CAMPOS_INBOX)
+    .eq("id", id)
+    .maybeSingle();
+  return (data as unknown as ConversationOverview) ?? null;
+}
+
+/**
+ * Quantas conversas encerradas existem — só o número, sem trazer as linhas.
+ *
+ * Serve para o contador da aba "Encerradas" continuar certo mesmo quando elas
+ * ainda não foram carregadas. `head: true` não devolve corpo nenhum.
+ */
+export async function getClosedCount(): Promise<number> {
+  if (PREVIEW_MODE) return 0;
+  noStore();
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("conversations")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "closed");
+  return count ?? 0;
+}
+
+export async function getConversations(
+  opts: { includeClosed?: boolean; onlyClosed?: boolean } = {},
+): Promise<ConversationOverview[]> {
   if (PREVIEW_MODE) return MOCK_CONVERSATIONS;
   noStore(); // sempre dados frescos (polling da inbox)
   const includeClosed = opts.includeClosed !== false;
@@ -86,7 +124,8 @@ export async function getConversations(opts: { includeClosed?: boolean } = {}): 
       .select(CAMPOS_INBOX)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .range(inicio, inicio + PAGINA - 1);
-    if (!includeClosed) query = query.neq("status", "closed");
+    if (opts.onlyClosed) query = query.eq("status", "closed");
+    else if (!includeClosed) query = query.neq("status", "closed");
     const { data } = await query;
     // Cast via unknown: com a lista de colunas em string (e não "*") o
     // supabase-js não consegue inferir o shape da linha.

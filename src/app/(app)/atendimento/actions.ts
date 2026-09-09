@@ -21,6 +21,19 @@ export async function fetchMessages(
 }
 
 /** Lista atualizada de conversas (usada pelo polling da inbox). */
+/**
+ * As ENCERRADAS, sob demanda.
+ *
+ * A página carrega só as ativas: as encerradas são 963 de 1.126 (86% do peso)
+ * e não mudam sozinhas. Rebuscá-las a cada `revalidatePath` — e são 25 ações
+ * que revalidam — custava 63ms de CPU no banco por render, contra 19ms.
+ * Elas entram quando alguém abre a aba "Encerradas" OU digita na busca, que
+ * varre todas as abas de propósito.
+ */
+export async function fetchClosedConversations() {
+  return getConversations({ onlyClosed: true });
+}
+
 export async function fetchConversations(opts: { includeClosed?: boolean } = {}) {
   return getConversations(opts);
 }

@@ -9,6 +9,8 @@ let InboxComponent: typeof import("./inbox").Inbox | null = null;
 
 export function InboxLoader(props: {
   initialConversations: ConversationOverview[];
+  /** Quantas encerradas existem — elas só são carregadas sob demanda. */
+  closedCount?: number;
   initialSelectedId: string | null;
   initialMessages: Message[];
   userId: string | null;

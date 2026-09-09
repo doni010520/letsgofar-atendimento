@@ -126,6 +126,7 @@ import {
   toggleIdentifyAgent,
   fetchMessages,
   fetchConversations,
+  fetchClosedConversations,
   fetchChannelStatuses,
   openDirectConversation,
   resolveDirectContact,
@@ -146,6 +147,7 @@ export function Inbox({
   hideAi = false,
   isAdmin = false,
   identifyAgentEnabled: identifyAgentEnabledInitial = false,
+  closedCount = 0,
   tags,
   agents,
   departments,
@@ -161,6 +163,8 @@ export function Inbox({
   hideAi?: boolean;
   isAdmin?: boolean;
   identifyAgentEnabled?: boolean;
+  /** Quantas encerradas existem no banco — carregadas sob demanda. */
+  closedCount?: number;
   tags: Tag[];
   agents: Profile[];
   departments: Department[];
@@ -319,6 +323,36 @@ export function Inbox({
     () => !document.hidden,
     () => true, // no servidor não existe aba oculta
   );
+  /**
+   * As ENCERRADAS entram só quando alguém precisa delas.
+   *
+   * A página passou a carregar apenas as ativas: as encerradas são 963 de
+   * 1.126 e não mudam sozinhas, mas eram rebuscadas a cada `revalidatePath` —
+   * e 25 ações revalidam. Aqui elas chegam uma vez, quando a atendente abre a
+   * aba "Encerradas" OU digita na busca (que varre todas as abas de propósito,
+   * senão volta o "pesquisei e não encontrei").
+   */
+  const encerradasPedidas = useRef(false);
+  const [carregandoEncerradas, setCarregandoEncerradas] = useState(false);
+  const garantirEncerradas = useCallback(async () => {
+    if (encerradasPedidas.current) return;
+    encerradasPedidas.current = true;
+    setCarregandoEncerradas(true);
+    try {
+      const fechadas = await fetchClosedConversations();
+      if (Array.isArray(fechadas)) {
+        setConversations((prev) => {
+          const tem = new Set(prev.map((c) => c.id));
+          return [...prev, ...fechadas.filter((c) => !tem.has(c.id))];
+        });
+      }
+    } catch {
+      encerradasPedidas.current = false; // deixa tentar de novo
+    } finally {
+      setCarregandoEncerradas(false);
+    }
+  }, []);
+
   /**
    * Recarrega só as ATIVAS e mescla com as encerradas que já estão na memória.
    *
@@ -1107,6 +1141,9 @@ export function Inbox({
       <div className={`${selectedId ? "hidden lg:flex" : "flex"} h-full w-full lg:w-auto`}>
         <ConversationList
           conversations={visibleConversations}
+          closedCount={closedCount}
+          carregandoEncerradas={carregandoEncerradas}
+          onPrecisaEncerradas={garantirEncerradas}
           selectedId={selectedId}
           onSelect={selectConversation}
           onPauseAi={handlePauseAiQuick}
