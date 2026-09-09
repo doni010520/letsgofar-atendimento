@@ -4,24 +4,10 @@ import { useMemo, useState, useTransition } from "react";
 import { Card, Button, EmptyState } from "@/components/ui";
 import { toast } from "@/components/toast";
 import type { TaskRow, TaskColumn } from "@/app/(app)/tarefas/page";
-import { noEscopo, casaBusca, type EscopoPessoa } from "@/lib/task-filtros";
-import { createTask, updateTaskStatus, deleteTask, toggleTaskItem } from "@/app/(app)/tarefas/actions";
-import { TaskKanbanView, TaskCalendarView, TaskDetailPanel } from "@/components/task-extras";
+import { casaBusca, COL_DELEGADAS, COL_RECEBIDAS } from "@/lib/task-filtros";
+import { createTask } from "@/app/(app)/tarefas/actions";
+import { TaskKanbanView, TaskDetailPanel } from "@/components/task-extras";
 import { MAX_ANEXO_LABEL, erroDeTamanho } from "@/lib/task-files";
-
-const PRIORITY: Record<string, { label: string; cls: string }> = {
-  urgent: { label: "Urgente", cls: "bg-red-100 text-red-700" },
-  high: { label: "Alta", cls: "bg-orange-100 text-orange-700" },
-  medium: { label: "Média", cls: "bg-blue-100 text-blue-700" },
-  low: { label: "Baixa", cls: "bg-gray-100 text-gray-600" },
-};
-
-const VIEWS = [
-  { key: "active", label: "Ativas" },
-  { key: "today", label: "Hoje" },
-  { key: "overdue", label: "Atrasadas" },
-  { key: "completed", label: "Concluídas" },
-] as const;
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -51,7 +37,11 @@ export function TasksClient({
    *
    * A regra fica em `src/lib/task-filtros.ts`, com teste.
    */
-  const [escopoPessoa, setEscopoPessoa] = useState<EscopoPessoa>("todas");
+  /** "todos" ou o id de alguém do time. Substitui os botões Todas/Minhas e
+   *  atende o "filtrar de alguém do time" que ela pediu. */
+  const [pessoa, setPessoa] = useState<string>("todos");
+  /** Mostrar o quadro inteiro ou uma coluna só. */
+  const [colunaVisivel, setColunaVisivel] = useState<string>("todas");
   /** Busca por título, descrição ou nome de quem é responsável. */
   const [busca, setBusca] = useState("");
 
@@ -64,9 +54,7 @@ export function TasksClient({
    */
   const [tipo, setTipo] = useState<"todas" | "lead" | "equipe">("equipe");
   const [esconderFinalizadas, setEsconderFinalizadas] = useState(false);
-  const [mode, setMode] = useState<"list" | "kanban" | "calendar">("list");
   const [detail, setDetail] = useState<TaskRow | null>(null);
-  const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("active");
   const [creating, setCreating] = useState(false);
   const [items, setItems] = useState<string[]>([]);
   const [newItem, setNewItem] = useState("");
@@ -81,7 +69,7 @@ export function TasksClient({
   // Escopo de pessoa: vale para lista, kanban e calendário — por isso é
   // aplicado antes, e não só dentro do filtro de status da lista.
   const escopo = useMemo(() => {
-    let lista = tasks.filter((t) => noEscopo(t, escopoPessoa, meId));
+    let lista = pessoa === "todos" ? tasks : tasks.filter((t) => t.assigned_to === pessoa);
     // A busca vale para lista, kanban e calendário — procurar tarefa era o
     // segundo pedido da Ianka, e não existia campo nenhum em nenhuma visão.
     if (busca.trim()) lista = lista.filter((t) => casaBusca(t, busca, agentName[t.assigned_to ?? ""]));
@@ -91,29 +79,9 @@ export function TasksClient({
       lista = lista.filter((t) => t.status !== "completed" && t.status !== "cancelled");
     }
     return lista;
-  }, [tasks, escopoPessoa, busca, agentName, meId, tipo, esconderFinalizadas]);
+  }, [tasks, pessoa, busca, agentName, tipo, esconderFinalizadas]);
 
-  /** Follow-ups pendentes: tarefa presa a um contato. Vêm em lista própria. */
-  const followUps = useMemo(
-    () =>
-      escopo
-        .filter((t) => t.contact_id && t.status !== "completed" && t.status !== "cancelled")
-        .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999")),
-    [escopo],
-  );
 
-  const visible = useMemo(() => {
-    const d = today();
-    return escopo.filter((t) => {
-      // Follow-up de contato já aparece na seção de cima.
-      if (t.contact_id && t.status !== "completed" && t.status !== "cancelled") return false;
-      const active = t.status === "pending" || t.status === "in_progress";
-      if (view === "active") return active;
-      if (view === "today") return active && t.due_date === d;
-      if (view === "overdue") return active && !!t.due_date && t.due_date < d;
-      return t.status === "completed";
-    });
-  }, [escopo, view]);
 
   // Tarefas sinalizadas pelo cron: lembrete disparado ou venceram.
   const atencao = useMemo(
@@ -143,11 +111,11 @@ export function TasksClient({
    *  existem mesmo quando a aba está mostrando só tarefas da equipe. */
   const leadsHoje = useMemo(() => {
     const d = today();
-    const base = tasks.filter((t) => noEscopo(t, escopoPessoa, meId));
+    const base = pessoa === "todos" ? tasks : tasks.filter((t) => t.assigned_to === pessoa);
     return base.filter(
       (t) => t.contact_id && t.status !== "completed" && t.status !== "cancelled" && t.due_date === d,
     ).length;
-  }, [tasks, escopoPessoa, meId]);
+  }, [tasks, pessoa]);
 
   async function onSubmit(fd: FormData) {
     setError("");
@@ -330,8 +298,8 @@ export function TasksClient({
         <Card><p className="text-xs text-ink-soft">Atrasadas</p><p className="text-2xl font-semibold text-red-600">{stats.overdue}</p></Card>
       </div>
 
-      {/* Follow-up de lead não aparece na aba "Da equipe". Sem este aviso, ele
-          fica invisível justamente no dia em que precisa ser feito. */}
+      {/* Follow-up de lead não aparece com o filtro "Da equipe". Sem este aviso,
+          ele fica invisível justamente no dia em que precisa ser feito. */}
       {tipo !== "lead" && leadsHoje > 0 && (
         <button
           onClick={() => setTipo("lead")}
@@ -345,39 +313,97 @@ export function TasksClient({
         </button>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-lg bg-gray-100 p-1">
-          {([
-            { k: "list", l: "Lista" },
-            { k: "kanban", l: "Kanban" },
-            { k: "calendar", l: "Calendário" },
-          ] as const).map((m) => (
-            <button
-              key={m.k}
-              onClick={() => setMode(m.k)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                mode === m.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
-              }`}
-            >
-              {m.l}
-            </button>
+      {/* UMA linha de controles, em dropdown.
+          Antes eram três fileiras de abas mais quatro botões, e a Ianka foi
+          direta: "não fica um monte de clique, um monte de sub-aba que acaba
+          sendo mais confuso do que útil". */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar tarefa"
+          aria-label="Buscar tarefa"
+          className="min-h-[40px] flex-1 rounded-lg border border-border px-3 py-2 text-sm text-ink placeholder:text-ink-soft sm:max-w-xs"
+        />
+
+        <select
+          value={pessoa}
+          onChange={(e) => setPessoa(e.target.value)}
+          aria-label="Filtrar por pessoa"
+          className="min-h-[40px] rounded-lg border border-border bg-surface px-2 py-2 text-sm text-ink"
+        >
+          <option value="todos">Time todo</option>
+          {meId && <option value={meId}>Só as minhas</option>}
+          {agents
+            .filter((a) => a.id !== meId)
+            .map((a) => (
+              <option key={a.id} value={a.id}>{a.name ?? "Sem nome"}</option>
+            ))}
+        </select>
+
+        <select
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value as typeof tipo)}
+          aria-label="Filtrar por tipo"
+          className="min-h-[40px] rounded-lg border border-border bg-surface px-2 py-2 text-sm text-ink"
+        >
+          <option value="equipe">Da equipe</option>
+          <option value="lead">Follow-ups de leads</option>
+          <option value="todas">Equipe + leads</option>
+        </select>
+
+        <select
+          value={colunaVisivel}
+          onChange={(e) => setColunaVisivel(e.target.value)}
+          aria-label="Mostrar coluna"
+          className="min-h-[40px] rounded-lg border border-border bg-surface px-2 py-2 text-sm text-ink"
+        >
+          <option value="todas">Todas as colunas</option>
+          <option value="pending">A fazer</option>
+          <option value="in_progress">Em andamento</option>
+          {meId && <option value={COL_DELEGADAS}>Delegadas por mim</option>}
+          {meId && <option value={COL_RECEBIDAS}>Recebidas</option>}
+          <option value="completed">Concluídas</option>
+          <option value="cancelled">Canceladas</option>
+          {columns.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </div>
+        </select>
+
+        <button
+          onClick={() => setEsconderFinalizadas((v) => !v)}
+          aria-pressed={esconderFinalizadas}
+          className={`min-h-[40px] rounded-lg border px-3 py-2 text-xs font-medium ${
+            esconderFinalizadas
+              ? "border-ink bg-ink text-white"
+              : "border-border bg-surface text-ink-soft hover:text-ink"
+          }`}
+        >
+          {esconderFinalizadas ? "Concluídas escondidas" : "Esconder concluídas"}
+        </button>
+
         <Button onClick={() => setCreating(true)}>+ Nova tarefa</Button>
       </div>
 
-      {/* Quadro ÚNICO: colunas de status + as que a equipe criou, lado a lado.
-          Eram dois quadros alternados e a Ianka reclamou com razão — criar uma
-          coluna é acrescentar ao fluxo, não trocar de fluxo. */}
-      {mode === "kanban" && (
-        <TaskKanbanView
-          tasks={escopo}
-          columns={columns}
-          onOpen={setDetail}
-          esconderFinalizadas={esconderFinalizadas}
+      {/* Kanban é a ÚNICA visão.
+          Lista e Calendário saíram a pedido dela: "uma que lista não dá nem
+          pra gente pesquisar, pra escrolar isso daí, pra achar alguma coisa,
+          fica difícil. Eu deixaria só o Kanban." */}
+      <TaskKanbanView
+        tasks={escopo}
+        columns={columns}
+        onOpen={setDetail}
+        esconderFinalizadas={esconderFinalizadas}
+        meId={meId}
+        colunaVisivel={colunaVisivel}
+      />
+
+      {!escopo.length && (
+        <EmptyState
+          title="Nenhuma tarefa aqui"
+          hint={busca.trim() ? "Nada com esse termo. Tente outro ou limpe a busca." : "Troque os filtros ou crie uma tarefa."}
         />
       )}
-      {mode === "calendar" && <TaskCalendarView tasks={escopo} onOpen={setDetail} />}
 
       {detail && (
         <TaskDetailPanel
@@ -387,224 +413,6 @@ export function TasksClient({
           onClose={() => setDetail(null)}
         />
       )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className={`inline-flex rounded-lg bg-gray-100 p-1 ${mode === "list" ? "" : "hidden"}`}>
-          {VIEWS.map((v) => (
-            <button
-              key={v.key}
-              onClick={() => setView(v.key)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                view === v.key ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        {/* Separa os dois tipos em qualquer visão. */}
-        <div className="inline-flex rounded-lg bg-gray-100 p-1">
-          {([
-            { k: "equipe", r: "Da equipe" },
-            { k: "lead", r: "Follow-ups de leads" },
-            { k: "todas", r: "Todas" },
-          ] as const).map((o) => (
-            <button
-              key={o.k}
-              onClick={() => setTipo(o.k)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                tipo === o.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
-              }`}
-            >
-              {o.r}
-            </button>
-          ))}
-        </div>
-
-        {/* Concluída/cancelada continua feita, mas ninguém precisa olhar para
-            ela o dia inteiro — no kanban some a coluna, na lista some a linha. */}
-        <button
-          onClick={() => setEsconderFinalizadas((v) => !v)}
-          aria-pressed={esconderFinalizadas}
-          className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-            esconderFinalizadas
-              ? "border-ink bg-ink text-white"
-              : "border-border bg-surface text-ink-soft hover:text-ink"
-          }`}
-        >
-          {esconderFinalizadas ? "Concluídas escondidas" : "Esconder concluídas"}
-        </button>
-
-        {/* Recorte por pessoa — vale para lista, kanban e calendário. */}
-        {meId && (
-          <div className="inline-flex rounded-lg bg-gray-100 p-1">
-            {([
-              { k: "todas", r: "Todas", t: "Sem recorte por pessoa" },
-              { k: "minhas", r: "Minhas", t: "Tarefas sob minha responsabilidade" },
-              { k: "delegadas", r: "Delegadas por mim", t: "Eu criei e passei para outra pessoa" },
-              { k: "recebidas", r: "Recebidas", t: "Outra pessoa criou e passou para mim — as que vêm de terceiros" },
-            ] as const).map((o) => (
-              <button
-                key={o.k}
-                onClick={() => setEscopoPessoa(o.k)}
-                aria-pressed={escopoPessoa === o.k}
-                title={o.t}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                  escopoPessoa === o.k ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
-                }`}
-              >
-                {o.r}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Busca — vale para as três visões. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar tarefa por título, descrição ou responsável"
-          aria-label="Buscar tarefa"
-          className="min-h-[40px] flex-1 rounded-lg border border-border px-3 py-2 text-sm text-ink placeholder:text-ink-soft sm:max-w-md"
-        />
-        {busca && (
-          <button
-            type="button"
-            onClick={() => setBusca("")}
-            className="min-h-[40px] rounded-lg border border-border px-3 py-2 text-xs font-medium text-ink-soft hover:text-ink"
-          >
-            Limpar
-          </button>
-        )}
-        {busca.trim() && (
-          <span className="text-xs text-ink-soft">{escopo.length} encontrada(s)</span>
-        )}
-      </div>
-
-      {/* Follow-ups: tarefas presas a um contato. No Chatwoot ficavam em outro
-          lugar (dentro da ficha), e misturá-las com as tarefas da equipe
-          atrapalhou a rotina de quem trabalha o funil — por isso vêm em cima e
-          separadas, cada uma abrindo a conversa daquela pessoa. */}
-      {mode === "list" && followUps.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Follow-ups de contatos <span className="text-brand">({followUps.length})</span>
-          </h2>
-          <div className="space-y-1.5">
-            {followUps.map((t) => {
-              const p = PRIORITY[t.priority] ?? PRIORITY.medium;
-              const late = !!t.due_date && t.due_date < today();
-              const quem = t.contacts?.name || t.contacts?.phone || "contato";
-              const conteudo = (
-                <>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{quem}</p>
-                    <p className="truncate text-xs text-ink-soft">{t.title}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {t.due_date && (
-                      <span className={`text-[11px] ${late ? "font-medium text-red-600" : "text-ink-soft"}`}>
-                        {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
-                      </span>
-                    )}
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${p.cls}`}>{p.label}</span>
-                  </div>
-                </>
-              );
-              const cls = `flex items-center gap-3 rounded-lg border p-2.5 transition ${
-                late ? "border-red-200 bg-red-50" : "border-border bg-surface"
-              }`;
-              // Sem conversa não há para onde levar; mostra sem link.
-              return t.conversation_id ? (
-                <a key={t.id} href={`/atendimento?c=${t.conversation_id}`} className={`${cls} hover:border-brand`}>
-                  {conteudo}
-                </a>
-              ) : (
-                <div key={t.id} className={cls}>{conteudo}</div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {mode === "list" && !visible.length && !followUps.length && (
-        <EmptyState title="Nenhuma tarefa aqui" hint="Crie uma tarefa ou troque o filtro." />
-      )}
-
-      {mode === "list" && visible.length > 0 && followUps.length > 0 && (
-        <h2 className="pt-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
-          Tarefas da equipe <span className="text-ink-soft">({visible.length})</span>
-        </h2>
-      )}
-
-      <div className={`space-y-2 ${mode === "list" ? "" : "hidden"}`}>
-        {visible.map((t) => {
-          const p = PRIORITY[t.priority] ?? PRIORITY.medium;
-          const done = t.status === "completed";
-          const late = !done && !!t.due_date && t.due_date < today();
-          const items = (t.task_items ?? []).sort((a, b) => a.position - b.position);
-          const doneCount = items.filter((i) => i.completed).length;
-
-          return (
-            <Card key={t.id}>
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={done}
-                  onChange={() =>
-                    startTransition(() => void updateTaskStatus(t.id, done ? "pending" : "completed"))
-                  }
-                  className="mt-1 rounded border-border"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button onClick={() => setDetail(t)} className={`text-left font-medium text-ink hover:underline ${done ? "line-through opacity-60" : ""}`}>{t.title}</button>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${p.cls}`}>{p.label}</span>
-                    {t.recurrence_type !== "none" && (
-                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">repete</span>
-                    )}
-                  </div>
-                  {t.description && <p className="mt-1 text-sm text-ink-soft">{t.description}</p>}
-
-                  <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-ink-soft">
-                    {t.assigned_to && <span>{agentName[t.assigned_to] ?? "—"}</span>}
-                    {t.due_date && (
-                      <span className={late ? "font-medium text-red-600" : ""}>
-                        {new Date(`${t.due_date}T12:00:00`).toLocaleDateString("pt-BR")}
-                        {t.due_time ? ` ${t.due_time.slice(0, 5)}` : ""}
-                        {late ? " · atrasada" : ""}
-                      </span>
-                    )}
-                    {items.length > 0 && <span>{doneCount}/{items.length} itens</span>}
-                  </div>
-
-                  {items.length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {items.map((i) => (
-                        <li key={i.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={i.completed}
-                            onChange={() => startTransition(() => void toggleTaskItem(i.id, !i.completed))}
-                            className="rounded border-border"
-                          />
-                          <span className={i.completed ? "text-ink-soft line-through" : "text-ink"}>{i.title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <Button variant="ghost" onClick={() => startTransition(() => void deleteTask(t.id))}>
-                  Excluir
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
     </div>
   );
 }

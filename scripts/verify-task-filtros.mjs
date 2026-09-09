@@ -1,5 +1,5 @@
 // Recortes e busca de tarefas (rodar: npx tsx scripts/verify-task-filtros.mjs)
-import { noEscopo, casaBusca, chaveDaColuna } from "../src/lib/task-filtros.ts";
+import { noEscopo, casaBusca, chaveDaColuna, COL_DELEGADAS, COL_RECEBIDAS } from "../src/lib/task-filtros.ts";
 
 let fail = 0;
 const ok = (c, m) => { console.log(`${c ? "OK " : "XX "} ${m}`); if (!c) fail++; };
@@ -43,17 +43,32 @@ ok(casaBusca({ title: null, description: null }, "x") === false, "titulo/descric
 
 
 // --- posicionamento no quadro unico ---
-const COLS = new Set(["col-delegadas", "col-espera"]);
-ok(chaveDaColuna({ status: "pending", column_id: null }, COLS) === "pending",
-   "sem coluna propria, cai na coluna do STATUS");
-ok(chaveDaColuna({ status: "in_progress", column_id: "col-delegadas" }, COLS) === "col-delegadas",
-   "com coluna propria, aparece nela (e o status continua gravado)");
-ok(chaveDaColuna({ status: "completed", column_id: "col-que-foi-apagada" }, COLS) === "completed",
-   "coluna apagada nao some com a tarefa: volta pro status");
-ok(chaveDaColuna({ status: null, column_id: null }, COLS) === "pending",
-   "sem status nenhum, assume 'a fazer' em vez de sumir");
-ok(chaveDaColuna({ status: "pending", column_id: null }, []) === "pending",
-   "sem nenhuma coluna propria criada, o quadro e so o de status");
+const COLS = new Set(["col-x"]);
+const EU2 = "u-ianka", OUTRA2 = "u-luana";
+const ch = (t) => chaveDaColuna(t, COLS, EU2);
+
+ok(ch({ status: "pending", created_by: EU2, assigned_to: EU2 }) === "pending",
+   "minha propria tarefa fica em A fazer");
+ok(ch({ status: "pending", created_by: EU2, assigned_to: OUTRA2 }) === COL_DELEGADAS,
+   "delegada por mim SAI de A fazer e vai pra coluna Delegadas (o pedido da Ianka)");
+ok(ch({ status: "in_progress", created_by: EU2, assigned_to: OUTRA2 }) === COL_DELEGADAS,
+   "delegada em andamento tambem fica em Delegadas");
+ok(ch({ status: "pending", created_by: OUTRA2, assigned_to: EU2 }) === COL_RECEBIDAS,
+   "recebida de outra pessoa vai pra coluna Recebidas");
+ok(ch({ status: "completed", created_by: EU2, assigned_to: OUTRA2 }) === "completed",
+   "delegada CONCLUIDA vai pro arquivo, nao entope a coluna Delegadas");
+ok(ch({ status: "cancelled", created_by: OUTRA2, assigned_to: EU2 }) === "cancelled",
+   "recebida cancelada idem");
+ok(ch({ status: "pending", column_id: "col-x", created_by: EU2, assigned_to: OUTRA2 }) === "col-x",
+   "coluna propria manda: escolha explicita vence o calculo");
+ok(ch({ status: "pending", column_id: "col-apagada", created_by: EU2, assigned_to: EU2 }) === "pending",
+   "coluna apagada nao some com a tarefa");
+ok(ch({ status: "pending", created_by: OUTRA2, assigned_to: OUTRA2 }) === "pending",
+   "tarefa de terceiros entre terceiros nao vira delegada nem recebida");
+ok(ch({ status: "pending", created_by: EU2, assigned_to: null }) === "pending",
+   "criada por mim e sem dono NAO conta como delegada");
+ok(chaveDaColuna({ status: "pending", created_by: EU2, assigned_to: OUTRA2 }, COLS, null) === "pending",
+   "sem 'eu' definido nao existe delegada/recebida");
 
 console.log(fail ? `\n${fail} falha(s)` : "\nTudo certo.");
 process.exit(fail ? 1 : 0);

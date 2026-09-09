@@ -2,10 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { User } from "lucide-react";
-import { Card, Button } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { toast } from "@/components/toast";
 import type { TaskRow, TaskColumn } from "@/app/(app)/tarefas/page";
-import { chaveDaColuna } from "@/lib/task-filtros";
+import { chaveDaColuna, COL_DELEGADAS, COL_RECEBIDAS } from "@/lib/task-filtros";
 import {
   updateTaskStatus,
   moveTask,
@@ -27,13 +27,6 @@ import {
   moveTaskToColumn,
 } from "@/app/(app)/tarefas/actions";
 import { MAX_ANEXO_LABEL, erroDeTamanho, urlDoAnexo } from "@/lib/task-files";
-
-const STATUS_COLUMNS = [
-  { key: "pending", label: "A fazer" },
-  { key: "in_progress", label: "Em andamento" },
-  { key: "completed", label: "Concluídas" },
-  { key: "cancelled", label: "Canceladas" },
-] as const;
 
 const PRIORITY_DOT: Record<string, string> = {
   urgent: "bg-red-500",
@@ -136,6 +129,8 @@ export function TaskKanbanView({
   columns = [],
   onOpen,
   esconderFinalizadas = false,
+  meId = null,
+  colunaVisivel = "todas",
 }: {
   tasks: TaskRow[];
   /** Colunas criadas pela equipe. Vazio = quadro só de status, como sempre foi. */
@@ -143,6 +138,10 @@ export function TaskKanbanView({
   onOpen: (t: TaskRow) => void;
   /** Esconde as colunas Concluídas e Canceladas — a tela vive cheia delas. */
   esconderFinalizadas?: boolean;
+  /** Quem está olhando: é o que define Delegadas e Recebidas. */
+  meId?: string | null;
+  /** Mostrar só uma coluna ("todas" = o quadro inteiro). */
+  colunaVisivel?: string;
 }) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -157,20 +156,43 @@ export function TaskKanbanView({
   );
   const idsProprias = useMemo(() => new Set(proprias.map((c) => c.id)), [proprias]);
 
-  const status = esconderFinalizadas
-    ? STATUS_COLUMNS.filter((c) => c.key !== "completed" && c.key !== "cancelled")
-    : STATUS_COLUMNS;
+  /**
+   * O quadro inteiro, em ordem: fluxo, o que saiu/entrou, arquivo, e por fim o
+   * que a equipe criou.
+   *
+   * Delegadas e Recebidas são CALCULADAS (não existem no banco) e por isso não
+   * recebem card arrastado: quem delega muda o responsável, não empurra o card.
+   */
+  const todasColunas = useMemo(() => {
+    const base: { chave: string; rotulo: string; cor?: string; solta: "status" | "propria" | "nao" }[] = [
+      { chave: "pending", rotulo: "A fazer", solta: "status" },
+      { chave: "in_progress", rotulo: "Em andamento", solta: "status" },
+    ];
+    if (meId) {
+      base.push({ chave: COL_DELEGADAS, rotulo: "Delegadas por mim", solta: "nao" });
+      base.push({ chave: COL_RECEBIDAS, rotulo: "Recebidas", solta: "nao" });
+    }
+    if (!esconderFinalizadas) {
+      base.push({ chave: "completed", rotulo: "Concluídas", solta: "status" });
+      base.push({ chave: "cancelled", rotulo: "Canceladas", solta: "status" });
+    }
+    for (const c of proprias) base.push({ chave: c.id, rotulo: c.name, cor: c.color, solta: "propria" });
+    return base;
+  }, [proprias, esconderFinalizadas, meId]);
 
   const porColuna = useMemo(() => {
     const map: Record<string, TaskRow[]> = {};
-    for (const c of STATUS_COLUMNS) map[c.key] = [];
-    for (const c of proprias) map[c.id] = [];
+    for (const c of todasColunas) map[c.chave] = [];
     for (const t of tasks) {
-      const k = chaveDaColuna(t, idsProprias);
+      const k = chaveDaColuna(t, idsProprias, meId);
       (map[k] ??= []).push(t);
     }
     return map;
-  }, [tasks, proprias, idsProprias]);
+  }, [tasks, todasColunas, idsProprias, meId]);
+
+  const visiveis = colunaVisivel === "todas"
+    ? todasColunas
+    : todasColunas.filter((c) => c.chave === colunaVisivel);
 
   /** Nova posição do card: média entre os vizinhos, como no quadro antigo. */
   function novaPosicao(chave: string, id: string, antesDe: string | null) {
@@ -184,19 +206,27 @@ export function TaskKanbanView({
     return ((anterior as number) + (seguinte as number)) / 2;
   }
 
-  function soltarNoStatus(statusKey: string, antesDe: string | null) {
+  function soltarNaColuna(
+    col: { chave: string; rotulo: string; solta: "status" | "propria" | "nao" },
+    antesDe: string | null,
+  ) {
     if (!dragging) return;
+    // Delegadas/Recebidas são calculadas: a tarefa entra e sai delas sozinha
+    // quando o responsável muda. Arrastar para lá não teria como "colar".
+    if (col.solta === "nao") {
+      setDragging(null);
+      toast(`"${col.rotulo}" se preenche sozinha — para mudar, troque o responsável na tarefa.`);
+      return;
+    }
     const id = dragging;
     setDragging(null);
-    startTransition(() => void moveTask(id, statusKey, novaPosicao(statusKey, id, antesDe)));
-  }
-
-  function soltarNaPropria(columnId: string, antesDe: string | null) {
-    if (!dragging) return;
-    const id = dragging;
-    setDragging(null);
+    const pos = novaPosicao(col.chave, id, antesDe);
+    if (col.solta === "status") {
+      startTransition(() => void moveTask(id, col.chave, pos));
+      return;
+    }
     startTransition(async () => {
-      const r = await moveTaskToColumn(id, columnId, novaPosicao(columnId, id, antesDe));
+      const r = await moveTaskToColumn(id, col.chave, pos);
       if (!r.ok) toast(r.erro, "error");
     });
   }
@@ -249,246 +279,144 @@ export function TaskKanbanView({
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-4">
-      {/* Colunas de STATUS — continuam onde sempre estiveram. */}
-      {status.map((col) => (
-        <div
-          key={col.key}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => soltarNoStatus(col.key, null)}
-          className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
-        >
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-sm font-medium text-ink">{col.label}</span>
-            <span className="text-xs text-ink-soft">{porColuna[col.key]?.length ?? 0}</span>
-          </div>
-          <div className="flex-1 space-y-2 p-2">
-            {(porColuna[col.key] ?? []).map((t) => (
-              <CardTarefa
-                key={t.id}
-                t={t}
-                onOpen={onOpen}
-                arrastando={dragging === t.id}
-                algoArrastando={!!dragging}
-                onDragStart={() => setDragging(t.id)}
-                onDragEnd={() => setDragging(null)}
-                onSoltarAqui={() => soltarNoStatus(col.key, t.id)}
-              />
-            ))}
-            {!(porColuna[col.key] ?? []).length && (
-              <p className="py-6 text-center text-xs text-ink-soft">vazio</p>
-            )}
-          </div>
-        </div>
-      ))}
-
-      {/* Colunas da EQUIPE — a partir daqui é o que ela criou. */}
-      {proprias.map((c, i) => (
-        <div
-          key={c.id}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => soltarNaPropria(c.id, null)}
-          className="flex w-64 shrink-0 flex-col rounded-card border border-border bg-surface/60"
-        >
-          <div className="border-b border-border px-3 py-2">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
-              {editando === c.id ? (
-                <input
-                  autoFocus
-                  value={rascunho}
-                  onChange={(e) => setRascunho(e.target.value)}
-                  onBlur={() => renomear(c.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") renomear(c.id);
-                    if (e.key === "Escape") setEditando(null);
-                  }}
-                  className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5 text-sm text-ink"
-                />
-              ) : (
-                <button
-                  onClick={() => { setEditando(c.id); setRascunho(c.name); }}
-                  title="Clique para renomear"
-                  className="min-w-0 flex-1 truncate text-left text-sm font-medium text-ink hover:underline"
-                >
-                  {c.name}
-                </button>
+      {visiveis.map((col, i) => {
+        const propria = col.solta === "propria" ? proprias.find((c) => c.id === col.chave) : null;
+        const iPropria = propria ? proprias.findIndex((c) => c.id === propria.id) : -1;
+        const cards = porColuna[col.chave] ?? [];
+        return (
+          <div
+            key={col.chave}
+            onDragOver={(e) => { if (col.solta !== "nao") e.preventDefault(); }}
+            onDrop={() => soltarNaColuna(col, null)}
+            className={`flex w-64 shrink-0 flex-col rounded-card border bg-surface/60 ${
+              col.solta === "nao" ? "border-dashed border-border" : "border-border"
+            }`}
+          >
+            <div className="border-b border-border px-3 py-2">
+              <div className="flex items-center gap-2">
+                {col.cor && (
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: col.cor }} />
+                )}
+                {editando === col.chave && propria ? (
+                  <input
+                    autoFocus
+                    value={rascunho}
+                    onChange={(e) => setRascunho(e.target.value)}
+                    onBlur={() => renomear(propria.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") renomear(propria.id);
+                      if (e.key === "Escape") setEditando(null);
+                    }}
+                    className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5 text-sm text-ink"
+                  />
+                ) : propria ? (
+                  <button
+                    onClick={() => { setEditando(propria.id); setRascunho(propria.name); }}
+                    title="Clique para renomear"
+                    className="min-w-0 flex-1 truncate text-left text-sm font-medium text-ink hover:underline"
+                  >
+                    {col.rotulo}
+                  </button>
+                ) : (
+                  <span
+                    className="min-w-0 flex-1 truncate text-sm font-medium text-ink"
+                    title={
+                      col.solta === "nao"
+                        ? "Coluna automática: entra e sai sozinha quando o responsável muda"
+                        : undefined
+                    }
+                  >
+                    {col.rotulo}
+                  </span>
+                )}
+                <span className="shrink-0 text-xs text-ink-soft">{cards.length}</span>
+              </div>
+              {propria && (
+                <div className="mt-1 flex items-center gap-1">
+                  <button
+                    onClick={() => moverColuna(propria.id, -1)}
+                    disabled={iPropria === 0}
+                    title="Mover coluna para a esquerda"
+                    className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
+                  >
+                    &larr;
+                  </button>
+                  <button
+                    onClick={() => moverColuna(propria.id, 1)}
+                    disabled={iPropria === proprias.length - 1}
+                    title="Mover coluna para a direita"
+                    className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
+                  >
+                    &rarr;
+                  </button>
+                  <button
+                    onClick={() => apagar(propria)}
+                    title="Apagar coluna (as tarefas voltam para a coluna do status)"
+                    className="ml-auto rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-red-50 hover:text-red-600"
+                  >
+                    apagar
+                  </button>
+                </div>
               )}
-              <span className="shrink-0 text-xs text-ink-soft">{porColuna[c.id]?.length ?? 0}</span>
             </div>
-            <div className="mt-1 flex items-center gap-1">
-              <button
-                onClick={() => moverColuna(c.id, -1)}
-                disabled={i === 0}
-                title="Mover coluna para a esquerda"
-                className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
-              >
-                &larr;
-              </button>
-              <button
-                onClick={() => moverColuna(c.id, 1)}
-                disabled={i === proprias.length - 1}
-                title="Mover coluna para a direita"
-                className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-gray-100 disabled:opacity-30"
-              >
-                &rarr;
-              </button>
-              <button
-                onClick={() => apagar(c)}
-                title="Apagar coluna (as tarefas voltam para a coluna do status)"
-                className="ml-auto rounded px-1.5 py-0.5 text-xs text-ink-soft hover:bg-red-50 hover:text-red-600"
-              >
-                apagar
-              </button>
+            <div className="flex-1 space-y-2 p-2">
+              {cards.map((t) => (
+                <CardTarefa
+                  key={t.id}
+                  t={t}
+                  onOpen={onOpen}
+                  arrastando={dragging === t.id}
+                  algoArrastando={!!dragging}
+                  onDragStart={() => setDragging(t.id)}
+                  onDragEnd={() => setDragging(null)}
+                  onSoltarAqui={() => soltarNaColuna(col, t.id)}
+                />
+              ))}
+              {!cards.length && (
+                <p className="py-6 text-center text-xs text-ink-soft">
+                  {col.solta === "nao" ? "nada aqui" : i === 0 ? "vazio" : "arraste tarefas para cá"}
+                </p>
+              )}
             </div>
           </div>
-          <div className="flex-1 space-y-2 p-2">
-            {(porColuna[c.id] ?? []).map((t) => (
-              <CardTarefa
-                key={t.id}
-                t={t}
-                onOpen={onOpen}
-                arrastando={dragging === t.id}
-                algoArrastando={!!dragging}
-                onDragStart={() => setDragging(t.id)}
-                onDragEnd={() => setDragging(null)}
-                onSoltarAqui={() => soltarNaPropria(c.id, t.id)}
-              />
-            ))}
-            {!(porColuna[c.id] ?? []).length && (
-              <p className="py-6 text-center text-xs text-ink-soft">arraste tarefas para cá</p>
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Criar coluna nova, sempre no fim da fila. */}
-      <div className="flex w-56 shrink-0 flex-col rounded-card border border-dashed border-border p-2">
-        {criando ? (
-          <div className="space-y-2">
-            <input
-              autoFocus
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") criar();
-                if (e.key === "Escape") { setCriando(false); setNome(""); }
-              }}
-              placeholder="Ex.: DELEGADAS"
-              className="w-full rounded-lg border border-border px-2 py-1.5 text-sm text-ink"
-            />
-            <div className="flex gap-2">
-              <Button onClick={criar}>Criar</Button>
-              <Button variant="ghost" onClick={() => { setCriando(false); setNome(""); }}>Cancelar</Button>
+      {colunaVisivel === "todas" && (
+        <div className="flex w-56 shrink-0 flex-col rounded-card border border-dashed border-border p-2">
+          {criando ? (
+            <div className="space-y-2">
+              <input
+                autoFocus
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") criar();
+                  if (e.key === "Escape") { setCriando(false); setNome(""); }
+                }}
+                placeholder="Ex.: Aguardando retorno"
+                className="w-full rounded-lg border border-border px-2 py-1.5 text-sm text-ink"
+              />
+              <div className="flex gap-2">
+                <Button onClick={criar}>Criar</Button>
+                <Button variant="ghost" onClick={() => { setCriando(false); setNome(""); }}>Cancelar</Button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setCriando(true)}
-            className="w-full rounded-lg px-3 py-6 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink"
-          >
-            + Nova coluna
-          </button>
-        )}
-      </div>
+          ) : (
+            <button
+              onClick={() => setCriando(true)}
+              className="w-full rounded-lg px-3 py-6 text-sm font-medium text-ink-soft hover:bg-gray-50 hover:text-ink"
+            >
+              + Nova coluna
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-export function TaskCalendarView({
-  tasks,
-  onOpen,
-}: {
-  tasks: TaskRow[];
-  onOpen: (t: TaskRow) => void;
-}) {
-  const [cursor, setCursor] = useState(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
-
-  const byDay = useMemo(() => {
-    const map: Record<string, TaskRow[]> = {};
-    for (const t of tasks) {
-      if (!t.due_date) continue;
-      (map[t.due_date] ??= []).push(t);
-    }
-    return map;
-  }, [tasks]);
-
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const cells: (string | null)[] = [
-    ...Array(firstWeekday).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => {
-      const d = String(i + 1).padStart(2, "0");
-      return `${year}-${String(month + 1).padStart(2, "0")}-${d}`;
-    }),
-  ];
-
-  return (
-    <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <Button variant="ghost" onClick={() => setCursor(new Date(year, month - 1, 1))}>
-          ← anterior
-        </Button>
-        <span className="text-sm font-medium text-ink">
-          {cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
-        </span>
-        <Button variant="ghost" onClick={() => setCursor(new Date(year, month + 1, 1))}>
-          próximo →
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-ink-soft">
-        {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
-          <div key={i} className="py-1 font-medium">{d}</div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((day, i) => {
-          if (!day) return <div key={`e${i}`} />;
-          const list = byDay[day] ?? [];
-          const isToday = day === today;
-          return (
-            <div
-              key={day}
-              className={`min-h-20 rounded-lg border p-1 ${
-                isToday ? "border-blue-400 bg-blue-50/40" : "border-border"
-              }`}
-            >
-              <div className="text-[11px] text-ink-soft">{Number(day.slice(-2))}</div>
-              <div className="space-y-0.5">
-                {list.slice(0, 3).map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => onOpen(t)}
-                    title={t.contacts ? `${t.contacts.name || t.contacts.phone} — ${t.title}` : t.title}
-                    className="flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px] hover:bg-gray-100"
-                  >
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`} />
-                    <span className={`truncate ${t.status === "completed" ? "line-through opacity-60" : ""}`}>
-                      {/* No espaço apertado do calendário, o nome do contato
-                          vale mais que o título ("Follow-up" repete sempre). */}
-                      {t.contacts ? (t.contacts.name || t.contacts.phone) : t.title}
-                    </span>
-                  </button>
-                ))}
-                {list.length > 3 && (
-                  <p className="px-1 text-[10px] text-ink-soft">+{list.length - 3}</p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
 
 /** Painel de detalhe: checklist, comentários e ações. */
 export function TaskDetailPanel({

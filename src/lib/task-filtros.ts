@@ -58,26 +58,53 @@ export function casaBusca(
   return campos.some((c) => normalizar(c).includes(alvo));
 }
 
+/** Colunas CALCULADAS — não existem no banco, são relativas a quem olha. */
+export const COL_DELEGADAS = "__delegadas__";
+export const COL_RECEBIDAS = "__recebidas__";
+
+const FINALIZADAS = new Set(["completed", "cancelled"]);
+
 /**
  * Em QUAL coluna do quadro a tarefa aparece.
  *
- * O quadro é um só: as colunas de status (A fazer, Em andamento...) e as
- * colunas que a equipe criou, lado a lado. A Ianka pediu exatamente isso —
- * "quando clico em minhas colunas somem as outras (andamento...), tem como
- * manter elas? E eu add as que eu quiser na nova coluna?".
+ * "Delegadas" e "Recebidas" são colunas CALCULADAS, e é isso que as torna
+ * possíveis: a MESMA tarefa é "delegada" para quem passou e "recebida" para
+ * quem recebeu. Gravada no banco, uma coluna dessas seria mentira para metade
+ * do time; calculada por quem está olhando, ela é sempre verdadeira. Foi por
+ * isso que a coluna "DELEGADAS" fixa não daria certo e esta dá.
  *
- * Uma tarefa aparece em UM lugar só:
- * - foi posta numa coluna própria que ainda existe → nessa coluna;
- * - caso contrário → na coluna do status dela.
+ * O pedido da Ianka: "as que a Luana me manda fica misturado com as minhas,
+ * então às vezes passa despercebido... no kanban fica tudo junto ali no a
+ * fazer". Tirar delegada/recebida de "A fazer" é exatamente o ponto.
  *
- * A segunda metade é o que faz a coluna apagada não sumir com tarefa: o
- * `column_id` órfão é ignorado e a tarefa reaparece no status.
+ * Ordem de precedência:
+ *  1. coluna própria, se ainda existir (escolha explícita de quem arrastou);
+ *  2. concluída/cancelada vai para o STATUS — arquivo não pode virar fila, ou
+ *     "Delegadas" acumularia tudo que já foi entregue;
+ *  3. delegada por mim / recebida de outra pessoa;
+ *  4. o status.
  */
 export function chaveDaColuna(
-  t: { status?: string | null; column_id?: string | null },
+  t: {
+    status?: string | null;
+    column_id?: string | null;
+    created_by?: string | null;
+    assigned_to?: string | null;
+  },
   colunasProprias: Iterable<string>,
+  meId?: string | null,
 ): string {
   const validas = colunasProprias instanceof Set ? colunasProprias : new Set(colunasProprias);
   if (t.column_id && validas.has(t.column_id)) return t.column_id;
-  return t.status ?? "pending";
+
+  const status = t.status ?? "pending";
+  if (FINALIZADAS.has(status)) return status;
+
+  if (meId) {
+    const minha = t.assigned_to === meId;
+    const criadaPorMim = t.created_by === meId;
+    if (criadaPorMim && !minha && t.assigned_to) return COL_DELEGADAS;
+    if (minha && !criadaPorMim && t.created_by) return COL_RECEBIDAS;
+  }
+  return status;
 }
