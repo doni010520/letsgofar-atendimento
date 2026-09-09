@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { ConversationList } from "./conversation-list";
@@ -308,13 +308,32 @@ export function Inbox({
   // semana (~1,7 GB/dia sem ninguém olhando, contra ~560 MB num dia de trabalho
   // de 8h). Quando a cota de egress satura, os requests falham, o middleware
   // não confirma a sessão e a atendente é jogada no /login "do nada".
-  const [abaVisivel, setAbaVisivel] = useState(true);
-  useEffect(() => {
-    const sync = () => setAbaVisivel(!document.hidden);
-    sync();
-    document.addEventListener("visibilitychange", sync);
-    return () => document.removeEventListener("visibilitychange", sync);
+  // `useSyncExternalStore` é o primitivo certo para ler estado do NAVEGADOR:
+  // sem setState dentro de efeito (que dispara render em cascata) e sem o
+  // primeiro quadro mentindo quando a página abre já em segundo plano.
+  const abaVisivel = useSyncExternalStore(
+    (avisar) => {
+      document.addEventListener("visibilitychange", avisar);
+      return () => document.removeEventListener("visibilitychange", avisar);
+    },
+    () => !document.hidden,
+    () => true, // no servidor não existe aba oculta
+  );
+  /**
+   * Recarrega só as ATIVAS e mescla com as encerradas que já estão na memória.
+   *
+   * Existe porque `fetchConversations()` sem recorte traz a lista INTEIRA —
+   * 1.086 conversas, 969 delas encerradas e paradas há meses: 1,4 MB de rede e
+   * ~400ms de CPU no banco por chamada, contra ~115ms do recorte. Encerrada não
+   * muda sozinha, então recarregá-la depois de assumir, transferir ou abrir um
+   * atendimento é trabalho jogado fora.
+   */
+  const recarregarAtivas = useCallback(async () => {
+    const ativas = await fetchConversations({ includeClosed: false });
+    if (!Array.isArray(ativas)) return;
+    setConversations((prev) => [...ativas, ...prev.filter((c) => c.status === "closed")]);
   }, []);
+
   // Porta única dos relógios: aba oculta congela o polling e volta sozinho
   // (o efeito remonta e dispara o tique imediato) quando a aba reaparece.
   const ativo = live && abaVisivel;
@@ -488,8 +507,14 @@ export function Inbox({
       .subscribe((status) => {
         // Se o canal cair (rede/token expirado), re-sincroniza pelo polling na
         // hora — evita ficar "surdo" sem perceber (o "precisa dar F5").
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          fetchConversations().then((c) => Array.isArray(c) && setConversations(c)).catch(() => {});
+        //
+        // CLOSED FICA DE FORA de propósito: o supabase-js chama este callback
+        // com CLOSED também no fechamento NORMAL do canal (RealtimeChannel.js,
+        // `_onClose(() => callback(CLOSED))`) — inclusive ao SAIR da tela. Sair
+        // do atendimento e voltar disparava um refetch da lista INTEIRA:
+        // 1,4 MB e ~400ms de banco, para redesenhar o que o polling já traz.
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void recarregarAtivas().catch(() => {});
         }
       });
 
@@ -507,7 +532,7 @@ export function Inbox({
       authSub.subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
-  }, [live, router]);
+  }, [live, router, recarregarAtivas]);
 
   function refetch(convId: string) {
     return fetchMessages(convId).then((msgs) => setMessagesByConv((prev) => ({ ...prev, [convId]: msgs })));
@@ -573,8 +598,7 @@ export function Inbox({
       }
       // Já existe conversa? Abre a real.
       if (r.existingId) {
-        const convs = await fetchConversations();
-        setConversations(convs);
+        await recarregarAtivas();
         setSelectedId(r.existingId);
         const msgs = await fetchMessages(r.existingId);
         setMessagesByConv((prev) => ({ ...prev, [r.existingId!]: msgs }));
@@ -612,8 +636,7 @@ export function Inbox({
     });
     if (id) {
       setDraftRealId(id);
-      const convs = await fetchConversations();
-      setConversations(convs);
+      await recarregarAtivas();
     }
     return id;
   }
@@ -691,8 +714,7 @@ export function Inbox({
         const realId = await materializeDraft();
         if (!realId) return;
         await sendMessage(realId, finalText, finalReplyId, mentions);
-        const convs = await fetchConversations();
-        setConversations(convs);
+        await recarregarAtivas();
         setSelectedId(realId);
         const msgs = await fetchMessages(realId);
         setMessagesByConv((prev) => ({ ...prev, [realId]: msgs }));
@@ -965,8 +987,7 @@ export function Inbox({
         alert("Não foi possível abrir o atendimento.");
         return;
       }
-      const convs = await fetchConversations();
-      setConversations(convs);
+      await recarregarAtivas();
       setSelectedId(id);
       const msgs = await fetchMessages(id);
       setMessagesByConv((prev) => ({ ...prev, [id]: msgs }));
@@ -996,8 +1017,7 @@ export function Inbox({
     setTransferring(false);
     startTransitionComTeto(startTransition, async () => {
       await transferConversation(id, opts);
-      const convs = await fetchConversations();
-      setConversations(convs);
+      await recarregarAtivas();
       await refetch(id);
     });
   }
