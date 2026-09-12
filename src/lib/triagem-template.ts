@@ -31,20 +31,28 @@ export type SectorOption = {
   confirmation: string;
 };
 
+/**
+ * Acolhida usada nas três opções, igual à do n8n (nós "Confirma *").
+ *
+ * As confirmações não prometem prazo de propósito: a versão anterior dizia
+ * "já já te respondem" / "em instantes alguém te atende", e numa sexta às 20h
+ * isso vira promessa quebrada — o atendimento só volta na segunda. O fluxo
+ * antigo acolhia e perguntava, sem falar em tempo.
+ */
+const ACOLHIDA = "Hello! Que bom ter você aqui 😊";
+
 export const DEFAULT_SECTORS: Omit<SectorOption, "departmentId">[] = [
   {
     label: "📚 Experiência do Aluno",
-    confirmation:
-      "Perfeito! Vou te encaminhar para a Experiência do Aluno. Em instantes alguém te atende. 😊",
+    confirmation: `${ACOLHIDA}\n\nComo posso ajudar?`,
   },
   {
     label: "💰 Financeiro",
-    confirmation: "Certo! Encaminhando para o Financeiro. Já já te respondem. 😊",
+    confirmation: `${ACOLHIDA}\n\nComo posso ajudar?`,
   },
   {
     label: "📊 Consultoria Estratégica",
-    confirmation:
-      "Ótimo! Vou te passar para a Consultoria Estratégica. Aguarde um instante. 😊",
+    confirmation: `${ACOLHIDA}\n\nPra eu te orientar da melhor forma, me conta: Qual é o seu principal objetivo com o inglês nesse momento?`,
   },
 ];
 

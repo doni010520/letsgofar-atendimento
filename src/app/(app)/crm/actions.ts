@@ -184,6 +184,7 @@ export async function addContactToCrm(contactId: string, stageId: string, dealVa
   }
 
   revalidatePath("/crm");
+  revalidatePath("/clientes");
 }
 
 export async function deletePipeline(id: string) {
@@ -194,4 +195,36 @@ export async function deletePipeline(id: string) {
 export async function renameStage(id: string, name: string) {
   await orgUpdate("pipeline_stages", id, { name });
   revalidatePath("/crm");
+}
+
+/**
+ * Estágios do funil + posição atual da conversa (C15/B11).
+ *
+ * Serve ao painel de CRM que fica dentro do atendimento: sem isso o atendente
+ * não tinha nenhum caminho para pôr a conversa no funil — os cards só existiam
+ * se já viessem da importação do Chatwoot.
+ */
+export async function getConversationCrm(conversationId: string): Promise<{
+  stageId: string | null;
+  dealValue: number | null;
+  closedWon: boolean | null;
+  stages: { id: string; name: string; color: string; pipeline_id: string }[];
+}> {
+  const sb = await createClient();
+  const [{ data: conv }, { data: stages }] = await Promise.all([
+    sb
+      .from("conversations")
+      .select("stage_id, deal_value, closed_won")
+      .eq("id", conversationId)
+      .maybeSingle(),
+    sb.from("pipeline_stages").select("id, name, color, pipeline_id").order("position"),
+  ]);
+
+  const c = conv as { stage_id: string | null; deal_value: number | null; closed_won: boolean | null } | null;
+  return {
+    stageId: c?.stage_id ?? null,
+    dealValue: c?.deal_value ?? null,
+    closedWon: c?.closed_won ?? null,
+    stages: (stages ?? []) as { id: string; name: string; color: string; pipeline_id: string }[],
+  };
 }

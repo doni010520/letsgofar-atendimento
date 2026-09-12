@@ -14,12 +14,15 @@ export function ConversationCrmPanel({
   dealValue,
   closedWon,
   stages,
+  onChanged,
 }: {
   conversationId: string;
   stageId: string | null;
   dealValue: number | null;
   closedWon: boolean | null;
   stages: { id: string; name: string; color: string; pipeline_id: string }[];
+  /** Avisa quem abriu o painel para recarregar o estado (a tela não é do CRM). */
+  onChanged?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -59,7 +62,11 @@ export function ConversationCrmPanel({
           disabled={pending}
           onChange={(e) => {
             const v = e.target.value;
-            if (v) startTransition(() => void moveConversationStage(conversationId, v));
+            if (v)
+              startTransition(async () => {
+                await moveConversationStage(conversationId, v);
+                onChanged?.();
+              });
           }}
           className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs"
         >
@@ -80,7 +87,10 @@ export function ConversationCrmPanel({
             onBlur={(e) => {
               const v = e.target.value === "" ? null : Number(e.target.value);
               setEditing(false);
-              startTransition(() => void updateDealValue(conversationId, v));
+              startTransition(async () => {
+                await updateDealValue(conversationId, v);
+                onChanged?.();
+              });
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") (e.target as HTMLInputElement).blur();

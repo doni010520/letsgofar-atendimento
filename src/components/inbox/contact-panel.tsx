@@ -5,6 +5,8 @@ import { X, Users, Crown, Shield, Loader2, Save, Check, Receipt, QrCode, Unlock,
 import { formatPhone } from "@/lib/utils";
 import { AttendanceHistory, type AttendanceHistoryItem } from "./attendance-history";
 import { ContactTasks } from "./contact-tasks";
+import { ConversationCrmPanel } from "@/components/conversation-crm-panel";
+import { getConversationCrm } from "@/app/(app)/crm/actions";
 import {
   getContactDetails,
   updateContactDetails,
@@ -52,6 +54,17 @@ export function ContactPanel({
   const [history, setHistory] = useState<AttendanceHistoryItem[]>([]);
   const [sgpLoading, setSgpLoading] = useState(false);
   const [sgpMsg, setSgpMsg] = useState<string | null>(null);
+  // Funil: estágio da conversa. Carregado à parte porque a conversation_overview
+  // não traz stage_id.
+  const [crm, setCrm] = useState<Awaited<ReturnType<typeof getConversationCrm>> | null>(null);
+
+  async function carregarCrm() {
+    try {
+      setCrm(await getConversationCrm(conversation.id));
+    } catch {
+      setCrm(null);
+    }
+  }
 
   /** Busca o CPF/CNPJ no SGP e autopreenche os campos do cadastro. */
   async function doSgpLookup() {
@@ -89,10 +102,12 @@ export function ContactPanel({
         const g = await getGroupInfo(conversation.id);
         if (!cancel) setGroup(g);
       } else {
-        const [c, h] = await Promise.all([
+        const [c, h, crmInfo] = await Promise.all([
           getContactDetails(conversation.id),
           getContactHistory(conversation.id),
+          getConversationCrm(conversation.id).catch(() => null),
         ]);
+        if (!cancel) setCrm(crmInfo);
         if (!cancel && c) {
           setContact(c);
           setName(c.name ?? "");
@@ -264,6 +279,20 @@ export function ContactPanel({
             </button>
             {erroSalvar && (
               <p className="mt-2 text-xs text-red-600">{erroSalvar}</p>
+            )}
+
+            {/* FUNIL: põe a conversa no CRM sem sair do atendimento. Antes não
+                existia nenhum caminho para isso — quem não veio da importação
+                do Chatwoot ficava fora do funil para sempre. */}
+            {crm && (
+              <ConversationCrmPanel
+                conversationId={conversation.id}
+                stageId={crm.stageId}
+                dealValue={crm.dealValue}
+                closedWon={crm.closedWon}
+                stages={crm.stages}
+                onChanged={carregarCrm}
+              />
             )}
 
             {/* Ações rápidas */}

@@ -6,6 +6,7 @@ import { formatPhone } from "@/lib/utils";
 import Link from "next/link";
 import { Download, MessageSquareText } from "lucide-react";
 import { BuscaContatos } from "@/components/busca-contatos";
+import { AddToCrm } from "@/components/add-to-crm";
 
 const POR_PAGINA = 100;
 
@@ -22,7 +23,7 @@ async function getContacts(termo: string, pagina: number) {
   const sb = await createClient();
   let q = sb
     .from("contacts")
-    .select("id, name, phone, email, city, avatar_url, created_at", { count: "exact" })
+    .select("id, name, phone, email, city, avatar_url, created_at, stage_id", { count: "exact" })
     .neq("is_group", true);
 
   if (termo) {
@@ -39,18 +40,34 @@ async function getContacts(termo: string, pagina: number) {
   return { linhas: data ?? [], total: count ?? 0 };
 }
 
-/** Última conversa de cada contato, para o botão "abrir conversa". */
+/** Estágios do funil, para o botão "adicionar ao funil" de cada linha. */
+async function getStages() {
+  if (PREVIEW_MODE) return [] as { id: string; name: string }[];
+  const sb = await createClient();
+  const { data } = await sb.from("pipeline_stages").select("id, name").order("position");
+  return (data ?? []) as { id: string; name: string }[];
+}
+
+/**
+ * Última conversa de cada contato: serve ao botão "abrir conversa" e também ao
+ * estágio do funil.
+ *
+ * O estágio vem da CONVERSA, não de `contacts.stage_id`: os cards importados do
+ * Chatwoot gravaram só a conversa, e o kanban lê dela ([crm/page.tsx]). Ler do
+ * contato mostraria "fora do funil" para quem já tem card.
+ */
 async function getConversas(ids: string[]) {
-  if (PREVIEW_MODE || !ids.length) return {} as Record<string, string>;
+  if (PREVIEW_MODE || !ids.length)
+    return {} as Record<string, { id: string; stageId: string | null }>;
   const sb = await createClient();
   const { data } = await sb
     .from("conversations")
-    .select("id, contact_id, last_message_at")
+    .select("id, contact_id, stage_id, last_message_at")
     .in("contact_id", ids)
     .order("last_message_at", { ascending: false, nullsFirst: false });
-  const mapa: Record<string, string> = {};
-  for (const c of (data ?? []) as { id: string; contact_id: string }[]) {
-    if (!mapa[c.contact_id]) mapa[c.contact_id] = c.id;
+  const mapa: Record<string, { id: string; stageId: string | null }> = {};
+  for (const c of (data ?? []) as { id: string; contact_id: string; stage_id: string | null }[]) {
+    if (!mapa[c.contact_id]) mapa[c.contact_id] = { id: c.id, stageId: c.stage_id };
   }
   return mapa;
 }
@@ -66,6 +83,12 @@ export default async function ClientesPage({
 
   const { linhas, total } = await getContacts(termo, pagina);
   const conversas = await getConversas(linhas.map((c) => c.id));
+  const stages = await getStages();
+  const nomeDoEstagio = Object.fromEntries(stages.map((s) => [s.id, s.name]));
+  // Conversa manda; o campo do contato só serve de reserva para quem ainda não
+  // tem conversa aberta.
+  const estagioDe = (c: { id: string; stage_id: string | null }) =>
+    conversas[c.id]?.stageId ?? c.stage_id ?? null;
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
 
   return (
@@ -135,16 +158,26 @@ export default async function ClientesPage({
                     {new Date(c.created_at).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                    {/* Onde o contato entra no funil: sem isto, só entrava quem
+                        veio da importação do Chatwoot. */}
+                    <AddToCrm
+                      contactId={c.id}
+                      stageId={estagioDe(c)}
+                      stageName={estagioDe(c) ? nomeDoEstagio[estagioDe(c)!] ?? null : null}
+                      stages={stages}
+                    />
                     {/* Achar o contato só serve se der para falar com ele. */}
                     {conversas[c.id] && (
                       <Link
-                        href={`/atendimento?c=${conversas[c.id]}`}
+                        href={`/atendimento?c=${conversas[c.id].id}`}
                         title="Abrir conversa"
                         className="inline-flex items-center gap-1 rounded-lg bg-brand/10 px-2 py-1 text-xs font-medium text-brand transition hover:bg-brand/20"
                       >
                         <MessageSquareText size={13} /> Conversa
                       </Link>
                     )}
+                    </div>
                   </td>
                 </tr>
               ))}
